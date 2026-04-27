@@ -38,6 +38,62 @@ if _USE_SUPABASE:
         host  = url.replace("https://","").replace("http://","")
         return f"postgresql://postgres:{senha}@db.{host}:5432/postgres"
 
+    def _traduzir_sql_pg(sql):
+        import re
+        sql = sql.replace("?", "%s")
+        sql = sql.replace("date('now')", "CURRENT_DATE")
+        sql = re.sub(r"date\('now',\s*'start of month'\)", "DATE_TRUNC('month', CURRENT_DATE)", sql)
+        sql = re.sub(r"date\('now',\s*'start of month',\s*'-1 day'\)", "(DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 day')", sql)
+        sql = re.sub(r"date\('now',\s*'start of month',\s*'-1 month'\)", "DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')", sql)
+        sql = re.sub(r"date\('now',\s*'start of month',\s*'-2 months'\)", "DATE_TRUNC('month', CURRENT_DATE - INTERVAL '2 months')", sql)
+        sql = re.sub(r"date\('now',\s*'start of year'\)", "DATE_TRUNC('year', CURRENT_DATE)", sql)
+        sql = re.sub(r"date\('now',\s*'(-?\d+)\s*(day|days|month|months|year|years)'\)",
+            lambda m: f"(CURRENT_DATE - INTERVAL '{abs(int(m.group(1)))} {m.group(2)}')", sql)
+        sql = re.sub(r"date\('now',\s*'\+(\d+)\s*(day|days)'\)",
+            lambda m: f"(CURRENT_DATE + INTERVAL '{m.group(1)} {m.group(2)}')", sql)
+        sql = re.sub(r"strftime\('%Y-%m',\s*([^)]+)\)",
+            lambda m: f"TO_CHAR({m.group(1).strip()}::DATE, 'YYYY-MM')", sql)
+        sql = re.sub(r"strftime\('%Y',\s*([^)]+)\)",
+            lambda m: f"TO_CHAR({m.group(1).strip()}::DATE, 'YYYY')", sql)
+        sql = re.sub(r"strftime\('%m',\s*([^)]+)\)",
+            lambda m: f"TO_CHAR({m.group(1).strip()}::DATE, 'MM')", sql)
+        sql = re.sub(r"printf\('%02d',\s*([^)]+)\)",
+            lambda m: f"LPAD(CAST({m.group(1).strip()} AS TEXT), 2, '0')", sql)
+        sql = re.sub(r"CAST\(julianday\('now'\)\s*-\s*julianday\(([^)]+)\)\s*AS\s*INTEGER\)",
+            lambda m: f"EXTRACT(DAY FROM (CURRENT_DATE - {m.group(1).strip()}::DATE))::INTEGER", sql)
+        sql = re.sub(r"julianday\('now'\)\s*-\s*julianday\(([^)]+)\)",
+            lambda m: f"EXTRACT(DAY FROM (CURRENT_DATE - {m.group(1).strip()}::DATE))", sql)
+        sql = re.sub(r"GROUP_CONCAT\(([^,)]+),\s*'([^']+)'\)",
+            lambda m: f"STRING_AGG({m.group(1).strip()}, '{m.group(2)}')", sql)
+        sql = re.sub(r"GROUP_CONCAT\(([^)]+)\)",
+            lambda m: f"STRING_AGG({m.group(1).strip()}, ',')", sql)
+        sql = sql.replace("IFNULL(", "COALESCE(")
+        result = []; i = 0; sql_up = sql.upper()
+        while i < len(sql):
+            if sql_up[i:i+6] == "ROUND(":
+                result.append("ROUND(("); i += 6
+                depth = 1; inner = []
+                while i < len(sql) and depth > 0:
+                    c = sql[i]
+                    if c == "(": depth += 1
+                    elif c == ")": depth -= 1
+                    if depth > 0: inner.append(c)
+                    i += 1
+                inner_str = "".join(inner)
+                d = 0; comma_pos = -1
+                for j, c in enumerate(inner_str):
+                    if c == "(": d += 1
+                    elif c == ")": d -= 1
+                    elif c == "," and d == 0: comma_pos = j; break
+                if comma_pos >= 0:
+                    result.append(f"{inner_str[:comma_pos]})::NUMERIC{inner_str[comma_pos:]})")
+                else:
+                    result.append(f"{inner_str})::NUMERIC)")
+            else:
+                result.append(sql[i]); i += 1
+        return "".join(result)
+
+
     def conectar():
         """Retorna conexao PostgreSQL (Supabase)."""
         conn = psycopg2.connect(_get_pg_url(), connect_timeout=10)
@@ -48,12 +104,28 @@ if _USE_SUPABASE:
         sql_pg = sql.replace("?", "%s")
         # Substitui ROUND(expr, n) por ROUND(expr::NUMERIC, n) de forma segura
         # usando split por token em vez de regex
-        sql_pg = _fix_round_pg(sql_pg)
+        sql_pg = _traduzir_sql_pg(sql_pg)
         cur = conn.cursor()
         cur.execute(sql_pg, params)
         return cur
 
-    def _fix_round_pg(sql):
+
+    def conectar():
+        """Retorna conexao PostgreSQL (Supabase)."""
+        conn = psycopg2.connect(_get_pg_url(), connect_timeout=10)
+        return conn
+
+    def _executar_pg(conn, sql, params=()):
+        """Executa SQL no PostgreSQL adaptando ROUND para double precision."""
+        sql_pg = sql.replace("?", "%s")
+        # Substitui ROUND(expr, n) por ROUND(expr::NUMERIC, n) de forma segura
+        # usando split por token em vez de regex
+        sql_pg = _traduzir_sql_pg(sql_pg)
+        cur = conn.cursor()
+        cur.execute(sql_pg, params)
+        return cur
+
+    def _traduzir_sql_pg(sql):
         """Substitui ROUND( por ROUND(( e adiciona )::NUMERIC antes da virgula/fecha."""
         if "ROUND(" not in sql.upper():
             return sql
@@ -98,7 +170,7 @@ if _USE_SUPABASE:
 
     def query(sql, params=()):
         """Executa SELECT e retorna lista de tuplas."""
-        sql_pg = _fix_round_pg(sql.replace("?", "%s"))
+        sql_pg = _traduzir_sql_pg(sql)
         conn   = conectar()
         try:
             cur = conn.cursor()
