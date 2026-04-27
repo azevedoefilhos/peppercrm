@@ -42,9 +42,28 @@ if _USE_SUPABASE:
         """Retorna conexao PostgreSQL (Supabase)."""
         return psycopg2.connect(_get_pg_url(), connect_timeout=10)
 
+    def _adaptar_sql_pg(sql):
+        """Adapta SQL SQLite para PostgreSQL."""
+        import re
+        # ? → %s
+        sql = sql.replace("?", "%s")
+        # ROUND(x, n) → ROUND(x::NUMERIC, n)
+        sql = re.sub(
+            r'ROUND\s*\(\s*(?!.*::NUMERIC)([\w\s\.\(\)\*\+\-\/,]+?),\s*(\d+)\s*\)',
+            lambda m: f"ROUND(({m.group(1)})::NUMERIC, {m.group(2)})",
+            sql
+        )
+        # ROUND(x) sem segundo argumento → ROUND(x::NUMERIC)
+        sql = re.sub(
+            r'ROUND\s*\(\s*(?!.*::NUMERIC)([^,\)]+)\s*\)(?!\s*::)',
+            lambda m: f"ROUND(({m.group(1)})::NUMERIC)",
+            sql
+        )
+        return sql
+
     def query(sql, params=()):
         """Executa SELECT e retorna lista de tuplas."""
-        sql_pg = sql.replace("?", "%s")
+        sql_pg = _adaptar_sql_pg(sql)
         conn   = conectar()
         try:
             cur = conn.cursor()
@@ -127,7 +146,7 @@ def registrar_historico(conn, pedido_id, campo, valor_antes, valor_depois, obs=N
               str(valor_depois) if valor_depois is not None else None, obs)
     if _USE_SUPABASE:
         cur = conn.cursor()
-        cur.execute(sql.replace("?","%s"), params)
+        cur.execute(_adaptar_sql_pg(sql), params)
     else:
         conn.execute(sql, params)
 
