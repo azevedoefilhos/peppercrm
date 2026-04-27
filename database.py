@@ -1,8 +1,7 @@
 """
 database.py -- PepperCRM
-Camada de acesso ao banco de dados.
-Em producao (Streamlit Cloud): usa Supabase (PostgreSQL via psycopg2)
-Em desenvolvimento (local):    usa SQLite (comportamento atual)
+Em producao (Streamlit Cloud): usa Supabase via Session Pooler (IPv4)
+Em desenvolvimento (local):    usa SQLite
 """
 
 import os
@@ -30,7 +29,7 @@ if _USE_SUPABASE:
     def _traduzir_sql_pg(sql):
         import re
         sql = sql.replace("?", "%s")
-        # Complexas ANTES das simples -- ordem importa
+        # Complexas ANTES das simples
         sql = re.sub(r"date\('now',\s*'start of month',\s*'-1 day'\)",
             "(DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 day')", sql)
         sql = re.sub(r"date\('now',\s*'start of month',\s*'-1 month'\)",
@@ -63,6 +62,11 @@ if _USE_SUPABASE:
         sql = re.sub(r"GROUP_CONCAT\(([^)]+)\)",
             lambda m: f"STRING_AGG({m.group(1).strip()}, ',')", sql)
         sql = sql.replace("IFNULL(", "COALESCE(")
+        # Cast colunas TEXT de data para DATE nas comparacoes
+        _cols = r"(data_pedido|data_contato|data_pesquisa|data_followup|data_entrega|data_visita|data_pagamento|data_inicio|data_fim|data_registro|data_vigencia|data_upload)"
+        sql = re.sub(rf"({_cols})\s*(>=|<=|=|>|<)", r"\1::DATE \3", sql)
+        sql = re.sub(rf"({_cols})\s+BETWEEN", r"\1::DATE BETWEEN", sql)
+        # ROUND com parser de tokens
         result = []; i = 0; sql_up = sql.upper()
         while i < len(sql):
             if sql_up[i:i+6] == "ROUND(":
@@ -89,13 +93,15 @@ if _USE_SUPABASE:
         return "".join(result)
 
     def _get_pg_url():
-        url   = os.environ.get("SUPABASE_URL", "")
+        import urllib.parse
         senha = urllib.parse.quote(os.environ.get("SUPABASE_DB_PASSWORD", ""))
-        host  = url.replace("https://","").replace("http://","")
-        return f"postgresql://postgres:{senha}@db.{host}:5432/postgres"
+        # Usa Session Pooler (IPv4 compativel) porta 5432
+        return (f"postgresql://postgres.yunzqndswpwttejlgeaa:{senha}"
+                f"@aws-1-sa-east-1.pooler.supabase.com:5432/postgres"
+                f"?sslmode=require")
 
     def conectar():
-        return psycopg2.connect(_get_pg_url(), connect_timeout=10)
+        return psycopg2.connect(_get_pg_url(), connect_timeout=15)
 
     def query(sql, params=()):
         sql_pg = _traduzir_sql_pg(sql)
