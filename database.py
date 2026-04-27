@@ -40,30 +40,65 @@ if _USE_SUPABASE:
 
     def conectar():
         """Retorna conexao PostgreSQL (Supabase)."""
-        return psycopg2.connect(_get_pg_url(), connect_timeout=10)
+        conn = psycopg2.connect(_get_pg_url(), connect_timeout=10)
+        return conn
+
+    def _executar_pg(conn, sql, params=()):
+        """Executa SQL no PostgreSQL adaptando ROUND para double precision."""
+        sql_pg = sql.replace("?", "%s")
+        # Substitui ROUND(expr, n) por ROUND(expr::NUMERIC, n) de forma segura
+        # usando split por token em vez de regex
+        sql_pg = _fix_round_pg(sql_pg)
+        cur = conn.cursor()
+        cur.execute(sql_pg, params)
+        return cur
+
+    def _fix_round_pg(sql):
+        """Substitui ROUND( por ROUND(( e adiciona )::NUMERIC antes da virgula/fecha."""
+        if "ROUND(" not in sql.upper():
+            return sql
+        result = []
+        i = 0
+        sql_up = sql.upper()
+        while i < len(sql):
+            if sql_up[i:i+6] == "ROUND(":
+                result.append("ROUND((")
+                i += 6
+                depth = 1
+                inner = []
+                while i < len(sql) and depth > 0:
+                    c = sql[i]
+                    if c == "(": depth += 1
+                    elif c == ")": depth -= 1
+                    if depth > 0:
+                        inner.append(c)
+                    i += 1
+                inner_str = "".join(inner)
+                # Verifica se tem segundo argumento (virgula no nivel 0)
+                d = 0
+                comma_pos = -1
+                for j, c in enumerate(inner_str):
+                    if c == "(": d += 1
+                    elif c == ")": d -= 1
+                    elif c == "," and d == 0:
+                        comma_pos = j; break
+                if comma_pos >= 0:
+                    expr  = inner_str[:comma_pos]
+                    resto = inner_str[comma_pos:]
+                    result.append(f"{expr})::NUMERIC{resto})")
+                else:
+                    result.append(f"{inner_str})::NUMERIC)")
+            else:
+                result.append(sql[i]); i += 1
+        return "".join(result)
 
     def _adaptar_sql_pg(sql):
-        """Adapta SQL SQLite para PostgreSQL."""
-        import re
-        # ? → %s
-        sql = sql.replace("?", "%s")
-        # ROUND(x, n) → ROUND(x::NUMERIC, n)
-        sql = re.sub(
-            r'ROUND\s*\(\s*(?!.*::NUMERIC)([\w\s\.\(\)\*\+\-\/,]+?),\s*(\d+)\s*\)',
-            lambda m: f"ROUND(({m.group(1)})::NUMERIC, {m.group(2)})",
-            sql
-        )
-        # ROUND(x) sem segundo argumento → ROUND(x::NUMERIC)
-        sql = re.sub(
-            r'ROUND\s*\(\s*(?!.*::NUMERIC)([^,\)]+)\s*\)(?!\s*::)',
-            lambda m: f"ROUND(({m.group(1)})::NUMERIC)",
-            sql
-        )
-        return sql
+        """Adapta SQL SQLite para PostgreSQL — apenas troca placeholders."""
+        return sql.replace("?", "%s")
 
     def query(sql, params=()):
         """Executa SELECT e retorna lista de tuplas."""
-        sql_pg = _adaptar_sql_pg(sql)
+        sql_pg = _fix_round_pg(sql.replace("?", "%s"))
         conn   = conectar()
         try:
             cur = conn.cursor()
@@ -146,7 +181,7 @@ def registrar_historico(conn, pedido_id, campo, valor_antes, valor_depois, obs=N
               str(valor_depois) if valor_depois is not None else None, obs)
     if _USE_SUPABASE:
         cur = conn.cursor()
-        cur.execute(_adaptar_sql_pg(sql), params)
+        cur.execute(sql.replace("?", "%s"), params)
     else:
         conn.execute(sql, params)
 
