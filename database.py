@@ -41,8 +41,23 @@ if _USE_SUPABASE:
     def _traduzir_sql_pg(sql):
         import re
         sql = sql.replace("?", "%s")
+        # IMPORTANTE: substituições complexas ANTES das simples
+        sql = re.sub(r"date\('now',\s*'start of month',\s*'-1 day'\)",
+            "(DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 day')", sql)
+        sql = re.sub(r"date\('now',\s*'start of month',\s*'-1 month'\)",
+            "DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')", sql)
+        sql = re.sub(r"date\('now',\s*'start of month',\s*'-2 months'\)",
+            "DATE_TRUNC('month', CURRENT_DATE - INTERVAL '2 months')", sql)
+        sql = re.sub(r"date\('now',\s*'start of month'\)",
+            "DATE_TRUNC('month', CURRENT_DATE)", sql)
+        sql = re.sub(r"date\('now',\s*'start of year'\)",
+            "DATE_TRUNC('year', CURRENT_DATE)", sql)
+        sql = re.sub(r"date\('now',\s*'(-?\d+)\s*(day|days|month|months|year|years)'\)",
+            lambda m: f"(CURRENT_DATE - INTERVAL '{abs(int(m.group(1)))} {m.group(2)}')", sql)
+        sql = re.sub(r"date\('now',\s*'\+(\d+)\s*(day|days)'\)",
+            lambda m: f"(CURRENT_DATE + INTERVAL '{m.group(1)} {m.group(2)}')", sql)
+        # Somente DEPOIS das complexas, substitui o simples
         sql = sql.replace("date('now')", "CURRENT_DATE")
-        sql = re.sub(r"date\('now',\s*'start of month'\)", "DATE_TRUNC('month', CURRENT_DATE)", sql)
         sql = re.sub(r"date\('now',\s*'start of month',\s*'-1 day'\)", "(DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 day')", sql)
         sql = re.sub(r"date\('now',\s*'start of month',\s*'-1 month'\)", "DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')", sql)
         sql = re.sub(r"date\('now',\s*'start of month',\s*'-2 months'\)", "DATE_TRUNC('month', CURRENT_DATE - INTERVAL '2 months')", sql)
