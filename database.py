@@ -1,59 +1,64 @@
 """
-database_supabase.py — PepperCRM
+database.py — PepperCRM
 Camada de acesso ao banco de dados.
-Em produção (Streamlit Cloud): usa Supabase (PostgreSQL via psycopg2)
+Em producao (Streamlit Cloud): usa Supabase (PostgreSQL via psycopg2)
 Em desenvolvimento (local):    usa SQLite (comportamento atual)
 """
 
 import os
 import sqlite3
 
-# ── Constantes globais usadas pelos módulos ─────────────────────────────
-TIPOS_PONTO_EXTRA = ["Ponta de gôndola","Ilha","Check-stand","Clip strip","Display"]
+# ── Constantes globais usadas pelos modulos ──────────────────────────────
+TIPOS_PONTO_EXTRA = ["Ponta de gondola","Ilha","Check-stand","Clip strip","Display"]
 
-# ── Detecta ambiente ─────────────────────────────────────────────────────
-# Quando rodando no Streamlit Cloud, a variável SUPABASE_URL estará definida
-# nos secrets do app. Localmente usa SQLite normalmente.
-_USE_SUPABASE = bool(os.environ.get("SUPABASE_URL") or
-                     (hasattr(__import__('streamlit'), 'secrets') and
-                      __import__('streamlit').secrets.get("SUPABASE_URL")))
+# ── Detecta ambiente de forma segura ─────────────────────────────────────
+# Usa APENAS variavel de ambiente — sem tentar ler st.secrets no import
+# O Streamlit Cloud define SUPABASE_URL automaticamente via secrets
+_USE_SUPABASE = bool(os.environ.get("SUPABASE_URL"))
+
+# Tenta carregar do secrets.toml apenas se existir (sem crashar)
+if not _USE_SUPABASE:
+    try:
+        import streamlit as st
+        _url = st.secrets.get("SUPABASE_URL", "")
+        if _url:
+            os.environ["SUPABASE_URL"] = _url
+            os.environ["SUPABASE_DB_PASSWORD"] = st.secrets.get("SUPABASE_DB_PASSWORD", "")
+            _USE_SUPABASE = True
+    except Exception:
+        _USE_SUPABASE = False
 
 if _USE_SUPABASE:
     import psycopg2
-    import psycopg2.extras
     import urllib.parse
 
     def _get_pg_url():
-        import streamlit as st
-        url      = st.secrets["SUPABASE_URL"]
-        senha    = urllib.parse.quote(st.secrets["SUPABASE_DB_PASSWORD"])
-        host     = url.replace("https://","").replace("http://","")
-        db_host  = f"db.{host}"
-        return f"postgresql://postgres:{senha}@{db_host}:5432/postgres"
+        url   = os.environ.get("SUPABASE_URL", "")
+        senha = urllib.parse.quote(os.environ.get("SUPABASE_DB_PASSWORD", ""))
+        host  = url.replace("https://","").replace("http://","")
+        return f"postgresql://postgres:{senha}@db.{host}:5432/postgres"
 
     def conectar():
-        """Retorna conexão PostgreSQL (Supabase)."""
+        """Retorna conexao PostgreSQL (Supabase)."""
         return psycopg2.connect(_get_pg_url(), connect_timeout=10)
 
     def query(sql, params=()):
-        """Executa SELECT e retorna lista de tuplas — compatível com SQLite."""
-        # Converte placeholders ? → %s (diferença SQLite vs PostgreSQL)
+        """Executa SELECT e retorna lista de tuplas."""
         sql_pg = sql.replace("?", "%s")
         conn   = conectar()
         try:
             cur = conn.cursor()
             cur.execute(sql_pg, params)
-            rows = cur.fetchall()
-            return rows
+            return cur.fetchall()
         finally:
             conn.close()
 
 else:
     # ── Modo SQLite (desenvolvimento local) ──────────────────────────────
-    _DB_PATH = os.path.join(os.path.dirname(__file__), "peppercrm.db")
+    _DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "peppercrm.db")
 
     def conectar():
-        """Retorna conexão SQLite."""
+        """Retorna conexao SQLite."""
         conn = sqlite3.connect(_DB_PATH)
         conn.execute("PRAGMA foreign_keys = ON")
         return conn
@@ -62,13 +67,12 @@ else:
         """Executa SELECT e retorna lista de tuplas."""
         conn = conectar()
         try:
-            rows = conn.execute(sql, params).fetchall()
-            return rows
+            return conn.execute(sql, params).fetchall()
         finally:
             conn.close()
 
 
-# ── Funções auxiliares (idênticas independente do banco) ─────────────────
+# ── Funcoes auxiliares ────────────────────────────────────────────────────
 
 def get_percentual_comissao(fornecedor_id: int) -> float:
     r = query("SELECT percentual FROM comissao WHERE fornecedor_id=? AND ativo=1 LIMIT 1",
@@ -85,8 +89,8 @@ def get_fornecedores_do_cliente(cliente_id: int):
     """, (cliente_id,))
 
 def get_mix_com_preco(cliente_id: int, fornecedor_id: int, pdv_id=None):
-    extra = "AND m.pdv_id=?" if pdv_id else ""
-    params= (cliente_id, fornecedor_id, pdv_id) if pdv_id else (cliente_id, fornecedor_id)
+    extra  = "AND m.pdv_id=?" if pdv_id else ""
+    params = (cliente_id, fornecedor_id, pdv_id) if pdv_id else (cliente_id, fornecedor_id)
     return query(f"""
         SELECT p.produto_id, p.descricao_curta, p.descricao,
                p.codigo_produto, p.ean,
@@ -122,27 +126,19 @@ def registrar_historico(conn, pedido_id, campo, valor_antes, valor_depois, obs=N
               str(valor_antes) if valor_antes is not None else None,
               str(valor_depois) if valor_depois is not None else None, obs)
     if _USE_SUPABASE:
-        sql_pg = sql.replace("?", "%s")
         cur = conn.cursor()
-        cur.execute(sql_pg, params)
+        cur.execute(sql.replace("?","%s"), params)
     else:
         conn.execute(sql, params)
 
-
-# ── Mantém compatibilidade com código existente ───────────────────────────
-# O database.py original tem criar_tabelas() e _migrar_todos()
-# Em produção (Supabase) essas funções não fazem nada —
-# a estrutura foi criada pelo script de migração
-
 def criar_tabelas():
-    """Compatibilidade — em produção as tabelas já existem no Supabase."""
+    """Compatibilidade — em producao as tabelas ja existem no Supabase."""
     pass
 
 def _migrar_todos():
-    """Compatibilidade — migração já foi feita pelo script dedicado."""
+    """Compatibilidade — migracao ja foi feita pelo script dedicado."""
     pass
 
 def get_nome_empresa():
-    """Retorna o nome da empresa da configuração."""
     r = query("SELECT empresa_nome FROM configuracao LIMIT 1")
     return r[0][0] if r and r[0][0] else "PepperCRM"
