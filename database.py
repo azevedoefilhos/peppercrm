@@ -99,8 +99,8 @@ if _USE_SUPABASE:
         # Cast colunas TEXT de data para DATE nas comparacoes
         # Usa lookbehind para capturar apenas quando precedida de ponto (alias.coluna)
         _cols = r"data_pedido|data_contato|data_pesquisa|data_followup|data_entrega|data_visita|data_pagamento|data_inicio|data_fim|data_registro|data_vigencia|data_upload"
-        sql = re.sub(rf"\.({_cols})\s*(>=|<=|=|>|<)", r".\1::DATE \2", sql)
-        sql = re.sub(rf"\.({_cols})\s+BETWEEN", r".\1::DATE BETWEEN", sql)
+        sql = re.sub(rf"\b({_cols})\b(\s*)(>=|<=|=|>|<)", r"\1::DATE\2\3", sql)
+        sql = re.sub(rf"\b({_cols})\b(\s+)BETWEEN\b", r"\1::DATE\2BETWEEN", sql)
         result = []; i = 0; sql_up = sql.upper()
         while i < len(sql):
             if sql_up[i:i+6] == "ROUND(":
