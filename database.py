@@ -41,15 +41,10 @@ if _USE_SUPABASE:
         return "".join(buf), i
 
     def _traduzir_julianday(sql):
-        """Traduz julianday SQLite -> diferenca de datas PostgreSQL.
-        No PostgreSQL, DATE - DATE retorna INTEGER diretamente.
-        Nao usar EXTRACT(DAY FROM ...) pois nao aceita integer.
-        """
         import re
         out = []
         i = 0
         while i < len(sql):
-            # CAST(julianday('now') - julianday(EXPR) AS INTEGER)
             m = re.match(r"CAST\(julianday\('now'\)\s*-\s*julianday\(", sql[i:], re.IGNORECASE)
             if m:
                 i += m.end()
@@ -59,7 +54,6 @@ if _USE_SUPABASE:
                     i += rest.end()
                 out.append(f"(CURRENT_DATE - ({expr.strip()})::DATE)")
                 continue
-            # julianday('now') - julianday(EXPR)
             m2 = re.match(r"julianday\('now'\)\s*-\s*julianday\(", sql[i:], re.IGNORECASE)
             if m2:
                 i += m2.end()
@@ -134,20 +128,90 @@ if _USE_SUPABASE:
     def _get_pg_password():
         return os.environ.get("SUPABASE_DB_PASSWORD", "")
 
+    # ── Wrapper de cursor compativel com SQLite ──────────────────────────────
+    class _PgCursor:
+        """Cursor psycopg2 que aceita ? como placeholder e suporta lastrowid."""
+        def __init__(self, pg_cur):
+            self._cur = pg_cur
+            self.lastrowid = None
+
+        def execute(self, sql, params=()):
+            sql_pg = _traduzir_sql_pg(sql)
+            # Adiciona RETURNING se for INSERT sem RETURNING
+            import re
+            is_insert = re.match(r'\s*INSERT\s+INTO\s+', sql_pg, re.IGNORECASE)
+            has_returning = 'RETURNING' in sql_pg.upper()
+            if is_insert and not has_returning:
+                # Descobre o nome da tabela e assume coluna _id
+                m = re.match(r'\s*INSERT\s+INTO\s+(\w+)', sql_pg, re.IGNORECASE)
+                if m:
+                    table = m.group(1)
+                    sql_pg = sql_pg.rstrip().rstrip(')') + f') RETURNING {table}_id'
+                    # Remove o ) extra que pode ter sido adicionado incorretamente
+                    # Tenta de forma mais segura
+                    sql_pg = re.sub(r'\)\s*RETURNING', ') RETURNING', sql_pg)
+            self._cur.execute(sql_pg, params)
+            if is_insert:
+                try:
+                    row = self._cur.fetchone()
+                    self.lastrowid = row[0] if row else None
+                except Exception:
+                    self.lastrowid = None
+
+        def fetchall(self):
+            return self._cur.fetchall()
+
+        def fetchone(self):
+            return self._cur.fetchone()
+
+    class _PgConn:
+        """Conexao psycopg2 compativel com interface SQLite."""
+        def __init__(self):
+            self._conn = psycopg2.connect(
+                host="aws-1-sa-east-1.pooler.supabase.com",
+                port=5432,
+                dbname="postgres",
+                user="postgres.yunzqndswpwttejlgeaa",
+                password=os.environ.get("SUPABASE_DB_PASSWORD", ""),
+                sslmode="require",
+                connect_timeout=15,
+            )
+
+        def cursor(self):
+            return _PgCursor(self._conn.cursor())
+
+        def execute(self, sql, params=()):
+            cur = self.cursor()
+            cur.execute(sql, params)
+            return cur
+
+        def commit(self):
+            self._conn.commit()
+
+        def close(self):
+            self._conn.close()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            self._conn.commit()
+            self._conn.close()
+
     def conectar():
-        return psycopg2.connect(
+        return _PgConn()
+
+    def query(sql, params=()):
+        sql_pg = _traduzir_sql_pg(sql)
+        conn = psycopg2.connect(
             host="aws-1-sa-east-1.pooler.supabase.com",
             port=5432,
             dbname="postgres",
             user="postgres.yunzqndswpwttejlgeaa",
-            password=_get_pg_password(),
+            password=os.environ.get("SUPABASE_DB_PASSWORD", ""),
             sslmode="require",
             connect_timeout=15,
         )
-
-    def query(sql, params=()):
-        sql_pg = _traduzir_sql_pg(sql)
-        conn = conectar()
         try:
             cur = conn.cursor()
             cur.execute(sql_pg, params)
@@ -157,7 +221,15 @@ if _USE_SUPABASE:
 
     def execute_write(sql, params=()):
         sql_pg = _traduzir_sql_pg(sql)
-        conn = conectar()
+        conn = psycopg2.connect(
+            host="aws-1-sa-east-1.pooler.supabase.com",
+            port=5432,
+            dbname="postgres",
+            user="postgres.yunzqndswpwttejlgeaa",
+            password=os.environ.get("SUPABASE_DB_PASSWORD", ""),
+            sslmode="require",
+            connect_timeout=15,
+        )
         try:
             cur = conn.cursor()
             cur.execute(sql_pg, params)
@@ -246,11 +318,7 @@ def registrar_historico(conn, pedido_id, campo, valor_antes, valor_depois, obs=N
     params = (pedido_id, datetime.now().isoformat(), campo,
               str(valor_antes) if valor_antes is not None else None,
               str(valor_depois) if valor_depois is not None else None, obs)
-    if _USE_SUPABASE:
-        cur = conn.cursor()
-        cur.execute(sql.replace("?","%s"), params)
-    else:
-        conn.execute(sql, params)
+    conn.execute(sql, params)
 
 def criar_tabelas():
     pass
