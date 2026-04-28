@@ -14,7 +14,7 @@ from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
                                 Paragraph, Spacer, HRFlowable, KeepTogether)
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-from database import conectar, query, TIPOS_PONTO_EXTRA
+from database import execute_write, conectar, query, TIPOS_PONTO_EXTRA
 
 UFS = ["SP","AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT",
        "PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","TO"]
@@ -499,14 +499,11 @@ def _tela_cabecalho():
     btn_label = "▶️ Iniciar coleta" if tipo_pesquisa == "vinculada" else "▶️ Iniciar pesquisa livre"
     if st.button(btn_label, type="primary",
                  use_container_width=True, key="btn_iniciar"):
-        conn = conectar()
-        cur  = conn.cursor()
-        cur.execute("""INSERT INTO pesquisa_preco
+        pq_id = execute_write("""INSERT INTO pesquisa_preco
             (data_pesquisa, pdv_id, cliente_id, fornecedor_id, observacao, status)
-            VALUES (?,?,?,?,?,'rascunho')""",
+            VALUES (?,?,?,?,?,'rascunho')
+            RETURNING pesquisa_id""",
             (str(data_pq), pdv_id, cli_id, forn_id_pq, obs_pq or None))
-        pq_id = cur.lastrowid
-        conn.commit(); conn.close()
         _limpar_estado_cabecalho()
         st.session_state["pq_id"]   = pq_id
         st.session_state["pq_modo"] = "coleta"
