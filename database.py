@@ -139,26 +139,8 @@ if _USE_SUPABASE:
 
         def execute(self, sql, params=()):
             sql_pg = _traduzir_sql_pg(sql)
-            # Adiciona RETURNING se for INSERT sem RETURNING
-            import re
-            is_insert = re.match(r'\s*INSERT\s+INTO\s+', sql_pg, re.IGNORECASE)
-            has_returning = 'RETURNING' in sql_pg.upper()
-            if is_insert and not has_returning:
-                # Descobre o nome da tabela e assume coluna _id
-                m = re.match(r'\s*INSERT\s+INTO\s+(\w+)', sql_pg, re.IGNORECASE)
-                if m:
-                    table = m.group(1)
-                    sql_pg = sql_pg.rstrip().rstrip(')') + f') RETURNING {table}_id'
-                    # Remove o ) extra que pode ter sido adicionado incorretamente
-                    # Tenta de forma mais segura
-                    sql_pg = re.sub(r'\)\s*RETURNING', ') RETURNING', sql_pg)
             self._cur.execute(sql_pg, params)
-            if is_insert:
-                try:
-                    row = self._cur.fetchone()
-                    self.lastrowid = row[0] if row else None
-                except Exception:
-                    self.lastrowid = None
+            self.lastrowid = None
 
         def fetchall(self):
             return self._cur.fetchall()
