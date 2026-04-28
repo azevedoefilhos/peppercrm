@@ -92,42 +92,21 @@ if _USE_SUPABASE:
                 result.append(sql[i]); i += 1
         return "".join(result)
 
-    def _get_pg_url():
-        import urllib.parse
-        senha = urllib.parse.quote(os.environ.get("SUPABASE_DB_PASSWORD", ""))
-        # Usa Session Pooler (IPv4 compativel) porta 5432
-        return (f"postgresql://postgres.yunzqndswpwttejlgeaa:{senha}"
-                f"@aws-1-sa-east-1.pooler.supabase.com:5432/postgres"
-                f"?sslmode=require")
+    def _get_pg_password():
+    import os
+    return os.environ.get("SUPABASE_DB_PASSWORD", "")
 
-    def conectar():
-        return psycopg2.connect(_get_pg_url(), connect_timeout=15)
-
-    def query(sql, params=()):
-        sql_pg = _traduzir_sql_pg(sql)
-        conn   = conectar()
-        try:
-            cur = conn.cursor()
-            cur.execute(sql_pg, params)
-            return cur.fetchall()
-        finally:
-            conn.close()
-
-else:
-    _DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "peppercrm.db")
-
-    def conectar():
-        conn = sqlite3.connect(_DB_PATH)
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
-
-    def query(sql, params=()):
-        conn = conectar()
-        try:
-            return conn.execute(sql, params).fetchall()
-        finally:
-            conn.close()
-
+def conectar():
+    import psycopg2
+    return psycopg2.connect(
+        host="aws-1-sa-east-1.pooler.supabase.com",
+        port=5432,
+        dbname="postgres",
+        user="postgres.yunzqndswpwttejlgeaa",
+        password=_get_pg_password(),
+        sslmode="require",
+        connect_timeout=15,
+    )
 
 def get_percentual_comissao(fornecedor_id):
     r = query("SELECT percentual FROM comissao WHERE fornecedor_id=? AND ativo=1 LIMIT 1",
