@@ -2050,8 +2050,7 @@ def _form_novo_concorrente_rapido(pq_id, prod_id, prod_nome, forn_id):
              desc.strip(), desc_c.strip() or None,
              peso or None, um,
              ean_conc.strip() or None,
-             1 if auditavel else 0,
-             obs_nc.strip() or None))
+             1 if auditavel else 0))
         pc_id_novo = cur.lastrowid
         conn.commit()
 
