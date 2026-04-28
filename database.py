@@ -96,6 +96,13 @@ if _USE_SUPABASE:
         sql = re.sub(r"GROUP_CONCAT\(([^)]+)\)",
             lambda m: f"STRING_AGG({m.group(1).strip()}, ',')", sql)
         sql = sql.replace("IFNULL(", "COALESCE(")
+        def _fix_insert_or(m):
+            suffix = " ON CONFLICT DO NOTHING" if "IGNORE" in m.group(0).upper() else " ON CONFLICT DO UPDATE SET"
+            return "INSERT INTO"
+        had_or_ignore = bool(re.search(r"INSERT\s+OR\s+IGNORE\s+INTO", sql, re.IGNORECASE))
+        sql = re.sub(r"INSERT\s+OR\s+(?:IGNORE|REPLACE)\s+INTO", "INSERT INTO", sql, flags=re.IGNORECASE)
+        if had_or_ignore:
+            sql = sql.rstrip() + " ON CONFLICT DO NOTHING"
         # Cast colunas TEXT de data para DATE nas comparacoes
         # Usa lookbehind para capturar apenas quando precedida de ponto (alias.coluna)
         _cols = r"data_pedido|data_contato|data_pesquisa|data_followup|data_entrega|data_visita|data_pagamento|data_inicio|data_fim|data_registro|data_vigencia|data_upload"
