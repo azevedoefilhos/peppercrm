@@ -54,9 +54,9 @@ if _USE_SUPABASE:
         sql = re.sub(r"printf\('%02d',\s*([^)]+)\)",
             lambda m: f"LPAD(CAST({m.group(1).strip()} AS TEXT), 2, '0')", sql)
         sql = re.sub(r"CAST\(julianday\('now'\)\s*-\s*julianday\(([^)]+)\)\s*AS\s*INTEGER\)",
-            lambda m: f"EXTRACT(DAY FROM (CURRENT_DATE - {m.group(1).strip()}::DATE))::INTEGER", sql)
+            lambda m: f"EXTRACT(DAY FROM (CURRENT_DATE - ({m.group(1).strip()})::DATE))::INTEGER", sql)
         sql = re.sub(r"julianday\('now'\)\s*-\s*julianday\(([^)]+)\)",
-            lambda m: f"EXTRACT(DAY FROM (CURRENT_DATE - {m.group(1).strip()}::DATE))", sql)
+            lambda m: f"EXTRACT(DAY FROM (CURRENT_DATE - ({m.group(1).strip()})::DATE))", sql)
         sql = re.sub(r"GROUP_CONCAT\(([^,)]+),\s*'([^']+)'\)",
             lambda m: f"STRING_AGG({m.group(1).strip()}, '{m.group(2)}')", sql)
         sql = re.sub(r"GROUP_CONCAT\(([^)]+)\)",
