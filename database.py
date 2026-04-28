@@ -267,3 +267,5 @@ def _migrar_todos():
 def get_nome_empresa():
     r = query("SELECT empresa_nome FROM configuracao LIMIT 1")
     return r[0][0] if r and r[0][0] else "PepperCRM"
+#   v 2  
+ 
