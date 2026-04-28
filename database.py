@@ -41,10 +41,15 @@ if _USE_SUPABASE:
         return "".join(buf), i
 
     def _traduzir_julianday(sql):
+        """Traduz julianday SQLite -> diferenca de datas PostgreSQL.
+        No PostgreSQL, DATE - DATE retorna INTEGER diretamente.
+        Nao usar EXTRACT(DAY FROM ...) pois nao aceita integer.
+        """
         import re
         out = []
         i = 0
         while i < len(sql):
+            # CAST(julianday('now') - julianday(EXPR) AS INTEGER)
             m = re.match(r"CAST\(julianday\('now'\)\s*-\s*julianday\(", sql[i:], re.IGNORECASE)
             if m:
                 i += m.end()
@@ -52,13 +57,14 @@ if _USE_SUPABASE:
                 rest = re.match(r"\s*AS\s*INTEGER\)", sql[i:], re.IGNORECASE)
                 if rest:
                     i += rest.end()
-                out.append(f"EXTRACT(DAY FROM (CURRENT_DATE - ({expr.strip()})::DATE))::INTEGER")
+                out.append(f"(CURRENT_DATE - ({expr.strip()})::DATE)")
                 continue
+            # julianday('now') - julianday(EXPR)
             m2 = re.match(r"julianday\('now'\)\s*-\s*julianday\(", sql[i:], re.IGNORECASE)
             if m2:
                 i += m2.end()
                 expr, i = _extrair_expr_parenteses(sql, i)
-                out.append(f"EXTRACT(DAY FROM (CURRENT_DATE - ({expr.strip()})::DATE))")
+                out.append(f"(CURRENT_DATE - ({expr.strip()})::DATE)")
                 continue
             out.append(sql[i])
             i += 1
