@@ -1929,7 +1929,7 @@ def _upsert_item(pq_id, prod_id, pc_id, dados):
     preco, oferta, frentes, ruptura, pe, tpe, obs = dados
     conn = conectar()
     conn.execute("""DELETE FROM pesquisa_preco_item
-        WHERE pesquisa_id=? AND produto_id IS ? AND produto_concorrente_id IS ?""",
+        WHERE pesquisa_id=? AND produto_id=? AND produto_concorrente_id=?""",
         (pq_id, prod_id, pc_id))
     conn.execute("""INSERT INTO pesquisa_preco_item
         (pesquisa_id, produto_id, produto_concorrente_id,
