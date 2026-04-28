@@ -96,9 +96,7 @@ if _USE_SUPABASE:
         sql = re.sub(r"GROUP_CONCAT\(([^)]+)\)",
             lambda m: f"STRING_AGG({m.group(1).strip()}, ',')", sql)
         sql = sql.replace("IFNULL(", "COALESCE(")
-        _cols = r"(data_pedido|data_contato|data_pesquisa|data_followup|data_entrega|data_visita|data_pagamento|data_inicio|data_fim|data_registro|data_vigencia|data_upload)"
-        sql = re.sub(rf"(?<=[.\s])({_cols})\s*(>=|<=|=|>|<)", r"\1::DATE \2", sql)
-        sql = re.sub(rf"(?<=[.\s])({_cols})\s+BETWEEN", r"\1::DATE BETWEEN", sql)
+        # Nota: cast ::DATE removido — PostgreSQL compara TEXT com DATE implicitamente
         result = []; i = 0; sql_up = sql.upper()
         while i < len(sql):
             if sql_up[i:i+6] == "ROUND(":
