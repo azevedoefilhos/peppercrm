@@ -14,7 +14,7 @@ from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
                                 Paragraph, Spacer, HRFlowable, KeepTogether)
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-from database import execute_write, conectar, query, TIPOS_PONTO_EXTRA
+from database import execute_write, execute_write, conectar, query, TIPOS_PONTO_EXTRA
 
 UFS = ["SP","AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT",
        "PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","TO"]
@@ -2040,19 +2040,17 @@ def _form_novo_concorrente_rapido(pq_id, prod_id, prod_nome, forn_id):
             conc_id = marcas_existentes[idx][0]
 
         # Cria produto concorrente
-        cur = conn.cursor()
-        cur.execute("""INSERT INTO produto_concorrente
+        pc_id_novo = execute_write("""INSERT INTO produto_concorrente
             (concorrente_id, categoria_id, descricao, descricao_curta,
              peso, unidade_medida, ean_concorrente, auditavel, ativo)
-            VALUES (?,?,?,?,?,?,?,?,1)""",
+            VALUES (?,?,?,?,?,?,?,?,1)
+            RETURNING produto_concorrente_id""",
             (conc_id,
              cat_sel[0] if cat_sel and cat_sel[0] else None,
              desc.strip(), desc_c.strip() or None,
              peso or None, um,
              ean_conc.strip() or None,
              1 if auditavel else 0))
-        pc_id_novo = cur.lastrowid
-        conn.commit()
 
         # Vincula ao produto de referência
         conn.execute("""INSERT OR IGNORE INTO produto_concorrente_relacao
