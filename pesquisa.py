@@ -247,7 +247,7 @@ def _tela_lista():
         LEFT JOIN pesquisa_preco_item pi ON pp.pesquisa_id=pi.pesquisa_id
         WHERE {' AND '.join(where)}
           AND (? = 'Todos' OR COALESCE(pdv.tipo_pdv,'') = ?)
-        GROUP BY pp.pesquisa_id
+        GROUP BY pp.pesquisa_id, pp.data_pesquisa, cli.nome_fantasia, pdv.nome_loja, f.nome_fantasia, pp.status
         ORDER BY pp.data_pesquisa DESC
     """, tuple(params + [fil_tipo_pdv, fil_tipo_pdv]))
 
