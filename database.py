@@ -92,7 +92,7 @@ if _USE_SUPABASE:
                 result.append(sql[i]); i += 1
         return "".join(result)
 
-    def _get_pg_password():
+def _get_pg_password():
     import os
     return os.environ.get("SUPABASE_DB_PASSWORD", "")
 
