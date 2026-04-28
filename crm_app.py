@@ -74,7 +74,9 @@ def _coletar_alertas_oportunidade():
             WHERE cr.ativo=1 AND cr.tipo_topico='Negociação'
               AND cr.status NOT IN ('Concluído','Cancelado')
             GROUP BY cr.contato_id
-            HAVING dias >= 15
+            HAVING CAST(julianday('now') - julianday(
+                       COALESCE(MAX(ci.data_interacao), cr.data_contato)
+                   ) AS INTEGER) >= 15
         )""")
     if neg_paradas and neg_paradas[0][0]:
         qtd, min_dias = neg_paradas[0]
