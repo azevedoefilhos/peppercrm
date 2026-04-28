@@ -26,9 +26,53 @@ if not _USE_SUPABASE:
 if _USE_SUPABASE:
     import psycopg2
 
+    def _extrair_expr_parenteses(s, start):
+        """Extrai expressao completa contando parenteses a partir de start (logo apos o '(')."""
+        depth = 1
+        i = start
+        buf = []
+        while i < len(s) and depth > 0:
+            c = s[i]
+            if c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+            if depth > 0:
+                buf.append(c)
+            i += 1
+        return "".join(buf), i
+
+    def _traduzir_julianday(sql):
+        """Traduz julianday SQLite para EXTRACT PostgreSQL usando parser de parenteses."""
+        import re
+        out = []
+        i = 0
+        while i < len(sql):
+            # CAST(julianday('now') - julianday(EXPR) AS INTEGER)
+            m = re.match(r"CAST\(julianday\('now'\)\s*-\s*julianday\(", sql[i:], re.IGNORECASE)
+            if m:
+                i += m.end()
+                expr, i = _extrair_expr_parenteses(sql, i)
+                rest = re.match(r"\s*AS\s*INTEGER\)", sql[i:], re.IGNORECASE)
+                if rest:
+                    i += rest.end()
+                out.append(f"EXTRACT(DAY FROM (CURRENT_DATE - ({expr.strip()})::DATE))::INTEGER")
+                continue
+            # julianday('now') - julianday(EXPR)
+            m2 = re.match(r"julianday\('now'\)\s*-\s*julianday\(", sql[i:], re.IGNORECASE)
+            if m2:
+                i += m2.end()
+                expr, i = _extrair_expr_parenteses(sql, i)
+                out.append(f"EXTRACT(DAY FROM (CURRENT_DATE - ({expr.strip()})::DATE))")
+                continue
+            out.append(sql[i])
+            i += 1
+        return "".join(out)
+
     def _traduzir_sql_pg(sql):
         import re
         sql = sql.replace("?", "%s")
+        # Complexas ANTES das simples
         sql = re.sub(r"date\('now',\s*'start of month',\s*'-1 day'\)",
             "(DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 day')", sql)
         sql = re.sub(r"date\('now',\s*'start of month',\s*'-1 month'\)",
@@ -52,18 +96,18 @@ if _USE_SUPABASE:
             lambda m: f"TO_CHAR({m.group(1).strip()}::DATE, 'MM')", sql)
         sql = re.sub(r"printf\('%02d',\s*([^)]+)\)",
             lambda m: f"LPAD(CAST({m.group(1).strip()} AS TEXT), 2, '0')", sql)
-        sql = re.sub(r"CAST\(julianday\('now'\)\s*-\s*julianday\(([^)]+)\)\s*AS\s*INTEGER\)",
-            lambda m: f"EXTRACT(DAY FROM (CURRENT_DATE - ({m.group(1).strip()})::DATE))::INTEGER", sql)
-        sql = re.sub(r"julianday\('now'\)\s*-\s*julianday\(([^)]+)\)",
-            lambda m: f"EXTRACT(DAY FROM (CURRENT_DATE - ({m.group(1).strip()})::DATE))", sql)
+        # julianday com parser de parenteses (suporta expressoes aninhadas)
+        sql = _traduzir_julianday(sql)
         sql = re.sub(r"GROUP_CONCAT\(([^,)]+),\s*'([^']+)'\)",
             lambda m: f"STRING_AGG({m.group(1).strip()}, '{m.group(2)}')", sql)
         sql = re.sub(r"GROUP_CONCAT\(([^)]+)\)",
             lambda m: f"STRING_AGG({m.group(1).strip()}, ',')", sql)
         sql = sql.replace("IFNULL(", "COALESCE(")
+        # Cast colunas TEXT de data para DATE nas comparacoes
         _cols = r"(data_pedido|data_contato|data_pesquisa|data_followup|data_entrega|data_visita|data_pagamento|data_inicio|data_fim|data_registro|data_vigencia|data_upload)"
         sql = re.sub(rf"({_cols})\s*(>=|<=|=|>|<)", r"\1::DATE \3", sql)
         sql = re.sub(rf"({_cols})\s+BETWEEN", r"\1::DATE BETWEEN", sql)
+        # ROUND com parser de tokens
         result = []; i = 0; sql_up = sql.upper()
         while i < len(sql):
             if sql_up[i:i+6] == "ROUND(":
@@ -155,7 +199,7 @@ else:
         finally:
             conn.close()
 
-# ─── Funções comuns ───────────────────────────────────────────────────────────
+# ─── Funcoes comuns ───────────────────────────────────────────────────────────
 
 def get_percentual_comissao(fornecedor_id):
     r = query("SELECT percentual FROM comissao WHERE fornecedor_id=? AND ativo=1 LIMIT 1",
