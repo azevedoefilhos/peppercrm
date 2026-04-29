@@ -3574,7 +3574,7 @@ def _ac_por_pdv(where_base, params_base, tipo_rel_where, cat_where, cat_params, 
                             JOIN tabela_preco_item tpi ON tpi.tabela_preco_id=tp.tabela_preco_id
                             JOIN produto p ON tpi.produto_id=p.produto_id
                             WHERE tp.fornecedor_id=? AND tp.ativo=1
-                            GROUP BY tp.tabela_preco_id
+                            GROUP BY tp.tabela_preco_id, tp.nome_tabela, tpi.preco_caixa, p.unidades_caixa, p.unidade_medida, p.peso
                             ORDER BY tp.nome_tabela""", (forn_p[0],))
         tab_pdv_opts = [(None, "— Sem comparacao de tabela")] + [
             (t[0], t[1]) for t in tabs_pdv]
