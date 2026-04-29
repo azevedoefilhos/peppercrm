@@ -194,7 +194,7 @@ def _presenca_pdv():
         WHERE pp.fornecedor_id=? AND pp.status='finalizado'
           AND ppi.produto_concorrente_id IS NOT NULL
           AND ppi.ruptura=0
-        GROUP BY pc.produto_concorrente_id
+        GROUP BY pc.produto_concorrente_id, conc.marca_concorrente, pc.descricao_curta, pc.descricao
         ORDER BY pdvs_presentes DESC, conc.marca_concorrente
     """, (forn_id, forn_id))
 
@@ -243,7 +243,7 @@ def _presenca_pdv():
         WHERE pp.fornecedor_id=? AND pp.status='finalizado'
           AND ppi.produto_concorrente_id IS NOT NULL
           AND ppi.ruptura=0
-        GROUP BY conc.concorrente_id
+        GROUP BY conc.concorrente_id, conc.marca_concorrente
         ORDER BY pdvs_presentes DESC
     """, (forn_id,))
 
@@ -389,7 +389,7 @@ def _meu_produto_vs():
         LEFT JOIN pesquisa_preco_item ppi_nosso ON ppi_nosso.pesquisa_id=pp.pesquisa_id
             AND ppi_nosso.produto_id=? AND ppi_nosso.produto_concorrente_id IS NULL
         WHERE rel.produto_id=?
-        GROUP BY rel.produto_concorrente_id
+        GROUP BY rel.produto_concorrente_id, rel.tipo_relacao, conc.marca_concorrente, pc.descricao_curta
         ORDER BY rel.tipo_relacao, pdvs_conc DESC
     """, (forn_id, prod_id, prod_id))
 
@@ -435,7 +435,7 @@ def _meu_produto_vs():
         JOIN concorrente conc       ON pc.concorrente_id=conc.concorrente_id
         WHERE pp.fornecedor_id=? AND pp.status='finalizado'
           AND ppi.frentes IS NOT NULL
-        GROUP BY ppi.produto_concorrente_id
+        GROUP BY ppi.produto_concorrente_id, conc.marca_concorrente, pc.descricao_curta
         ORDER BY media_frentes DESC
     """, (forn_id, prod_id, prod_id, forn_id))
 
@@ -469,7 +469,7 @@ def _meu_produto_vs():
         JOIN produto_concorrente pc ON ppi.produto_concorrente_id=pc.produto_concorrente_id
         JOIN concorrente conc       ON pc.concorrente_id=conc.concorrente_id
         WHERE pp.fornecedor_id=? AND pp.status='finalizado'
-        GROUP BY ppi.produto_concorrente_id
+        GROUP BY ppi.produto_concorrente_id, conc.marca_concorrente, pc.descricao_curta
         ORDER BY pct DESC
     """, (forn_id, prod_id, prod_id, forn_id))
 
@@ -533,7 +533,7 @@ def _oportunidades():
           AND p.fornecedor_id=?
           AND ppi_conc.ruptura=0
           AND (ppi_nosso.pesquisa_item_id IS NULL OR ppi_nosso.ruptura=1)
-        GROUP BY COALESCE(pp.pdv_id, pp.cliente_id), p.produto_id, pc.produto_concorrente_id
+        GROUP BY COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT), p.produto_id, pc.produto_concorrente_id, p.descricao_curta, conc.marca_concorrente, pc.descricao_curta, pdv.nome_loja, cli.nome_fantasia, pdv.cidade, cli.cidade
         ORDER BY vezes_detectado DESC, local
     """, (forn_id, forn_id))
 
@@ -568,7 +568,7 @@ def _oportunidades():
         LEFT JOIN cliente cli       ON pp.cliente_id=cli.cliente_id
         WHERE pp.fornecedor_id=? AND pp.status='finalizado'
           AND ppi.produto_concorrente_id IS NOT NULL
-        GROUP BY COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c')
+        GROUP BY COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c'), pdv.nome_loja, cli.nome_fantasia, pdv.cidade, cli.cidade
         ORDER BY marcas_concorrentes DESC, produtos_concorrentes DESC
     """, (forn_id,))
 
@@ -627,8 +627,8 @@ def _oportunidades():
         JOIN concorrente conc       ON pc.concorrente_id=conc.concorrente_id
         WHERE pp.fornecedor_id=? AND pp.status='finalizado'
           AND ppi.produto_concorrente_id IS NOT NULL AND ppi.ruptura=0
-        GROUP BY conc.concorrente_id
-        HAVING pdvs_presentes > 0
+        GROUP BY conc.concorrente_id, conc.marca_concorrente
+        HAVING COUNT(DISTINCT COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c')) > 0
         ORDER BY pct_sem_ponto DESC, pdvs_presentes DESC
     """, (forn_id,))
 
