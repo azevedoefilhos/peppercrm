@@ -34,7 +34,7 @@ def tela_analise_competitiva():
     col1, col2, col3 = st.columns(3)
     col1.metric("Pesquisas finalizadas", n_pesq)
     col2.metric("Produtos concorrentes cadastrados", n_conc)
-    pdvs_pesq = query("""SELECT COUNT(DISTINCT COALESCE(pdv_id, cliente_id||'c'))
+    pdvs_pesq = query("""SELECT COUNT(DISTINCT COALESCE(pdv_id::TEXT, cliente_id::TEXT||'c'))
         FROM pesquisa_preco WHERE status='finalizado'""")[0][0]
     col3.metric("PDVs/locais pesquisados", pdvs_pesq)
 
