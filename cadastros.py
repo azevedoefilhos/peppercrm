@@ -1533,7 +1533,8 @@ def _historico_precos():
 
     prods_com_hist = query(f"""
         SELECT DISTINCT p.produto_id, p.descricao_curta, p.codigo_produto,
-               COALESCE(cat.nome_categoria,'—'), COALESCE(l.nome_linha,'—')
+               COALESCE(cat.nome_categoria,'—'), COALESCE(l.nome_linha,'—'),
+               cat.nome_categoria, p.descricao_curta
         FROM produto p
         JOIN historico_preco h ON h.produto_id = p.produto_id
         LEFT JOIN categoria cat ON p.categoria_id=cat.categoria_id
