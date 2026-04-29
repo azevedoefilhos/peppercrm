@@ -2030,11 +2030,9 @@ def _form_novo_concorrente_rapido(pq_id, prod_id, prod_nome, forn_id):
             if not nova_marca.strip():
                 st.error("Informe o nome da nova marca.")
                 conn.close(); return
-            cur = conn.cursor()
-            cur.execute("INSERT INTO concorrente (fornecedor_id, marca_concorrente, ativo) VALUES (?,?,1)",
-                        (forn_id, nova_marca.strip()))
-            conc_id = cur.lastrowid
-            conn.commit()
+            conc_id = execute_write(
+                "INSERT INTO concorrente (fornecedor_id, marca_concorrente, ativo) VALUES (?,?,1) RETURNING concorrente_id",
+                (forn_id, nova_marca.strip()))
         else:
             idx = [m[1] for m in marcas_existentes].index(marca_sel)
             conc_id = marcas_existentes[idx][0]
