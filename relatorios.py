@@ -740,7 +740,9 @@ def _rel_cluster():
     # ── Seção 2: Lista de PDVs por cluster com status de compra ──────────
     st.markdown("#### 📋 PDVs por segmento — detalhe individual")
 
-    pdvs = query("""
+    _forn_where2 = "AND p.fornecedor_id = ?" if _forn_id_cob else ""
+    _forn_params2 = (_forn_id_cob,) if _forn_id_cob else ()
+    pdvs = query(f"""
         SELECT
             c.cliente_id,
             c.nome_fantasia,
@@ -757,7 +759,7 @@ def _rel_cluster():
         JOIN pdv ON pdv.pdv_id = c.cliente_id
         LEFT JOIN pedido p ON p.cliente_id = c.cliente_id
             AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
-            AND (? = 'todos' OR p.fornecedor_id = ?)
+            {_forn_where2}
         LEFT JOIN pedido_item pi ON pi.pedido_id = p.pedido_id
             AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO')
         WHERE c.status NOT IN ('Inativo','Encerrado')
@@ -766,7 +768,7 @@ def _rel_cluster():
         GROUP BY c.cliente_id, c.nome_fantasia, c.cidade,
                  pdv.cluster, pdv.tamanho_pdv, pdv.tipo_pdv, c.status
         ORDER BY pdv.cluster, pdv.tamanho_pdv, total_comprado DESC
-    """, (forn_sel[0], forn_sel[0], cl_sel, cl_sel, tam_sel, tam_sel))
+    """, _forn_params2 + (cl_sel, cl_sel, tam_sel, tam_sel))
 
     if not pdvs:
         st.info("Nenhum PDV encontrado.")
