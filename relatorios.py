@@ -162,7 +162,7 @@ def _rel_cliente():
         {_FILTRO_BASE}
           AND p.data_pedido BETWEEN {d_ini} AND {d_fim}
           {where_extra}
-        GROUP BY c.cliente_id, f.fornecedor_id
+        GROUP BY c.cliente_id, c.nome_fantasia, f.fornecedor_id, f.nome_fantasia
         ORDER BY total DESC
     """, tuple(params))
 
@@ -260,7 +260,7 @@ def _rel_produto():
         {_FILTRO_BASE}
           AND p.data_pedido BETWEEN {d_ini} AND {d_fim}
           {where_extra}
-        GROUP BY pr.produto_id
+        GROUP BY pr.produto_id, pr.codigo_produto, pr.descricao_curta, f.nome_fantasia, cat.nome_categoria
         ORDER BY caixas DESC
         LIMIT {int(top_n)}
     """, tuple(params))
