@@ -631,7 +631,7 @@ def _rel_ranking_pdv():
           AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO')
           AND p.data_pedido BETWEEN {d_ini} AND {d_fim}
           {where_extra}
-        GROUP BY p.cliente_id, c.nome_fantasia, p.pdv_id, COALESCE(p.pdv_id, 0), pdv.nome_loja, pdv.numero_loja, pdv.cidade
+        GROUP BY p.cliente_id, c.nome_fantasia, c.cidade, c.estado, p.pdv_id, COALESCE(p.pdv_id, 0), pdv.nome_loja, pdv.numero_loja, pdv.cidade, pdv.estado
         ORDER BY total DESC
         LIMIT {int(top_n)}
     """, tuple(params))
@@ -690,7 +690,10 @@ def _rel_cluster():
     st.markdown("#### 📊 Cobertura por cluster — clientes ativos vs abordados")
     st.caption("Mostra quantos PDVs de cada cluster já compraram de cada fornecedor.")
 
-    cob = query("""
+    _forn_id_cob = int(forn_sel[0]) if str(forn_sel[0]).lower() != 'todos' else None
+    _forn_where  = "AND p.fornecedor_id = ?" if _forn_id_cob else ""
+    _forn_params = (_forn_id_cob,) if _forn_id_cob else ()
+    cob = query(f"""
         SELECT
             pdv.cluster,
             pdv.tamanho_pdv,
@@ -704,13 +707,13 @@ def _rel_cluster():
         JOIN pdv ON pdv.pdv_id = c.cliente_id
         LEFT JOIN pedido p ON p.cliente_id = c.cliente_id
             AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
-            AND (? = 'todos' OR p.fornecedor_id = ?)
+            {{_forn_where}}
         WHERE c.status NOT IN ('Inativo','Encerrado')
           AND (? = 'Todos' OR pdv.cluster = ?)
           AND (? = 'Todos' OR pdv.tamanho_pdv = ?)
-        GROUP BY pdv.cluster, pdv.tamanho_pdv, f.nome_fantasia
+        GROUP BY pdv.cluster, pdv.tamanho_pdv
         ORDER BY pdv.cluster, pdv.tamanho_pdv
-    """, (forn_sel[0], forn_sel[0], cl_sel, cl_sel, tam_sel, tam_sel))
+    """, _forn_params + (cl_sel, cl_sel, tam_sel, tam_sel))
 
     if cob:
         df_cob = pd.DataFrame(cob, columns=["Cluster","Tamanho","Total PDVs",
