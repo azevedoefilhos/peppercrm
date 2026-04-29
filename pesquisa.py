@@ -2578,7 +2578,7 @@ def _tela_detalhe(pq_id):
                     WHERE pp.pdv_id=?
                       AND pp.status='finalizado'
                       AND pp.fornecedor_id=?
-                    GROUP BY pp.pesquisa_id
+                    GROUP BY pp.pesquisa_id, pp.data_pesquisa, pi_n.preco
                     ORDER BY pp.data_pesquisa DESC
                     LIMIT 12
                 """, (sel_prod_h[0], sel_prod_h[0], sel_prod_h[0], pdv_id_det, forn_id))
