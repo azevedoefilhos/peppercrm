@@ -3176,7 +3176,7 @@ def _ac_por_produto(where_base, params_base, tipo_rel_where, cat_where, cat_para
           AND {' AND '.join(where_base)}
           {tipo_rel_where}
           {cat_where}
-        GROUP BY pp.pdv_id, ppi.produto_concorrente_id
+        GROUP BY pp.pdv_id, ppi.produto_concorrente_id, cli.nome_fantasia, pdv.nome_loja, pdv.tipo_pdv, conc.marca_concorrente, pc.descricao_curta, rel.tipo_relacao
         ORDER BY marca, preco_medio
     """, tuple([prod_id, prod_id] + params_base + cat_params))
 
@@ -3473,7 +3473,7 @@ def _ac_por_categoria(where_base, params_base, forn_id_global):
         JOIN concorrente conc       ON pc.concorrente_id=conc.concorrente_id
         WHERE pc.categoria_id=?
           AND {' AND '.join(where_base)}
-        GROUP BY conc.concorrente_id
+        GROUP BY conc.concorrente_id, conc.marca_concorrente
         ORDER BY ocorrencias DESC
     """, tuple([cat_sel[0]] + params_base))
 
