@@ -190,7 +190,7 @@ def _tela_por_pedido():
         LEFT JOIN comissao com ON p.fornecedor_id=com.fornecedor_id AND com.ativo=1
         LEFT JOIN comissao_pagamento cpag ON p.pedido_id=cpag.pedido_id
         WHERE {' AND '.join(where)}
-        GROUP BY p.pedido_id
+        GROUP BY p.pedido_id, p.data_pedido, cli.nome_fantasia, f.nome_fantasia, p.status_pedido, p.comissao_percentual, p.desconto_geral, cpag.status_pagamento, cpag.valor_pago, com.percentual
         ORDER BY p.data_pedido DESC
     """, tuple(params))
 
@@ -322,7 +322,7 @@ def _tela_pagamentos():
         LEFT JOIN comissao com ON p.fornecedor_id=com.fornecedor_id AND com.ativo=1
         LEFT JOIN comissao_pagamento cpag ON p.pedido_id=cpag.pedido_id
         WHERE {' AND '.join(where)}
-        GROUP BY p.pedido_id
+        GROUP BY p.pedido_id, p.data_pedido, cli.nome_fantasia, f.nome_fantasia, p.comissao_percentual, p.desconto_geral, cpag.valor_pago, cpag.data_pagamento, cpag.status_pagamento, cpag.observacao, com.percentual
         ORDER BY p.data_pedido DESC
     """, tuple(params))
 
@@ -488,7 +488,7 @@ def _tela_relatorio():
         LEFT JOIN comissao_pagamento cpag ON p.pedido_id=cpag.pedido_id
         WHERE p.status_pedido {status_filter}
           AND p.data_pedido BETWEEN {d_ini_sql} AND {d_fim_sql}
-        GROUP BY f.fornecedor_id
+        GROUP BY f.fornecedor_id, f.nome_fantasia, p.comissao_percentual, com.percentual
         ORDER BY previsto DESC
     """)
 
