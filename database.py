@@ -315,20 +315,35 @@ def get_mix_com_preco(cliente_id, fornecedor_id, pdv_id=None):
     extra  = "AND m.pdv_id=?" if pdv_id else ""
     params = (cliente_id, fornecedor_id, pdv_id) if pdv_id else (cliente_id, fornecedor_id)
     return query(f"""
-        SELECT p.produto_id, p.descricao_curta, p.descricao,
-               p.codigo_produto, p.ean,
-               p.peso, p.unidade_medida, p.unidades_caixa,
-               COALESCE(tpi.preco_caixa, 0) AS preco_caixa,
-               m.mix_id
+        SELECT p.produto_id,
+               p.codigo_produto,
+               p.descricao_curta,
+               p.descricao,
+               p.unidades_caixa,
+               p.unidade_medida,
+               COALESCE(tpi.preco_caixa, 0)  AS preco_caixa,
+               COALESCE(tpi.desconto_max, 0) AS desconto_max,
+               p.ean,
+               ult.quantidade                AS ultima_qtd,
+               ult.data_pedido               AS ultima_data
         FROM mix_cliente m
         JOIN produto p ON m.produto_id=p.produto_id
         LEFT JOIN cliente_fornecedor cf
                ON cf.cliente_id=m.cliente_id AND cf.fornecedor_id=m.fornecedor_id AND cf.ativo=1
         LEFT JOIN tabela_preco_item tpi
                ON tpi.tabela_preco_id=cf.tabela_preco_id AND tpi.produto_id=p.produto_id
+        LEFT JOIN (
+               SELECT pi.produto_id, pi.quantidade, ped.data_pedido
+               FROM pedido_item pi
+               JOIN pedido ped ON pi.pedido_id=ped.pedido_id
+               WHERE ped.cliente_id=? AND ped.fornecedor_id=?
+                 AND ped.status_pedido NOT IN ('CANCELADO','RECUSADO')
+               ORDER BY ped.data_pedido DESC
+               LIMIT 1
+        ) ult ON ult.produto_id=p.produto_id
         WHERE m.cliente_id=? AND m.fornecedor_id=? AND m.ativo=1 {extra}
         ORDER BY p.descricao_curta
-    """, params)
+    """, (cliente_id, fornecedor_id) + ((pdv_id,) if pdv_id else ()) + (cliente_id, fornecedor_id) + ((pdv_id,) if pdv_id else ()))
 
 def get_clientes_ativos():
     return query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo=1 ORDER BY nome_fantasia")
