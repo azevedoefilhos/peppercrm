@@ -325,7 +325,7 @@ def _visao_geral():
         JOIN cliente c ON mc.cliente_id=c.cliente_id
         LEFT JOIN pdv  ON mc.pdv_id=pdv.pdv_id
         WHERE mc.fornecedor_id=? AND mc.ativo=1 AND c.ativo=1
-        GROUP BY mc.cliente_id, mc.pdv_id
+        GROUP BY mc.cliente_id, mc.pdv_id, c.nome_fantasia, pdv.nome_loja
         ORDER BY c.nome_fantasia, pdv.nome_loja
     """, (forn_id,))
 
