@@ -20,7 +20,7 @@ from contatos import tela_contatos, get_followups_vencidos, get_followups_hoje, 
 criar_tabelas()
 _nome = get_nome_empresa()
 
-st.set_page_config(page_title=_nome, page_icon="🌶", layout="wide")
+st.set_page_config(page_title=_nome, layout="wide")
 
 if "pagina"         not in st.session_state: st.session_state["pagina"]         = "home"
 if "id_selecionado" not in st.session_state: st.session_state["id_selecionado"] = None
@@ -493,7 +493,7 @@ def _tela_busca_global():
 
 if pagina == "home":
     col_t, col_b, col_c = st.columns([5, 1, 1])
-    with col_t: st.title(f"🌶 {_nome}")
+    with col_t: st.title(f"{_nome}")
     with col_b:
         st.write("")
         if st.button("🔍 Busca", use_container_width=True): ir("busca_global")
