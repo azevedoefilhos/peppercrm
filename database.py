@@ -150,6 +150,8 @@ if _USE_SUPABASE:
         sql = re.sub(r"GROUP_CONCAT\(([^)]+)\)",
             lambda m: f"STRING_AGG({m.group(1).strip()}, ',')", sql)
         sql = sql.replace("IFNULL(", "COALESCE(")
+        sql = re.sub(r"INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT", "SERIAL PRIMARY KEY", sql, flags=re.IGNORECASE)
+        sql = re.sub(r"INTEGER\s+AUTOINCREMENT", "SERIAL", sql, flags=re.IGNORECASE)
         had_or_ignore = bool(re.search(r"INSERT\s+OR\s+IGNORE\s+INTO", sql, re.IGNORECASE))
         sql = re.sub(r"INSERT\s+OR\s+(?:IGNORE|REPLACE)\s+INTO", "INSERT INTO", sql, flags=re.IGNORECASE)
         if had_or_ignore:
