@@ -176,7 +176,8 @@ if _USE_SUPABASE:
                 sslmode="require",
                 connect_timeout=15,
             )
-            def cursor(self):
+
+        def cursor(self):
             return _PgCursor(self._conn.cursor())
 
         def execute(self, sql, params=()):
