@@ -22,9 +22,56 @@ if not _USE_SUPABASE:
     except Exception:
         _USE_SUPABASE = False
 
+
+class _DictRow:
+    """Permite acesso por nome E por indice em linhas de resultado SQL."""
+    __slots__ = ("_row", "_cols")
+
+    def __init__(self, row, cols):
+        self._row  = row
+        self._cols = cols  # dict nome -> indice
+
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            return self._row[self._cols[key]]
+        return self._row[key]
+
+    def __bool__(self):
+        return self._row is not None
+
+    def __contains__(self, k):
+        return k in self._cols
+
+    def __iter__(self):
+        return iter(self._row)
+
+    def __len__(self):
+        return len(self._row)
+
+    def keys(self):
+        return self._cols.keys()
+
+
+def _make_dict_rows(cur):
+    """Converte resultado de cursor em lista de _DictRow."""
+    rows = cur.fetchall()
+    if rows and cur.description:
+        cols = {d[0]: i for i, d in enumerate(cur.description)}
+        return [_DictRow(r, cols) for r in rows]
+    return rows
+
+
+def _make_dict_row(cur):
+    """Converte fetchone em _DictRow."""
+    row = cur.fetchone()
+    if row and cur.description:
+        cols = {d[0]: i for i, d in enumerate(cur.description)}
+        return _DictRow(row, cols)
+    return row
+
+
 if _USE_SUPABASE:
     import psycopg2
-    
 
     def _extrair_expr_parenteses(s, start):
         depth = 1
@@ -97,15 +144,10 @@ if _USE_SUPABASE:
         sql = re.sub(r"GROUP_CONCAT\(([^)]+)\)",
             lambda m: f"STRING_AGG({m.group(1).strip()}, ',')", sql)
         sql = sql.replace("IFNULL(", "COALESCE(")
-        def _fix_insert_or(m):
-            suffix = " ON CONFLICT DO NOTHING" if "IGNORE" in m.group(0).upper() else " ON CONFLICT DO UPDATE SET"
-            return "INSERT INTO"
         had_or_ignore = bool(re.search(r"INSERT\s+OR\s+IGNORE\s+INTO", sql, re.IGNORECASE))
         sql = re.sub(r"INSERT\s+OR\s+(?:IGNORE|REPLACE)\s+INTO", "INSERT INTO", sql, flags=re.IGNORECASE)
         if had_or_ignore:
             sql = sql.rstrip() + " ON CONFLICT DO NOTHING"
-        # Cast colunas TEXT de data para DATE nas comparacoes
-        # Usa lookbehind para capturar apenas quando precedida de ponto (alias.coluna)
         _cols = r"data_pedido|data_contato|data_pesquisa|data_followup|data_entrega|data_visita|data_pagamento|data_inicio|data_fim|data_registro|data_vigencia|data_upload"
         sql = re.sub(rf"\b({_cols})\b(\s*)(>=|<=|=|>|<)", r"\1::DATE\2\3", sql)
         sql = re.sub(rf"\b({_cols})\b(\s+)BETWEEN\b", r"\1::DATE\2BETWEEN", sql)
@@ -138,9 +180,19 @@ if _USE_SUPABASE:
     def _get_pg_password():
         return os.environ.get("SUPABASE_DB_PASSWORD", "")
 
-    # ── Wrapper de cursor compativel com SQLite ──────────────────────────────
+    def _pg_connect():
+        return psycopg2.connect(
+            host="aws-1-sa-east-1.pooler.supabase.com",
+            port=5432,
+            dbname="postgres",
+            user="postgres.yunzqndswpwttejlgeaa",
+            password=_get_pg_password(),
+            sslmode="require",
+            connect_timeout=15,
+        )
+
     class _PgCursor:
-        """Cursor psycopg2 que aceita ? como placeholder e suporta lastrowid."""
+        """Cursor psycopg2 compativel com SQLite — suporta fetchone/fetchall como _DictRow."""
         def __init__(self, pg_cur):
             self._cur = pg_cur
             self.lastrowid = None
@@ -151,31 +203,15 @@ if _USE_SUPABASE:
             self.lastrowid = None
 
         def fetchall(self):
-            rows = self._cur.fetchall()
-            if rows and self._cur.description:
-                cols = {d[0]: i for i, d in enumerate(self._cur.description)}
-                return [_DictRow(r, cols) for r in rows]
-            return rows
+            return _make_dict_rows(self._cur)
 
         def fetchone(self):
-            row = self._cur.fetchone()
-            if row and self._cur.description:
-                cols = {d[0]: i for i, d in enumerate(self._cur.description)}
-                return _DictRow(row, cols)
-            return row
+            return _make_dict_row(self._cur)
 
     class _PgConn:
         """Conexao psycopg2 compativel com interface SQLite."""
         def __init__(self):
-            self._conn = psycopg2.connect(
-                host="aws-1-sa-east-1.pooler.supabase.com",
-                port=5432,
-                dbname="postgres",
-                user="postgres.yunzqndswpwttejlgeaa",
-                password=os.environ.get("SUPABASE_DB_PASSWORD", ""),
-                sslmode="require",
-                connect_timeout=15,
-            )
+            self._conn = _pg_connect()
 
         def cursor(self):
             return _PgCursor(self._conn.cursor())
@@ -203,37 +239,17 @@ if _USE_SUPABASE:
 
     def query(sql, params=()):
         sql_pg = _traduzir_sql_pg(sql)
-        conn = psycopg2.connect(
-            host="aws-1-sa-east-1.pooler.supabase.com",
-            port=5432,
-            dbname="postgres",
-            user="postgres.yunzqndswpwttejlgeaa",
-            password=os.environ.get("SUPABASE_DB_PASSWORD", ""),
-            sslmode="require",
-            connect_timeout=15,
-        )
+        conn = _pg_connect()
         try:
             cur = conn.cursor()
             cur.execute(sql_pg, params)
-            rows = cur.fetchall()
-            if rows and cur.description:
-                cols = {d[0]: i for i, d in enumerate(cur.description)}
-                return [_DictRow(r, cols) for r in rows]
-            return rows
+            return _make_dict_rows(cur)
         finally:
             conn.close()
 
     def execute_write(sql, params=()):
         sql_pg = _traduzir_sql_pg(sql)
-        conn = psycopg2.connect(
-            host="aws-1-sa-east-1.pooler.supabase.com",
-            port=5432,
-            dbname="postgres",
-            user="postgres.yunzqndswpwttejlgeaa",
-            password=os.environ.get("SUPABASE_DB_PASSWORD", ""),
-            sslmode="require",
-            connect_timeout=15,
-        )
+        conn = _pg_connect()
         try:
             cur = conn.cursor()
             cur.execute(sql_pg, params)
@@ -245,30 +261,12 @@ if _USE_SUPABASE:
         finally:
             conn.close()
 
-
-
-class _DictRow:
-    """Wrapper que permite acesso por nome E por indice em linhas de resultado."""
-    __slots__ = ('_row', '_cols')
-    def __init__(self, row, cols):
-        self._row  = row
-        self._cols = cols  # dict nome->indice
-    def __getitem__(self, key):
-        if isinstance(key, str):
-            return self._row[self._cols[key]]
-        return self._row[key]
-    def __bool__(self):    return self._row is not None
-    def __contains__(self, k): return k in self._cols
-    def __iter__(self):    return iter(self._row)
-    def __len__(self):     return len(self._row)
-    def keys(self):        return self._cols.keys()
-
-
 else:
     _DB_PATH = os.path.join(os.path.dirname(__file__), "peppercrm.db")
 
     def conectar():
         conn = sqlite3.connect(_DB_PATH)
+        conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
@@ -289,6 +287,7 @@ else:
             return cur.lastrowid
         finally:
             conn.close()
+
 
 def get_percentual_comissao(fornecedor_id):
     r = query("SELECT percentual FROM comissao WHERE fornecedor_id=? AND ativo=1 LIMIT 1",
