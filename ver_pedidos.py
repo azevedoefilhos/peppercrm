@@ -132,7 +132,7 @@ def _lista_pedidos():
         LEFT JOIN pdv     ON p.pdv_id=pdv.pdv_id
         LEFT JOIN pedido_item pi ON p.pedido_id=pi.pedido_id
         WHERE {' AND '.join(where)}
-        GROUP BY p.pedido_id
+        GROUP BY p.pedido_id, p.data_pedido, c.nome_fantasia, pdv.nome_loja, f.nome_fantasia, p.nr_pedido_cliente, p.nr_pedido_fornecedor, p.prazo_pagamento, p.data_entrega, p.status_pedido, p.desconto_geral
         ORDER BY p.data_pedido DESC, p.pedido_id DESC
     """, tuple(params))
 
