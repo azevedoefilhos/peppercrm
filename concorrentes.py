@@ -400,7 +400,7 @@ def _produtos_e_relacoes():
         LEFT JOIN produto_concorrente_relacao rel
                ON rel.produto_concorrente_id=pc.produto_concorrente_id
         WHERE {' AND '.join(where)}
-        GROUP BY pc.produto_concorrente_id
+        GROUP BY pc.produto_concorrente_id, conc.marca_concorrente, f.nome_fantasia, pc.descricao_curta, pc.descricao, cat.nome_categoria, pc.peso, pc.unidade_medida, pc.auditavel, pc.ean_concorrente
         ORDER BY COALESCE(pc.auditavel,1) DESC,
                  conc.marca_concorrente, pc.descricao_curta
     """, tuple(params))
