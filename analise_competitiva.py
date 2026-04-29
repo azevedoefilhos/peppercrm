@@ -194,7 +194,7 @@ def _presenca_pdv():
         WHERE pp.fornecedor_id=? AND pp.status='finalizado'
           AND ppi.produto_concorrente_id IS NOT NULL
           AND ppi.ruptura=0
-        GROUP BY pc.produto_concorrente_id, conc.marca_concorrente, pc.descricao_curta, pc.descricao
+        GROUP BY pc.produto_concorrente_id, conc.marca_concorrente, pc.descricao_curta, pc.descricao, cat.nome_categoria, rel_tipo.tipo_relacao
         ORDER BY pdvs_presentes DESC, conc.marca_concorrente
     """, (forn_id, forn_id))
 
@@ -389,7 +389,7 @@ def _meu_produto_vs():
         LEFT JOIN pesquisa_preco_item ppi_nosso ON ppi_nosso.pesquisa_id=pp.pesquisa_id
             AND ppi_nosso.produto_id=? AND ppi_nosso.produto_concorrente_id IS NULL
         WHERE rel.produto_id=?
-        GROUP BY rel.produto_concorrente_id, rel.tipo_relacao, conc.marca_concorrente, pc.descricao_curta
+        GROUP BY rel.produto_concorrente_id, rel.tipo_relacao, conc.marca_concorrente, pc.descricao_curta, pc.descricao
         ORDER BY rel.tipo_relacao, pdvs_conc DESC
     """, (forn_id, prod_id, prod_id))
 
