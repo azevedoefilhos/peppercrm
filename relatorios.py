@@ -1131,7 +1131,7 @@ def _rel_cobertura():
               AND cxf.fornecedor_id=? AND cr.ativo=1
               AND cr.tipo_topico='Negociação'
               AND cr.status NOT IN ('Concluído','Cancelado')
-            GROUP BY c.cliente_id
+            GROUP BY c.cliente_id, c.nome_fantasia, c.cidade, c.status, pdv.tipo_pdv, pdv.cluster
             ORDER BY MAX(cr.data_contato) DESC""",
 
         "✅ Clientes ativos (já compraram)": f"""
@@ -1145,7 +1145,7 @@ def _rel_cobertura():
               AND p.fornecedor_id=? AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
               AND (cxf.fornecedor_id IS NULL OR cxf.fornecedor_id=?)
             LEFT JOIN contato_x_fornecedor cxf ON cxf.contato_id=cr.contato_id
-            GROUP BY c.cliente_id
+            GROUP BY c.cliente_id, c.nome_fantasia, c.cidade, c.status, pdv.tipo_pdv, pdv.cluster
             ORDER BY MAX(p.data_pedido) DESC""",
     }
 
@@ -1178,7 +1178,7 @@ def _rel_cobertura():
               AND cxf.fornecedor_id=? AND cr.ativo=1
               AND cr.tipo_topico='Negociação'
               AND cr.status NOT IN ('Concluído','Cancelado')
-            GROUP BY c.cliente_id ORDER BY MAX(cr.data_contato) DESC""",
+            GROUP BY c.cliente_id, c.nome_fantasia, c.cidade, c.status, c.perfil, pdv.cluster ORDER BY MAX(cr.data_contato) DESC""",
             tuple(params_base) + (fid,)
         ),
         "✅ Compraram — manter ativo": (
@@ -1189,7 +1189,7 @@ def _rel_cobertura():
             JOIN pedido p ON p.cliente_id=c.cliente_id
             WHERE {where_sql}
               AND p.fornecedor_id=? AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
-            GROUP BY c.cliente_id ORDER BY MAX(p.data_pedido) DESC""",
+            GROUP BY c.cliente_id, c.nome_fantasia, c.cidade, c.status, c.perfil, pdv.cluster ORDER BY MAX(p.data_pedido) DESC""",
             tuple(params_base) + (fid,)
         ),
     }
