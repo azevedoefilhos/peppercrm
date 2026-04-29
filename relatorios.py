@@ -24,8 +24,8 @@ _FILTRO_BASE = """
 """
 
 _VALOR_ITEM = """
-    ROUND(pi.quantidade * pi.preco_final
-          * (1 - COALESCE(p.desconto_geral,0)/100.0), 2)
+    pi.quantidade * pi.preco_final
+          * (1 - COALESCE(p.desconto_geral,0)/100.0)
 """
 
 
