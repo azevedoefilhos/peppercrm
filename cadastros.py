@@ -1532,14 +1532,14 @@ def _historico_precos():
         params_p.extend([b, b, b])
 
     prods_com_hist = query(f"""
-        SELECT DISTINCT p.produto_id, p.descricao_curta, p.codigo_produto,
-               COALESCE(cat.nome_categoria,'—'), COALESCE(l.nome_linha,'—'),
-               cat.nome_categoria, p.descricao_curta
+        SELECT p.produto_id, p.descricao_curta, p.codigo_produto,
+               COALESCE(cat.nome_categoria,'—'), COALESCE(l.nome_linha,'—')
         FROM produto p
         JOIN historico_preco h ON h.produto_id = p.produto_id
         LEFT JOIN categoria cat ON p.categoria_id=cat.categoria_id
         LEFT JOIN linha l       ON p.linha_id=l.linha_id
         WHERE {' AND '.join(where_p)}
+        GROUP BY p.produto_id, p.descricao_curta, p.codigo_produto, cat.nome_categoria, l.nome_linha
         ORDER BY cat.nome_categoria, p.descricao_curta
     """, tuple(params_p))
 
