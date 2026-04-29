@@ -317,7 +317,7 @@ def _rel_categoria():
         {_FILTRO_BASE}
           AND p.data_pedido BETWEEN {d_ini} AND {d_fim}
           {where_extra}
-        GROUP BY cat.categoria_id, f.fornecedor_id
+        GROUP BY cat.categoria_id, cat.nome_categoria, f.fornecedor_id, f.nome_fantasia
         ORDER BY total DESC
     """, tuple(params))
 
@@ -375,7 +375,7 @@ def _rel_evolucao():
         {_FILTRO_BASE}
           AND p.data_pedido >= date('now', '-{int(meses)} months')
           {where_extra}
-        GROUP BY mes, f.fornecedor_id
+        GROUP BY mes, f.fornecedor_id, f.nome_fantasia
         ORDER BY mes
     """, tuple(params))
 
@@ -631,7 +631,7 @@ def _rel_ranking_pdv():
           AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO')
           AND p.data_pedido BETWEEN {d_ini} AND {d_fim}
           {where_extra}
-        GROUP BY p.cliente_id, COALESCE(p.pdv_id, 0)
+        GROUP BY p.cliente_id, c.nome_fantasia, p.pdv_id, COALESCE(p.pdv_id, 0), pdv.nome_loja, pdv.numero_loja, pdv.cidade
         ORDER BY total DESC
         LIMIT {int(top_n)}
     """, tuple(params))
@@ -708,7 +708,7 @@ def _rel_cluster():
         WHERE c.status NOT IN ('Inativo','Encerrado')
           AND (? = 'Todos' OR pdv.cluster = ?)
           AND (? = 'Todos' OR pdv.tamanho_pdv = ?)
-        GROUP BY pdv.cluster, pdv.tamanho_pdv
+        GROUP BY pdv.cluster, pdv.tamanho_pdv, f.nome_fantasia
         ORDER BY pdv.cluster, pdv.tamanho_pdv
     """, (forn_sel[0], forn_sel[0], cl_sel, cl_sel, tam_sel, tam_sel))
 
