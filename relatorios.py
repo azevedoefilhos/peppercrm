@@ -707,7 +707,7 @@ def _rel_cluster():
         JOIN pdv ON pdv.pdv_id = c.cliente_id
         LEFT JOIN pedido p ON p.cliente_id = c.cliente_id
             AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
-            {{_forn_where}}
+            {_forn_where}
         WHERE c.status NOT IN ('Inativo','Encerrado')
           AND (? = 'Todos' OR pdv.cluster = ?)
           AND (? = 'Todos' OR pdv.tamanho_pdv = ?)
