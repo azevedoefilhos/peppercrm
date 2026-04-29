@@ -1016,7 +1016,7 @@ def _lista_tabelas():
         FROM tabela_preco tp
         LEFT JOIN fornecedor f ON tp.fornecedor_id = f.fornecedor_id
         LEFT JOIN tabela_preco_item tpi ON tp.tabela_preco_id = tpi.tabela_preco_id
-        GROUP BY tp.tabela_preco_id
+        GROUP BY tp.tabela_preco_id, f.fornecedor_id, f.nome_fantasia, tp.nome_tabela, tp.tipo_tabela, tp.prazo_pagamento, tp.frete, tp.data_inicio, tp.data_fim, tp.ativo
         ORDER BY f.nome_fantasia, tp.data_inicio DESC
     """)
     if not dados:
