@@ -296,9 +296,17 @@ def get_percentual_comissao(fornecedor_id):
 
 def get_fornecedores_do_cliente(cliente_id):
     return query("""
-        SELECT DISTINCT f.fornecedor_id, f.nome_fantasia
+        SELECT cf.cliente_fornecedor_id,
+               f.fornecedor_id,
+               f.nome_fantasia,
+               tp.tabela_preco_id,
+               tp.nome_tabela,
+               tp.tipo_tabela,
+               tp.prazo_pagamento,
+               tp.frete
         FROM cliente_fornecedor cf
         JOIN fornecedor f ON cf.fornecedor_id=f.fornecedor_id
+        LEFT JOIN tabela_preco tp ON cf.tabela_preco_id=tp.tabela_preco_id
         WHERE cf.cliente_id=? AND cf.ativo=1 AND f.ativo=1
         ORDER BY f.nome_fantasia
     """, (cliente_id,))
