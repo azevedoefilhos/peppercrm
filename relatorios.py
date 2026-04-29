@@ -1406,8 +1406,16 @@ def _rel_competitivo():
         JOIN concorrente conc       ON pc.concorrente_id=conc.concorrente_id
         WHERE pcr.produto_id=? AND pc.ativo=1
         ORDER BY pcr.tipo_relacao ASC,
-                 CASE WHEN ultimo_preco IS NULL THEN 1 ELSE 0 END,
-                 ultimo_preco ASC
+                 CASE WHEN (SELECT ppi2.preco FROM pesquisa_preco_item ppi2
+                            JOIN pesquisa_preco pp2 ON ppi2.pesquisa_id=pp2.pesquisa_id
+                            WHERE ppi2.produto_concorrente_id=pc.produto_concorrente_id
+                              AND pp2.status='finalizado' AND ppi2.preco IS NOT NULL
+                            ORDER BY pp2.data_pesquisa DESC LIMIT 1) IS NULL THEN 1 ELSE 0 END,
+                 (SELECT ppi2.preco FROM pesquisa_preco_item ppi2
+                  JOIN pesquisa_preco pp2 ON ppi2.pesquisa_id=pp2.pesquisa_id
+                  WHERE ppi2.produto_concorrente_id=pc.produto_concorrente_id
+                    AND pp2.status='finalizado' AND ppi2.preco IS NOT NULL
+                  ORDER BY pp2.data_pesquisa DESC LIMIT 1) ASC
     """, (pid,))
 
     if not concorrentes:
