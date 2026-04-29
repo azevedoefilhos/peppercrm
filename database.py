@@ -322,7 +322,7 @@ def get_mix_com_preco(cliente_id, fornecedor_id, pdv_id=None):
                p.unidades_caixa,
                p.unidade_medida,
                COALESCE(tpi.preco_caixa, 0)  AS preco_caixa,
-               COALESCE(tpi.desconto_max, 0) AS desconto_max,
+               COALESCE(tpi.desconto_maximo, 0) AS desconto_max,
                p.ean,
                ult.quantidade                AS ultima_qtd,
                ult.data_pedido               AS ultima_data
