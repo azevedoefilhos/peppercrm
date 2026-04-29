@@ -24,6 +24,7 @@ if not _USE_SUPABASE:
 
 if _USE_SUPABASE:
     import psycopg2
+    
 
     def _extrair_expr_parenteses(s, start):
         depth = 1
@@ -150,10 +151,18 @@ if _USE_SUPABASE:
             self.lastrowid = None
 
         def fetchall(self):
-            return self._cur.fetchall()
+            rows = self._cur.fetchall()
+            if rows and self._cur.description:
+                cols = {d[0]: i for i, d in enumerate(self._cur.description)}
+                return [_DictRow(r, cols) for r in rows]
+            return rows
 
         def fetchone(self):
-            return self._cur.fetchone()
+            row = self._cur.fetchone()
+            if row and self._cur.description:
+                cols = {d[0]: i for i, d in enumerate(self._cur.description)}
+                return _DictRow(row, cols)
+            return row
 
     class _PgConn:
         """Conexao psycopg2 compativel com interface SQLite."""
@@ -167,8 +176,7 @@ if _USE_SUPABASE:
                 sslmode="require",
                 connect_timeout=15,
             )
-
-        def cursor(self):
+            def cursor(self):
             return _PgCursor(self._conn.cursor())
 
         def execute(self, sql, params=()):
@@ -206,7 +214,11 @@ if _USE_SUPABASE:
         try:
             cur = conn.cursor()
             cur.execute(sql_pg, params)
-            return cur.fetchall()
+            rows = cur.fetchall()
+            if rows and cur.description:
+                cols = {d[0]: i for i, d in enumerate(cur.description)}
+                return [_DictRow(r, cols) for r in rows]
+            return rows
         finally:
             conn.close()
 
@@ -231,6 +243,25 @@ if _USE_SUPABASE:
                 return None
         finally:
             conn.close()
+
+
+
+class _DictRow:
+    """Wrapper que permite acesso por nome E por indice em linhas de resultado."""
+    __slots__ = ('_row', '_cols')
+    def __init__(self, row, cols):
+        self._row  = row
+        self._cols = cols  # dict nome->indice
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            return self._row[self._cols[key]]
+        return self._row[key]
+    def __bool__(self):    return self._row is not None
+    def __contains__(self, k): return k in self._cols
+    def __iter__(self):    return iter(self._row)
+    def __len__(self):     return len(self._row)
+    def keys(self):        return self._cols.keys()
+
 
 else:
     _DB_PATH = os.path.join(os.path.dirname(__file__), "peppercrm.db")
