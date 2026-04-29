@@ -52,12 +52,18 @@ class _DictRow:
         return self._cols.keys()
 
 
+def _conv_row(row):
+    """Converte Decimal para float em uma linha de resultado."""
+    from decimal import Decimal
+    return tuple(float(v) if isinstance(v, Decimal) else v for v in row)
+
+
 def _make_dict_rows(cur):
     """Converte resultado de cursor em lista de _DictRow."""
     rows = cur.fetchall()
     if rows and cur.description:
         cols = {d[0]: i for i, d in enumerate(cur.description)}
-        return [_DictRow(r, cols) for r in rows]
+        return [_DictRow(_conv_row(r), cols) for r in rows]
     return rows
 
 
@@ -66,7 +72,7 @@ def _make_dict_row(cur):
     row = cur.fetchone()
     if row and cur.description:
         cols = {d[0]: i for i, d in enumerate(cur.description)}
-        return _DictRow(row, cols)
+        return _DictRow(_conv_row(row), cols)
     return row
 
 
@@ -322,7 +328,7 @@ def get_mix_com_preco(cliente_id, fornecedor_id, pdv_id=None):
                p.unidades_caixa,
                p.unidade_medida,
                COALESCE(tpi.preco_caixa, 0)  AS preco_caixa,
-               COALESCE(tpi.desconto_maximo, 0) AS desconto_max,
+               COALESCE(tpi.desconto_max, 0) AS desconto_max,
                p.ean,
                ult.quantidade                AS ultima_qtd,
                ult.data_pedido               AS ultima_data
