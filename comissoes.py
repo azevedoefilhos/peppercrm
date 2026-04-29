@@ -515,7 +515,7 @@ def _tela_relatorio():
     )
 
     df_show = df_f.copy()
-    for col in ["Base (R$)","Previsto (R$)","Pago (R$)","Diferença (R$)"]:
+    for col in ["Base (R$)","Previsto (R$)","Pago (R$)","Diferenca (R$)"]:
         df_show[col] = df_show[col].apply(_fmt_brl)
     st.dataframe(df_show, use_container_width=True, hide_index=True)
 
