@@ -1291,13 +1291,14 @@ def _rel_competitivo():
         where_p.append("p.categoria_id=?"); params_p.append(cat_sel[0])
 
     prods = query(f"""
-        SELECT DISTINCT p.produto_id, p.descricao_curta, p.codigo_produto,
+        SELECT p.produto_id, p.descricao_curta, p.codigo_produto,
                p.peso, p.unidade_medida,
                COALESCE(cat.nome_categoria,'—')
         FROM produto p
         LEFT JOIN categoria cat ON p.categoria_id=cat.categoria_id
         JOIN produto_concorrente_relacao pcr ON pcr.produto_id=p.produto_id
         WHERE {' AND '.join(where_p)}
+        GROUP BY p.produto_id, p.descricao_curta, p.codigo_produto, p.peso, p.unidade_medida, cat.nome_categoria
         ORDER BY cat.nome_categoria, p.descricao_curta
     """, tuple(params_p))
 
