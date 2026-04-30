@@ -245,15 +245,39 @@ if _USE_SUPABASE:
     def conectar():
         return _PgConn()
 
+    def _get_session_conn():
+        """Retorna conexao persistente por sessao Streamlit ou cria nova."""
+        try:
+            import streamlit as st
+            if "db_conn" not in st.session_state or st.session_state["db_conn"].closed:
+                st.session_state["db_conn"] = _pg_connect()
+            conn = st.session_state["db_conn"]
+            # Verifica se conexao ainda esta viva
+            try:
+                conn.cursor().execute("SELECT 1")
+                return conn
+            except Exception:
+                st.session_state["db_conn"] = _pg_connect()
+                return st.session_state["db_conn"]
+        except Exception:
+            return _pg_connect()
+
     def query(sql, params=()):
         sql_pg = _traduzir_sql_pg(sql)
-        conn = _pg_connect()
         try:
+            conn = _get_session_conn()
             cur = conn.cursor()
             cur.execute(sql_pg, params)
             return _make_dict_rows(cur)
-        finally:
-            conn.close()
+        except Exception:
+            # Fallback: conexao nova
+            conn = _pg_connect()
+            try:
+                cur = conn.cursor()
+                cur.execute(sql_pg, params)
+                return _make_dict_rows(cur)
+            finally:
+                conn.close()
 
     def execute_write(sql, params=()):
         sql_pg = _traduzir_sql_pg(sql)
