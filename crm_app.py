@@ -58,6 +58,7 @@ def _scroll_topo():
 """, height=0, scrolling=False)
 
 
+@st.cache_data(ttl=120, show_spinner=False)
 def _coletar_alertas_oportunidade():
     """Detecta proativamente situações que merecem atenção comercial."""
     alertas = []
@@ -143,59 +144,76 @@ def _dashboard():
     mes_ini  = hoje.strftime("%Y-%m-01")
     hoje_str = hoje.strftime("%d/%m/%Y")
 
-    # ── Coleta todos os dados ─────────────────────────────────────────────
-    @st.cache_data(ttl=120, show_spinner=False)
-    def _q1_cached(sql, p=()):
-        r = query(sql, p); return r[0][0] if r else 0
-    def _q1(sql, p=()):
-        return _q1_cached(sql, p)
+    # ⚡ Coleta todos os dados em UMA funcao cacheada (TTL 60s) ————————————
+    @st.cache_data(ttl=60, show_spinner=False)
+    def _dados_dashboard_cache():
+        def q1(sql, p=()):
+            r = query(sql, p); return r[0][0] if r else 0
 
-    # Vendas
-    qtd_abertos  = _q1("SELECT COUNT(*) FROM pedido WHERE status_pedido IN ('ABERTO','ENVIADO')")
-    r = query("""SELECT COUNT(*), ROUND(COALESCE(SUM(
-        (SELECT SUM(pi.quantidade*pi.preco_final*(1-COALESCE(p2.desconto_geral,0)/100.0))
-         FROM pedido_item pi WHERE pi.pedido_id=p2.pedido_id
-         AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO','CANCELADO'))),0),2)
-        FROM pedido p2 WHERE p2.status_pedido NOT IN ('CANCELADO','RECUSADO')
-          AND p2.data_pedido >= date('now','start of month')""")
-    qtd_mes, total_mes = (r[0][0], r[0][1]) if r else (0, 0.0)
-    r2 = query("""SELECT ROUND(COALESCE(SUM(
-        (SELECT SUM(pi.quantidade*pi.preco_final*(1-COALESCE(p2.desconto_geral,0)/100.0))
-         FROM pedido_item pi WHERE pi.pedido_id=p2.pedido_id
-         AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO','CANCELADO'))
-        * COALESCE(p2.comissao_percentual,COALESCE(com.percentual,0))/100.0),0),2)
-        FROM pedido p2
-        LEFT JOIN comissao com ON p2.fornecedor_id=com.fornecedor_id AND com.ativo=1
-        WHERE p2.status_pedido='ENTREGUE'
-          AND p2.data_pedido >= date('now','start of month')""")
-    comissao_mes = r2[0][0] if r2 else 0.0
-    qtd_entregas = _q1("SELECT COUNT(*) FROM pedido WHERE data_entrega BETWEEN date('now') AND date('now','+7 days') AND status_pedido NOT IN ('CANCELADO','RECUSADO','ENTREGUE','DEVOLVIDO')")
-    qtd_sem_pedido = _q1("SELECT COUNT(*) FROM cliente c WHERE c.ativo=1 AND NOT EXISTS (SELECT 1 FROM pedido p WHERE p.cliente_id=c.cliente_id AND p.data_pedido >= date('now','-30 days') AND p.status_pedido NOT IN ('CANCELADO','RECUSADO'))")
-    qtd_rupturas   = _q1("SELECT COUNT(*) FROM pesquisa_preco_item pi JOIN pesquisa_preco pp ON pi.pesquisa_id=pp.pesquisa_id WHERE pi.ruptura=1 AND pp.data_pesquisa >= date('now','-30 days')")
+        r = query("""SELECT COUNT(*), ROUND(COALESCE(SUM(
+            (SELECT SUM(pi.quantidade*pi.preco_final*(1-COALESCE(p2.desconto_geral,0)/100.0))
+             FROM pedido_item pi WHERE pi.pedido_id=p2.pedido_id
+             AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO','CANCELADO'))),0),2)
+            FROM pedido p2 WHERE p2.status_pedido NOT IN ('CANCELADO','RECUSADO')
+              AND p2.data_pedido >= date('now','start of month')""")
+        qtd_mes = r[0][0] if r else 0
+        total_mes = float(r[0][1]) if r and r[0][1] else 0.0
 
-    # Atividade comercial — dados que JÁ existem no banco
-    qtd_contatos_mes = _q1("""SELECT COUNT(*) FROM contato_registro
-        WHERE ativo=1 AND data_contato >= date('now','start of month')""")
-    qtd_negoc_abertas = _q1("""SELECT COUNT(*) FROM contato_registro
-        WHERE ativo=1 AND tipo_topico='Negociação'
-          AND status NOT IN ('Concluído','Cancelado')""")
-    qtd_clientes_contatados = _q1("""SELECT COUNT(DISTINCT cliente_id)
-        FROM contato_registro WHERE ativo=1
-          AND data_contato >= date('now','-30 days')
-          AND cliente_id IS NOT NULL""")
-    qtd_pesquisas_mes = _q1("""SELECT COUNT(*) FROM pesquisa_preco
-        WHERE data_pesquisa >= date('now','start of month')""")
-    qtd_visitas_mes = _q1("""SELECT COUNT(*) FROM visita_cliente
-        WHERE data_visita >= date('now','start of month')""")
-    qtd_clientes_ativos = _q1("""SELECT COUNT(*) FROM cliente
-        WHERE status NOT IN ('Encerrado','Cancelado')""")
-    qtd_prospectos = _q1("SELECT COUNT(*) FROM cliente WHERE status='Prospecto'")
+        r2 = query("""SELECT ROUND(COALESCE(SUM(
+            (SELECT SUM(pi.quantidade*pi.preco_final*(1-COALESCE(p2.desconto_geral,0)/100.0))
+             FROM pedido_item pi WHERE pi.pedido_id=p2.pedido_id
+             AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO','CANCELADO'))
+            * COALESCE(p2.comissao_percentual,COALESCE(com.percentual,0))/100.0),0),2)
+            FROM pedido p2
+            LEFT JOIN comissao com ON p2.fornecedor_id=com.fornecedor_id AND com.ativo=1
+            WHERE p2.status_pedido='ENTREGUE'
+              AND p2.data_pedido >= date('now','start of month')""")
 
-    # Follow-ups
-    fups_venc = get_followups_vencidos()
-    fups_hoje = get_followups_hoje()
-    total_venc = len(fups_venc)
-    total_hoje = len(fups_hoje)
+        fups_v = query("""SELECT cr.contato_id, cr.assunto, cli.nome_fantasia, cr.data_followup
+            FROM contato_registro cr LEFT JOIN cliente cli ON cr.cliente_id=cli.cliente_id
+            WHERE cr.ativo=1 AND cr.tipo_interacao='Followup' AND cr.status='Pendente'
+              AND cr.data_followup < date('now') ORDER BY cr.data_followup""")
+        fups_h = query("""SELECT cr.contato_id, cr.assunto, cli.nome_fantasia, cr.data_followup
+            FROM contato_registro cr LEFT JOIN cliente cli ON cr.cliente_id=cli.cliente_id
+            WHERE cr.ativo=1 AND cr.tipo_interacao='Followup' AND cr.status='Pendente'
+              AND cr.data_followup = date('now') ORDER BY cr.data_followup""")
+
+        return {
+            "qtd_abertos":  q1("SELECT COUNT(*) FROM pedido WHERE status_pedido IN ('ABERTO','ENVIADO')"),
+            "qtd_mes": qtd_mes, "total_mes": total_mes,
+            "comissao_mes": float(r2[0][0]) if r2 and r2[0][0] else 0.0,
+            "qtd_entregas": q1("SELECT COUNT(*) FROM pedido WHERE data_entrega BETWEEN date('now') AND date('now','+7 days') AND status_pedido NOT IN ('CANCELADO','RECUSADO','ENTREGUE','DEVOLVIDO')"),
+            "qtd_sem_pedido": q1("SELECT COUNT(*) FROM cliente c WHERE c.ativo=1 AND NOT EXISTS (SELECT 1 FROM pedido p WHERE p.cliente_id=c.cliente_id AND p.data_pedido >= date('now','-30 days') AND p.status_pedido NOT IN ('CANCELADO','RECUSADO'))"),
+            "qtd_rupturas": q1("SELECT COUNT(*) FROM pesquisa_preco_item pi JOIN pesquisa_preco pp ON pi.pesquisa_id=pp.pesquisa_id WHERE pi.ruptura=1 AND pp.data_pesquisa >= date('now','-30 days')"),
+            "qtd_contatos_mes": q1("SELECT COUNT(*) FROM contato_registro WHERE ativo=1 AND data_contato >= date('now','start of month')"),
+            "qtd_negoc_abertas": q1("SELECT COUNT(*) FROM contato_registro WHERE ativo=1 AND tipo_topico='Negociação' AND status NOT IN ('Concluído','Cancelado')"),
+            "qtd_clientes_contatados": q1("SELECT COUNT(DISTINCT cliente_id) FROM contato_registro WHERE ativo=1 AND data_contato >= date('now','-30 days') AND cliente_id IS NOT NULL"),
+            "qtd_pesquisas_mes": q1("SELECT COUNT(*) FROM pesquisa_preco WHERE data_pesquisa >= date('now','start of month')"),
+            "qtd_visitas_mes": q1("SELECT COUNT(*) FROM visita_cliente WHERE data_visita >= date('now','start of month')"),
+            "qtd_clientes_ativos": q1("SELECT COUNT(*) FROM cliente WHERE status NOT IN ('Encerrado','Cancelado')"),
+            "qtd_prospectos": q1("SELECT COUNT(*) FROM cliente WHERE status='Prospecto'"),
+            "fups_venc": list(fups_v), "fups_hoje": list(fups_h),
+        }
+
+    _d = _dados_dashboard_cache()
+    qtd_abertos          = _d["qtd_abertos"]
+    qtd_mes              = _d["qtd_mes"]
+    total_mes            = _d["total_mes"]
+    comissao_mes         = _d["comissao_mes"]
+    qtd_entregas         = _d["qtd_entregas"]
+    qtd_sem_pedido       = _d["qtd_sem_pedido"]
+    qtd_rupturas         = _d["qtd_rupturas"]
+    qtd_contatos_mes     = _d["qtd_contatos_mes"]
+    qtd_negoc_abertas    = _d["qtd_negoc_abertas"]
+    qtd_clientes_contatados = _d["qtd_clientes_contatados"]
+    qtd_pesquisas_mes    = _d["qtd_pesquisas_mes"]
+    qtd_visitas_mes      = _d["qtd_visitas_mes"]
+    qtd_clientes_ativos  = _d["qtd_clientes_ativos"]
+    qtd_prospectos       = _d["qtd_prospectos"]
+    fups_venc            = _d["fups_venc"]
+    fups_hoje            = _d["fups_hoje"]
+    total_venc           = len(fups_venc)
+    total_hoje           = len(fups_hoje)
 
     # ═════════════════════════════════════════════════════════════════════
     # BLOCO 1 — ALERTAS URGENTES (sempre no topo, só aparece se houver)
