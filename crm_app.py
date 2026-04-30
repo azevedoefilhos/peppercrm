@@ -171,12 +171,12 @@ def _dashboard():
 
         fups_v = query("""SELECT cr.contato_id, cr.assunto, cli.nome_fantasia, cr.data_followup
             FROM contato_registro cr LEFT JOIN cliente cli ON cr.cliente_id=cli.cliente_id
-            WHERE cr.ativo=1 AND cr.tipo_interacao='Followup' AND cr.status='Pendente'
-              AND cr.data_followup < date('now') ORDER BY cr.data_followup""")
+            WHERE cr.ativo=1 AND cr.data_followup IS NOT NULL AND cr.status='Pendente'
+              AND cr.data_followup::DATE < CURRENT_DATE ORDER BY cr.data_followup""")
         fups_h = query("""SELECT cr.contato_id, cr.assunto, cli.nome_fantasia, cr.data_followup
             FROM contato_registro cr LEFT JOIN cliente cli ON cr.cliente_id=cli.cliente_id
-            WHERE cr.ativo=1 AND cr.tipo_interacao='Followup' AND cr.status='Pendente'
-              AND cr.data_followup = date('now') ORDER BY cr.data_followup""")
+            WHERE cr.ativo=1 AND cr.data_followup IS NOT NULL AND cr.status='Pendente'
+              AND cr.data_followup::DATE = CURRENT_DATE ORDER BY cr.data_followup""")
 
         return {
             "qtd_abertos":  q1("SELECT COUNT(*) FROM pedido WHERE status_pedido IN ('ABERTO','ENVIADO')"),
