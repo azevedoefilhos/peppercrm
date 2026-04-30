@@ -144,8 +144,11 @@ def _dashboard():
     hoje_str = hoje.strftime("%d/%m/%Y")
 
     # ── Coleta todos os dados ─────────────────────────────────────────────
-    def _q1(sql, p=()):
+    @st.cache_data(ttl=120, show_spinner=False)
+    def _q1_cached(sql, p=()):
         r = query(sql, p); return r[0][0] if r else 0
+    def _q1(sql, p=()):
+        return _q1_cached(sql, p)
 
     # Vendas
     qtd_abertos  = _q1("SELECT COUNT(*) FROM pedido WHERE status_pedido IN ('ABERTO','ENVIADO')")
