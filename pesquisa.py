@@ -2793,8 +2793,8 @@ def _gerar_pdf_por_produto(df, prod_nome, forn_nome, preco_tab_unit, filtros_des
     if preco_tab_unit:
         colunas += ["Meu unit.","Dif. vs tab.","Score"]
 
-    cw_base = [3.5*cm, 1.8*cm, 2.2*cm, 3.0*cm, 1.5*cm,
-               1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.2*cm, 1.8*cm]
+    cw_base = [5.0*cm, 1.8*cm, 2.5*cm, 4.5*cm, 1.8*cm,
+               2.0*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.2*cm, 2.5*cm]
     if preco_tab_unit:
         cw_base += [1.8*cm, 2.2*cm, 2.0*cm]
 
@@ -2859,7 +2859,7 @@ def _gerar_pdf_por_marca(df, marca_nome, forn_nome, tab_nome, filtros_desc):
             colunas += ["Meu preco unit.","Dif. vs tab.","Score"]
         colunas.append("Data")
 
-        cw = [3.5*cm, 3.0*cm, 1.5*cm, 3.5*cm, 1.8*cm, 1.8*cm]
+        cw = [4.5*cm, 5.0*cm, 1.8*cm, 5.5*cm, 2.0*cm, 2.0*cm]
         if tem_tab:
             cw += [1.8*cm, 2.2*cm, 2.0*cm]
         cw.append(1.8*cm)
@@ -2894,7 +2894,7 @@ def _gerar_pdf_por_marca(df, marca_nome, forn_nome, tab_nome, filtros_desc):
 def _gerar_pdf_por_categoria(df, cat_nome, filtros_desc):
     s   = _pdf_estilos()
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4,
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
                             leftMargin=1.5*cm, rightMargin=1.5*cm,
                             topMargin=1.5*cm, bottomMargin=1.5*cm)
     el  = []
@@ -2914,7 +2914,7 @@ def _gerar_pdf_por_categoria(df, cat_nome, filtros_desc):
     el.append(Spacer(1, 0.5*cm))
 
     colunas = ["Marca","Produtos","PDVs","Ocorrencias","Share (%)","Preco medio","Preco min","Preco max"]
-    cw      = [4.5*cm, 2.0*cm, 2.0*cm, 2.5*cm, 2.0*cm, 2.5*cm, 2.5*cm, 2.5*cm]
+    cw      = [5.5*cm, 1.8*cm, 1.8*cm, 2.2*cm, 1.8*cm, 2.8*cm, 2.5*cm, 2.5*cm]
 
     rows = []
     for _, row in df.iterrows():
@@ -3589,6 +3589,7 @@ def _ac_por_pdv(where_base, params_base, tipo_rel_where, cat_where, cat_params, 
     # Monta where da pesquisa
     where_pdv  = list(where_base)
     params_pdv = list(params_base)
+    where_pdv.append("pp.fornecedor_id=?"); params_pdv.append(forn_p[0])
     where_pdv.append("pp.cliente_id=?"); params_pdv.append(cli_id_sel)
     if pdv_id_sel:
         where_pdv.append("pp.pdv_id=?"); params_pdv.append(pdv_id_sel)
