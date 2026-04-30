@@ -24,42 +24,27 @@ if not _USE_SUPABASE:
 
 
 class _DictRow:
-    """Permite acesso por nome E por indice em linhas de resultado SQL."""
     __slots__ = ("_row", "_cols")
-
     def __init__(self, row, cols):
         self._row  = row
-        self._cols = cols  # dict nome -> indice
-
+        self._cols = cols
     def __getitem__(self, key):
         if isinstance(key, str):
             return self._row[self._cols[key]]
         return self._row[key]
-
-    def __bool__(self):
-        return self._row is not None
-
-    def __contains__(self, k):
-        return k in self._cols
-
-    def __iter__(self):
-        return iter(self._row)
-
-    def __len__(self):
-        return len(self._row)
-
-    def keys(self):
-        return self._cols.keys()
+    def __bool__(self):    return self._row is not None
+    def __contains__(self, k): return k in self._cols
+    def __iter__(self):    return iter(self._row)
+    def __len__(self):     return len(self._row)
+    def keys(self):        return self._cols.keys()
 
 
 def _conv_row(row):
-    """Converte Decimal para float em uma linha de resultado."""
     from decimal import Decimal
     return tuple(float(v) if isinstance(v, Decimal) else v for v in row)
 
 
 def _make_dict_rows(cur):
-    """Converte resultado de cursor em lista de _DictRow."""
     rows = cur.fetchall()
     if rows and cur.description:
         cols = {d[0]: i for i, d in enumerate(cur.description)}
@@ -68,7 +53,6 @@ def _make_dict_rows(cur):
 
 
 def _make_dict_row(cur):
-    """Converte fetchone em _DictRow."""
     row = cur.fetchone()
     if row and cur.description:
         cols = {d[0]: i for i, d in enumerate(cur.description)}
@@ -80,32 +64,25 @@ if _USE_SUPABASE:
     import psycopg2
 
     def _extrair_expr_parenteses(s, start):
-        depth = 1
-        i = start
-        buf = []
+        depth = 1; i = start; buf = []
         while i < len(s) and depth > 0:
             c = s[i]
-            if c == "(":
-                depth += 1
-            elif c == ")":
-                depth -= 1
-            if depth > 0:
-                buf.append(c)
+            if c == "(": depth += 1
+            elif c == ")": depth -= 1
+            if depth > 0: buf.append(c)
             i += 1
         return "".join(buf), i
 
     def _traduzir_julianday(sql):
         import re
-        out = []
-        i = 0
+        out = []; i = 0
         while i < len(sql):
             m = re.match(r"CAST\(julianday\('now'\)\s*-\s*julianday\(", sql[i:], re.IGNORECASE)
             if m:
                 i += m.end()
                 expr, i = _extrair_expr_parenteses(sql, i)
                 rest = re.match(r"\s*AS\s*INTEGER\)", sql[i:], re.IGNORECASE)
-                if rest:
-                    i += rest.end()
+                if rest: i += rest.end()
                 out.append(f"(CURRENT_DATE - ({expr.strip()})::DATE)")
                 continue
             m2 = re.match(r"julianday\('now'\)\s*-\s*julianday\(", sql[i:], re.IGNORECASE)
@@ -114,8 +91,7 @@ if _USE_SUPABASE:
                 expr, i = _extrair_expr_parenteses(sql, i)
                 out.append(f"(CURRENT_DATE - ({expr.strip()})::DATE)")
                 continue
-            out.append(sql[i])
-            i += 1
+            out.append(sql[i]); i += 1
         return "".join(out)
 
     def _traduzir_sql_pg(sql):
@@ -150,12 +126,12 @@ if _USE_SUPABASE:
         sql = re.sub(r"GROUP_CONCAT\(([^)]+)\)",
             lambda m: f"STRING_AGG({m.group(1).strip()}, ',')", sql)
         sql = sql.replace("IFNULL(", "COALESCE(")
-        sql = re.sub(r"INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT", "SERIAL PRIMARY KEY", sql, flags=re.IGNORECASE)
-        sql = re.sub(r"INTEGER\s+AUTOINCREMENT", "SERIAL", sql, flags=re.IGNORECASE)
         had_or_ignore = bool(re.search(r"INSERT\s+OR\s+IGNORE\s+INTO", sql, re.IGNORECASE))
         sql = re.sub(r"INSERT\s+OR\s+(?:IGNORE|REPLACE)\s+INTO", "INSERT INTO", sql, flags=re.IGNORECASE)
         if had_or_ignore:
             sql = sql.rstrip() + " ON CONFLICT DO NOTHING"
+        sql = re.sub(r"INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT", "SERIAL PRIMARY KEY", sql, flags=re.IGNORECASE)
+        sql = re.sub(r"INTEGER\s+AUTOINCREMENT", "SERIAL", sql, flags=re.IGNORECASE)
         _cols = r"data_pedido|data_contato|data_pesquisa|data_followup|data_entrega|data_visita|data_pagamento|data_inicio|data_fim|data_registro|data_vigencia|data_upload"
         sql = re.sub(rf"\b({_cols})\b(\s*)(>=|<=|=|>|<)", r"\1::DATE\2\3", sql)
         sql = re.sub(rf"\b({_cols})\b(\s+)BETWEEN\b", r"\1::DATE\2BETWEEN", sql)
@@ -185,82 +161,59 @@ if _USE_SUPABASE:
                 result.append(sql[i]); i += 1
         return "".join(result)
 
-    def _get_pg_password():
-        return os.environ.get("SUPABASE_DB_PASSWORD", "")
-
     def _pg_connect():
         return psycopg2.connect(
             host="aws-1-sa-east-1.pooler.supabase.com",
             port=5432,
             dbname="postgres",
             user="postgres.yunzqndswpwttejlgeaa",
-            password=_get_pg_password(),
+            password=os.environ.get("SUPABASE_DB_PASSWORD", ""),
             sslmode="require",
             connect_timeout=15,
         )
 
-    class _PgCursor:
-        """Cursor psycopg2 compativel com SQLite — suporta fetchone/fetchall como _DictRow."""
-        def __init__(self, pg_cur):
-            self._cur = pg_cur
-            self.lastrowid = None
-
-        def execute(self, sql, params=()):
-            sql_pg = _traduzir_sql_pg(sql)
-            self._cur.execute(sql_pg, params)
-            self.lastrowid = None
-
-        def fetchall(self):
-            return _make_dict_rows(self._cur)
-
-        def fetchone(self):
-            return _make_dict_row(self._cur)
-
-    class _PgConn:
-        """Conexao psycopg2 compativel com interface SQLite."""
-        def __init__(self):
-            self._conn = _pg_connect()
-
-        def cursor(self):
-            return _PgCursor(self._conn.cursor())
-
-        def execute(self, sql, params=()):
-            cur = self.cursor()
-            cur.execute(sql, params)
-            return cur
-
-        def commit(self):
-            self._conn.commit()
-
-        def close(self):
-            self._conn.close()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            self._conn.commit()
-            self._conn.close()
-
-    def conectar():
-        return _PgConn()
-
     def _get_session_conn():
-        """Retorna conexao persistente por sessao Streamlit ou cria nova."""
+        """Conexao persistente por sessao Streamlit — elimina overhead TCP por query."""
         try:
             import streamlit as st
             if "db_conn" not in st.session_state or st.session_state["db_conn"].closed:
                 st.session_state["db_conn"] = _pg_connect()
             conn = st.session_state["db_conn"]
-            # Verifica se conexao ainda esta viva
             try:
                 conn.cursor().execute("SELECT 1")
                 return conn
             except Exception:
+                try: conn.close()
+                except: pass
                 st.session_state["db_conn"] = _pg_connect()
                 return st.session_state["db_conn"]
         except Exception:
             return _pg_connect()
+
+    class _PgCursor:
+        def __init__(self, pg_cur):
+            self._cur = pg_cur
+            self.lastrowid = None
+        def execute(self, sql, params=()):
+            sql_pg = _traduzir_sql_pg(sql)
+            self._cur.execute(sql_pg, params)
+            self.lastrowid = None
+        def fetchall(self): return _make_dict_rows(self._cur)
+        def fetchone(self): return _make_dict_row(self._cur)
+
+    class _PgConn:
+        def __init__(self):
+            self._conn = _pg_connect()
+        def cursor(self): return _PgCursor(self._conn.cursor())
+        def execute(self, sql, params=()):
+            cur = self.cursor(); cur.execute(sql, params); return cur
+        def commit(self): self._conn.commit()
+        def close(self): self._conn.close()
+        def __enter__(self): return self
+        def __exit__(self, *a):
+            self._conn.commit(); self._conn.close()
+
+    def conectar(): return _PgConn()
 
     def query(sql, params=()):
         sql_pg = _traduzir_sql_pg(sql)
@@ -270,14 +223,13 @@ if _USE_SUPABASE:
             cur.execute(sql_pg, params)
             return _make_dict_rows(cur)
         except Exception:
-            # Fallback: conexao nova
-            conn = _pg_connect()
+            conn2 = _pg_connect()
             try:
-                cur = conn.cursor()
+                cur = conn2.cursor()
                 cur.execute(sql_pg, params)
                 return _make_dict_rows(cur)
             finally:
-                conn.close()
+                conn2.close()
 
     def execute_write(sql, params=()):
         sql_pg = _traduzir_sql_pg(sql)
@@ -286,10 +238,8 @@ if _USE_SUPABASE:
             cur = conn.cursor()
             cur.execute(sql_pg, params)
             conn.commit()
-            try:
-                return cur.fetchone()[0]
-            except Exception:
-                return None
+            try: return cur.fetchone()[0]
+            except Exception: return None
         finally:
             conn.close()
 
@@ -345,7 +295,7 @@ def get_fornecedores_do_cliente(cliente_id):
 
 def get_mix_com_preco(cliente_id, fornecedor_id, pdv_id=None):
     extra  = "AND m.pdv_id=?" if pdv_id else ""
-    params = (cliente_id, fornecedor_id, pdv_id) if pdv_id else (cliente_id, fornecedor_id)
+    params = (cliente_id, fornecedor_id) + ((pdv_id,) if pdv_id else ()) + (cliente_id, fornecedor_id) + ((pdv_id,) if pdv_id else ())
     return query(f"""
         SELECT p.produto_id,
                p.codigo_produto,
@@ -354,7 +304,7 @@ def get_mix_com_preco(cliente_id, fornecedor_id, pdv_id=None):
                p.unidades_caixa,
                p.unidade_medida,
                COALESCE(tpi.preco_caixa, 0)  AS preco_caixa,
-               COALESCE(tpi.desconto_max, 0) AS desconto_max,
+               COALESCE(tpi.desconto_maximo, 0) AS desconto_max,
                p.ean,
                ult.quantidade                AS ultima_qtd,
                ult.data_pedido               AS ultima_data
@@ -375,7 +325,7 @@ def get_mix_com_preco(cliente_id, fornecedor_id, pdv_id=None):
         ) ult ON ult.produto_id=p.produto_id
         WHERE m.cliente_id=? AND m.fornecedor_id=? AND m.ativo=1 {extra}
         ORDER BY p.descricao_curta
-    """, (cliente_id, fornecedor_id) + ((pdv_id,) if pdv_id else ()) + (cliente_id, fornecedor_id) + ((pdv_id,) if pdv_id else ()))
+    """, params)
 
 def get_clientes_ativos():
     return query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo=1 ORDER BY nome_fantasia")
@@ -387,51 +337,6 @@ def get_produtos_por_fornecedor(fornecedor_id):
         FROM produto WHERE fornecedor_id=? AND ativo=1 ORDER BY descricao_curta
     """, (fornecedor_id,))
 
-# ─── Cache de dados estaticos via Streamlit ──────────────────────────────────
-def _cache_clientes():
-    """Retorna clientes ativos com cache de 5 minutos."""
-    try:
-        import streamlit as st
-        @st.cache_data(ttl=300, show_spinner=False)
-        def _fn():
-            return query("SELECT cliente_id, nome_fantasia, cidade, estado, status FROM cliente WHERE ativo=1 ORDER BY nome_fantasia")
-        return _fn()
-    except Exception:
-        return get_clientes_ativos()
-
-def _cache_fornecedores():
-    """Retorna fornecedores ativos com cache de 5 minutos."""
-    try:
-        import streamlit as st
-        @st.cache_data(ttl=300, show_spinner=False)
-        def _fn():
-            return query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
-        return _fn()
-    except Exception:
-        return query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
-
-def _cache_categorias():
-    """Retorna categorias com cache de 10 minutos."""
-    try:
-        import streamlit as st
-        @st.cache_data(ttl=600, show_spinner=False)
-        def _fn():
-            return query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
-        return _fn()
-    except Exception:
-        return query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
-
-def _cache_produtos_fornecedor(fornecedor_id):
-    """Retorna produtos de um fornecedor com cache de 5 minutos."""
-    try:
-        import streamlit as st
-        @st.cache_data(ttl=300, show_spinner=False)
-        def _fn(fid):
-            return get_produtos_por_fornecedor(fid)
-        return _fn(fornecedor_id)
-    except Exception:
-        return get_produtos_por_fornecedor(fornecedor_id)
-
 def registrar_historico(conn, pedido_id, campo, valor_antes, valor_depois, obs=None):
     from datetime import datetime
     sql = """INSERT INTO pedido_historico
@@ -442,12 +347,34 @@ def registrar_historico(conn, pedido_id, campo, valor_antes, valor_depois, obs=N
               str(valor_depois) if valor_depois is not None else None, obs)
     conn.execute(sql, params)
 
-def criar_tabelas():
-    pass
-
-def _migrar_todos():
-    pass
+def criar_tabelas(): pass
+def _migrar_todos(): pass
 
 def get_nome_empresa():
     r = query("SELECT empresa_nome FROM configuracao LIMIT 1")
     return r[0][0] if r and r[0][0] else "PepperCRM"
+
+# Funcoes de cache para dados estaticos
+def _cache_clientes():
+    try:
+        import streamlit as st
+        @st.cache_data(ttl=300, show_spinner=False)
+        def _fn(): return get_clientes_ativos()
+        return _fn()
+    except Exception: return get_clientes_ativos()
+
+def _cache_fornecedores():
+    try:
+        import streamlit as st
+        @st.cache_data(ttl=300, show_spinner=False)
+        def _fn(): return query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+        return _fn()
+    except Exception: return query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+
+def _cache_categorias():
+    try:
+        import streamlit as st
+        @st.cache_data(ttl=600, show_spinner=False)
+        def _fn(): return query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
+        return _fn()
+    except Exception: return query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
