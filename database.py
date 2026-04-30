@@ -363,6 +363,51 @@ def get_produtos_por_fornecedor(fornecedor_id):
         FROM produto WHERE fornecedor_id=? AND ativo=1 ORDER BY descricao_curta
     """, (fornecedor_id,))
 
+# ─── Cache de dados estaticos via Streamlit ──────────────────────────────────
+def _cache_clientes():
+    """Retorna clientes ativos com cache de 5 minutos."""
+    try:
+        import streamlit as st
+        @st.cache_data(ttl=300, show_spinner=False)
+        def _fn():
+            return query("SELECT cliente_id, nome_fantasia, cidade, estado, status FROM cliente WHERE ativo=1 ORDER BY nome_fantasia")
+        return _fn()
+    except Exception:
+        return get_clientes_ativos()
+
+def _cache_fornecedores():
+    """Retorna fornecedores ativos com cache de 5 minutos."""
+    try:
+        import streamlit as st
+        @st.cache_data(ttl=300, show_spinner=False)
+        def _fn():
+            return query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+        return _fn()
+    except Exception:
+        return query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+
+def _cache_categorias():
+    """Retorna categorias com cache de 10 minutos."""
+    try:
+        import streamlit as st
+        @st.cache_data(ttl=600, show_spinner=False)
+        def _fn():
+            return query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
+        return _fn()
+    except Exception:
+        return query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
+
+def _cache_produtos_fornecedor(fornecedor_id):
+    """Retorna produtos de um fornecedor com cache de 5 minutos."""
+    try:
+        import streamlit as st
+        @st.cache_data(ttl=300, show_spinner=False)
+        def _fn(fid):
+            return get_produtos_por_fornecedor(fid)
+        return _fn(fornecedor_id)
+    except Exception:
+        return get_produtos_por_fornecedor(fornecedor_id)
+
 def registrar_historico(conn, pedido_id, campo, valor_antes, valor_depois, obs=None):
     from datetime import datetime
     sql = """INSERT INTO pedido_historico
