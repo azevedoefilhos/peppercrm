@@ -2883,7 +2883,7 @@ def _gerar_pdf_por_marca(df, marca_nome, forn_nome, tab_nome, filtros_desc):
             linha.append(str(row.get("Data","—"))[:10])
             rows.append(linha)
 
-        el.append(KeepTogether(_pdf_tabela(rows, colunas, cw, s)))
+        el.append(_pdf_tabela(rows, colunas, cw, s))
         el.append(Spacer(1, 0.3*cm))
 
     doc.build(el)
@@ -2962,10 +2962,10 @@ def _gerar_pdf_por_pdv(df, pdv_label, forn_nome, tab_nome, filtros_desc):
 
         tem_tab = "Meu unit. (tab.)" in df_cat.columns and df_cat["Meu unit. (tab.)"].notna().any()
         colunas = ["Data","Nosso produto","Marca","Produto concorrente","Tipo rel.","Preco conc."]
-        cw      = [1.8*cm, 3.5*cm, 2.5*cm, 3.5*cm, 1.8*cm, 2.0*cm]
+        cw      = [1.8*cm, 5.5*cm, 3.0*cm, 6.0*cm, 2.0*cm, 2.5*cm]
         if tem_tab:
             colunas += ["Meu unit. (tab.)","Dif. vs tab.","Score"]
-            cw      += [2.0*cm, 2.5*cm, 2.0*cm]
+            cw      += [2.5*cm, 2.5*cm, 1.8*cm]
 
         rows = []
         for _, row in df_cat.iterrows():
