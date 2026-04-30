@@ -1,23 +1,9 @@
 # crm_app.py — PepperCRM
 
 import streamlit as st
-from database import criar_tabelas, query
-from cadastros import tela_fornecedores, tela_produtos, tela_tabelas_preco, tela_clientes
-from pedido import tela_novo_pedido
-from ver_pedidos import tela_ver_pedidos
-from relatorios import tela_relatorios
-from configuracao import tela_configuracao, get_nome_empresa
-from comissoes import tela_comissoes
-from visitas import tela_visitas
-from mix_analise import tela_mix_analise
-from pesquisa import tela_pesquisa
-from concorrentes import tela_concorrentes
-from analise_competitiva import tela_analise_competitiva
-from contatos import tela_contatos, get_followups_vencidos, get_followups_hoje
-from metas          import tela_metas
-from contatos import tela_contatos, get_followups_vencidos, get_followups_hoje, get_negociacoes_urgentes
+from database import query
+from configuracao import get_nome_empresa
 
-criar_tabelas()
 _nome = get_nome_empresa()
 
 st.set_page_config(page_title=_nome, layout="wide")
@@ -546,20 +532,20 @@ if pagina == "home":
         if st.button("🎯 Metas",                          use_container_width=True): ir("metas")
 
 
-elif pagina == "configuracao":  tela_configuracao()
-elif pagina == "fornecedores":  tela_fornecedores()
-elif pagina == "produtos":      tela_produtos()
-elif pagina == "tabelas_preco": tela_tabelas_preco()
-elif pagina == "clientes":      tela_clientes()
-elif pagina == "pedido":        tela_novo_pedido()
-elif pagina == "ver_pedidos":   tela_ver_pedidos()
-elif pagina == "relatorios":    tela_relatorios()
-elif pagina == "comissoes":     tela_comissoes()
-elif pagina == "visitas":       tela_visitas()
-elif pagina == "mix_analise":   tela_mix_analise()
-elif pagina == "pesquisa":      tela_pesquisa()
-elif pagina == "concorrentes":        tela_concorrentes()
-elif pagina == "analise_competitiva": tela_analise_competitiva()
-elif pagina == "contatos":            tela_contatos()
-elif pagina == "metas":               tela_metas()
+elif pagina == "configuracao":  from configuracao import tela_configuracao; tela_configuracao()
+elif pagina == "fornecedores":  from cadastros import tela_fornecedores; tela_fornecedores()
+elif pagina == "produtos":      from cadastros import tela_produtos; tela_produtos()
+elif pagina == "tabelas_preco": from cadastros import tela_tabelas_preco; tela_tabelas_preco()
+elif pagina == "clientes":      from cadastros import tela_clientes; tela_clientes()
+elif pagina == "pedido":        from pedido import tela_novo_pedido; tela_novo_pedido()
+elif pagina == "ver_pedidos":   from ver_pedidos import tela_ver_pedidos; tela_ver_pedidos()
+elif pagina == "relatorios":    from relatorios import tela_relatorios; tela_relatorios()
+elif pagina == "comissoes":     from comissoes import tela_comissoes; tela_comissoes()
+elif pagina == "visitas":       from visitas import tela_visitas; tela_visitas()
+elif pagina == "mix_analise":   from mix_analise import tela_mix_analise; tela_mix_analise()
+elif pagina == "pesquisa":      from pesquisa import tela_pesquisa; tela_pesquisa()
+elif pagina == "concorrentes":        from concorrentes import tela_concorrentes; tela_concorrentes()
+elif pagina == "analise_competitiva": from analise_competitiva import tela_analise_competitiva; tela_analise_competitiva()
+elif pagina == "contatos":            from contatos import tela_contatos; tela_contatos()
+elif pagina == "metas":               from metas import tela_metas; tela_metas()
 elif pagina == "busca_global":        _tela_busca_global()
