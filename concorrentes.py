@@ -1,3 +1,4 @@
+from cache_helpers import cache_clientes, cache_fornecedores, cache_categorias, cache_produtos_fornecedor
 # concorrentes.py -- PepperCRM
 # 2 abas: Marcas concorrentes | Produtos e relacoes (unificada)
 
@@ -44,7 +45,7 @@ def tela_concorrentes():
 
 def _marcas():
     import io
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = cache_fornecedores()
     if not forns:
         st.warning("Cadastre ao menos um fornecedor antes de cadastrar concorrentes.")
         return
@@ -321,8 +322,8 @@ def _produtos_e_relacoes():
         st.info("Cadastre uma marca concorrente primeiro (aba Marcas concorrentes).")
         return
 
-    cats  = query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    cats  = cache_categorias()
+    forns = cache_fornecedores()
 
     # ── Filtro de fornecedor — define o contexto do formulário ──────────────
     col1, col2, col3, col4 = st.columns(4)
@@ -629,7 +630,7 @@ def _form_editar_produto_relacao(pc_id, concs, cats, forns):
     if not prod: return
 
     conc_id_at, desc_at, desc_c_at, cat_id_at, peso_at, um_at, ean_at, obs_at, ativo_at = prod[0]
-    cats_lista = query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
+    cats_lista = cache_categorias()
     ums = ["UN","kg","g","L","ml"]
     conc_ids  = [c[0] for c in concs]
     idx_conc  = conc_ids.index(conc_id_at) if conc_id_at in conc_ids else 0
@@ -803,7 +804,7 @@ def _gestao_por_ean():
         "e permite cadastrar ou reclassificar rapidamente."
     )
 
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = cache_fornecedores()
     if not forns:
         st.info("Cadastre um fornecedor primeiro."); return
 
@@ -963,7 +964,7 @@ def _gestao_por_ean():
         st.markdown("**Ou cadastrar como produto novo:**")
         st.divider()
 
-        cats = query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
+        cats = cache_categorias()
         marcas_existing = query("""SELECT conc.concorrente_id, conc.marca_concorrente
             FROM concorrente conc WHERE conc.fornecedor_id=? AND conc.ativo=1
             ORDER BY conc.marca_concorrente""", (forn_sel[0],))
@@ -1184,7 +1185,7 @@ def _importar_concorrentes():
     st.divider()
 
     # ── Upload do arquivo ─────────────────────────────────────────────────
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = cache_fornecedores()
     if not forns:
         st.info("Cadastre um fornecedor primeiro."); return
 

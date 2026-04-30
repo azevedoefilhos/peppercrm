@@ -1,3 +1,4 @@
+from cache_helpers import cache_clientes, cache_fornecedores, cache_categorias, cache_produtos_fornecedor
 # análise_competitiva.py — PepperCRM
 # Inteligencia competitiva: marcas, categorias, produtos, presença em PDVs
 
@@ -65,7 +66,7 @@ def _marcas_categorias():
     st.subheader("Marcas concorrentes por categoria")
     st.caption("Quantos produtos diretos e indiretos cada marca tem por categoria.")
 
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = cache_fornecedores()
     if not forns:
         st.info("Nenhum fornecedor cadastrado."); return
 
@@ -147,7 +148,7 @@ def _presenca_pdv():
     st.subheader("Presença de concorrentes nos PDVs")
     st.caption("Cada PDV contado uma unica vez, mesmo com multiplas pesquisas realizadas.")
 
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = cache_fornecedores()
     if not forns:
         st.info("Nenhum fornecedor cadastrado."); return
 
@@ -313,7 +314,7 @@ def _presenca_pdv():
 def _meu_produto_vs():
     st.subheader("Meu produto vs concorrentes diretos e indiretos")
 
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = cache_fornecedores()
     if not forns:
         st.info("Nenhum fornecedor cadastrado."); return
 
@@ -485,7 +486,7 @@ def _meu_produto_vs():
 def _oportunidades():
     st.subheader("Oportunidades estratégicas")
 
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = cache_fornecedores()
     if not forns:
         st.info("Nenhum fornecedor cadastrado."); return
 

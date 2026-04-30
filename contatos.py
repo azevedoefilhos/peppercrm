@@ -1,3 +1,4 @@
+from cache_helpers import cache_clientes, cache_fornecedores, cache_categorias, cache_produtos_fornecedor
 # contatos.py — PepperCRM
 # Módulo unificado: Contatos, Follow-ups & Negociações
 # Modelo: Tópico (assunto) + Linha do tempo de interações
@@ -101,7 +102,7 @@ def _lista_topicos():
 
     col_f, col_exp = st.columns([3,1])
     with col_f:
-        forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+        forns = cache_fornecedores()
         forn_opts = [(0,"Todos os fornecedores")] + [(f[0],f[1]) for f in forns]
         fil_forn = st.selectbox("Fornecedor tratado", forn_opts,
                                 format_func=lambda x: x[1], key="fl_forn")
@@ -288,7 +289,7 @@ def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual):
     r      = cr[0]
     cli_id = r[4]
 
-    todos_f   = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    todos_f   = cache_fornecedores()
     forns_vin = query("""SELECT fn.fornecedor_id, fn.nome_fantasia
         FROM contato_x_fornecedor cxf
         JOIN fornecedor fn ON cxf.fornecedor_id=fn.fornecedor_id
@@ -593,7 +594,7 @@ def _form_novo_topico():
     if err: st.error(err)
 
     clientes = query("SELECT cliente_id, nome_fantasia, status FROM cliente ORDER BY nome_fantasia")
-    fornecs  = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    fornecs  = cache_fornecedores()
 
     # ── 1. Com quem ───────────────────────────────────────────────────────
     st.markdown("**1. Com quem foi o contato?**")

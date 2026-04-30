@@ -1,3 +1,4 @@
+from cache_helpers import cache_clientes, cache_fornecedores, cache_categorias, cache_produtos_fornecedor
 # pesquisa.py — PepperCRM — versao 2025-corrigida
 # pesquisa.py — PepperCRM
 # Coleta de preços no PDV — fluxo linear, estado persistido no banco
@@ -429,7 +430,7 @@ def _tela_cabecalho():
     # ════════════════════════════════════════════════
     st.subheader("3. Fornecedor")
 
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = cache_fornecedores()
 
     # Modo de pesquisa — vinculada ou livre
     tipo_pesquisa = st.radio(
@@ -1656,7 +1657,7 @@ def _form_vincular_e_coletar(pq_id, forn_id, pc_id, label_conc):
     Para concorrente sem vínculo: vincula a um produto nosso e coleta o preço.
     Tudo inline, sem sair da tela de coleta.
     """
-    cats = query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
+    cats = cache_categorias()
 
     # Pré-seleciona categoria do produto concorrente
     cat_conc = query("SELECT categoria_id FROM produto_concorrente WHERE produto_concorrente_id=?", (pc_id,))
@@ -1943,7 +1944,7 @@ def _form_novo_concorrente_rapido(pq_id, prod_id, prod_nome, forn_id):
     """Cadastra marca + produto concorrente inline, vincula e já coleta o preço."""
     st.caption(f"Encontrou um concorrente de '{prod_nome}' que ainda não está na base? Cadastre aqui.")
 
-    cats = query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
+    cats = cache_categorias()
     marcas_existentes = query("""SELECT conc.concorrente_id, conc.marca_concorrente
         FROM concorrente conc WHERE conc.fornecedor_id=? AND conc.ativo=1
         ORDER BY conc.marca_concorrente""", (forn_id,))
@@ -2096,7 +2097,7 @@ def _form_editar_cabecalho_pesquisa(pq_id, cli_id_atual, forn_id_atual, pdv_id_a
     cli_nome = cli_info[0][0] if cli_info else f"Cliente #{cli_id_atual}"
 
     # Fornecedores ativos
-    forns    = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns    = cache_fornecedores()
     forn_ids = [f[0] for f in forns]
     idx_forn = forn_ids.index(forn_id_atual) if forn_id_atual in forn_ids else 0
 
@@ -3003,7 +3004,7 @@ def _tela_analise_consolidada():
     st.divider()
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+        forns = cache_fornecedores()
         forn_opts = [(None, "Todos os fornecedores")] + [(f[0], f[1]) for f in forns]
         fil_forn  = st.selectbox("Fornecedor ref.", forn_opts, format_func=lambda x: x[1], key="ac_forn")
     with col2:
@@ -3017,7 +3018,7 @@ def _tela_analise_consolidada():
                 ORDER BY cat.nome_categoria
             """, (fil_forn[0],))
         else:
-            cats_raw = query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
+            cats_raw = cache_categorias()
         cat_opts = [(None, "Todas as categorias")] + [(c[0], c[1]) for c in cats_raw]
         fil_cat  = st.selectbox("Categoria", cat_opts, format_func=lambda x: x[1], key="ac_cat")
     with col3:
@@ -3106,7 +3107,7 @@ def _ac_por_produto(where_base, params_base, tipo_rel_where, cat_where, cat_para
     st.subheader("Comparativo por produto")
     st.caption("Selecione um produto seu e veja como os concorrentes se posicionam em todos os PDVs pesquisados.")
 
-    forns_p = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns_p = cache_fornecedores()
     if forn_id_global:
         forns_p = [f for f in forns_p if f[0] == forn_id_global] or forns_p
     forn_p  = st.selectbox("Fornecedor", forns_p, format_func=lambda x: x[1], key="ac_p_forn")
@@ -3457,7 +3458,7 @@ def _ac_por_categoria(where_base, params_base, forn_id_global):
             WHERE p.fornecedor_id=? AND p.ativo=1 AND cat.ativo=1
             ORDER BY cat.nome_categoria""", (forn_id_global,))
     else:
-        cats = query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
+        cats = cache_categorias()
     if not cats:
         st.info("Nenhuma categoria encontrada."); return
 
@@ -3528,7 +3529,7 @@ def _ac_por_pdv(where_base, params_base, tipo_rel_where, cat_where, cat_params, 
     st.caption("Selecione um PDV e veja todos os concorrentes pesquisados, com opcao de confrontar com sua tabela de preco.")
 
     # 1. Seleciona fornecedor
-    forns_p = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns_p = cache_fornecedores()
     if forn_id_global:
         forns_p = [f for f in forns_p if f[0] == forn_id_global] or forns_p
     forn_p = st.selectbox("Fornecedor", forns_p, format_func=lambda x: x[1], key="ac_pdv_forn")

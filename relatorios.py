@@ -1,3 +1,4 @@
+from cache_helpers import cache_clientes, cache_fornecedores, cache_categorias, cache_produtos_fornecedor
 # relatorios.py — PepperCRM
 # Relatórios de vendas: cliente, fornecedor, produto, categoria,
 # comparação de períodos, evolução mensal + exportação Excel
@@ -1256,7 +1257,7 @@ def _rel_competitivo():
     )
 
     # ── Filtros ──────────────────────────────────────────────────────────
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = cache_fornecedores()
     if not forns:
         st.info("Nenhum fornecedor cadastrado."); return
 

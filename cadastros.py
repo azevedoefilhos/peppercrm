@@ -1,3 +1,4 @@
+from cache_helpers import cache_clientes, cache_fornecedores, cache_categorias, cache_produtos_fornecedor
 # cadastros.py — PepperCRM
 # Módulos: Fornecedor · Produto · Tabela de Preços · Cliente · PDVs · Mix
 
@@ -132,7 +133,7 @@ def _form_editar_fornecedor(forn_id):
 
 def _tela_contatos_fornecedor():
     st.subheader("Contatos por fornecedor")
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = cache_fornecedores()
     if not forns:
         st.info("Cadastre um fornecedor primeiro.")
         return
@@ -460,9 +461,9 @@ def _form_editar_produto(prod_id):
      ncm_at, cest_at, subcat_at, grupo_at,
      obs_at, ativo_at) = prod[0]
 
-    forns  = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns  = cache_fornecedores()
     marcas = query("SELECT marca_id, nome_marca FROM marca WHERE fornecedor_id=? AND ativo=1 ORDER BY nome_marca", (forn_id_at,))
-    cats   = query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
+    cats   = cache_categorias()
     linhas = query("""SELECT MIN(linha_id), nome_linha FROM linha WHERE ativo=1
                       GROUP BY nome_linha ORDER BY nome_linha""")
 
@@ -567,7 +568,7 @@ def _form_editar_produto(prod_id):
 
 def _form_novo_produto():
     st.subheader("Novo produto")
-    forns  = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns  = cache_fornecedores()
 
     # Fornecedor selecionado FORA do form — filtra marca/categoria/linha reativamente
     forn_pre = st.selectbox("Fornecedor", forns,
@@ -593,7 +594,7 @@ def _form_novo_produto():
         linhas = query("""SELECT MIN(linha_id), nome_linha FROM linha
                           WHERE ativo=1 GROUP BY nome_linha ORDER BY nome_linha""")
 
-    cats = query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
+    cats = cache_categorias()
 
     with st.expander("+ Cadastrar nova Marca / Categoria / Linha"):
         col1, col2, col3 = st.columns(3)
@@ -1155,7 +1156,7 @@ def _lista_tabelas():
             if not s: return None
             return datetime.date.fromisoformat(str(s).strip()[:10])
 
-        forns_e     = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+        forns_e     = cache_fornecedores()
         forn_ids_e  = [f[0] for f in forns_e]
         idx_forn_e  = forn_ids_e.index(forn_id_at) if forn_id_at in forn_ids_e else 0
         tipos_e     = ["rede","varejo","atacado"]
@@ -1427,7 +1428,7 @@ def _historico_precos():
         "Use como argumento em negociações."
     )
 
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = cache_fornecedores()
     if not forns:
         st.info("Nenhum fornecedor cadastrado."); return
 
@@ -2224,7 +2225,7 @@ def _tela_vinculos_cliente():
     cli_sel = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="vinc_cli")
     cli_id  = cli_sel[0]
 
-    forns   = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns   = cache_fornecedores()
     tabelas = query("SELECT tabela_preco_id, fornecedor_id, nome_tabela, prazo_pagamento FROM tabela_preco WHERE ativo=1 ORDER BY nome_tabela")
 
     vinculos = query("""
@@ -4463,7 +4464,7 @@ def _excluir_produtos_lote():
         "**Use apenas quando necessário reimportar toda a linha de um fornecedor.**"
     )
 
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = cache_fornecedores()
     if not forns:
         st.info("Nenhum fornecedor cadastrado.")
         return

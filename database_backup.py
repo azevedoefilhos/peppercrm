@@ -8,6 +8,9 @@ Em desenvolvimento (local):    usa SQLite (comportamento atual)
 import os
 import sqlite3
 
+# ── Constantes globais usadas pelos módulos ─────────────────────────────
+TIPOS_PONTO_EXTRA = ["Ponta de gôndola","Ilha","Check-stand","Clip strip","Display"]
+
 # ── Detecta ambiente ─────────────────────────────────────────────────────
 # Quando rodando no Streamlit Cloud, a variável SUPABASE_URL estará definida
 # nos secrets do app. Localmente usa SQLite normalmente.
@@ -132,10 +135,14 @@ def registrar_historico(conn, pedido_id, campo, valor_antes, valor_depois, obs=N
 # a estrutura foi criada pelo script de migração
 
 def criar_tabelas():
-    if not _USE_SUPABASE:
-        # Em desenvolvimento, chama o database.py original
-        pass
+    """Compatibilidade — em produção as tabelas já existem no Supabase."""
+    pass
 
 def _migrar_todos():
-    if not _USE_SUPABASE:
-        pass
+    """Compatibilidade — migração já foi feita pelo script dedicado."""
+    pass
+
+def get_nome_empresa():
+    """Retorna o nome da empresa da configuração."""
+    r = query("SELECT empresa_nome FROM configuracao LIMIT 1")
+    return r[0][0] if r and r[0][0] else "PepperCRM"
