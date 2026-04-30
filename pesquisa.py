@@ -2030,9 +2030,14 @@ def _form_novo_concorrente_rapido(pq_id, prod_id, prod_nome, forn_id):
             if not nova_marca.strip():
                 st.error("Informe o nome da nova marca.")
                 conn.close(); return
-            conc_id = execute_write(
-                "INSERT INTO concorrente (fornecedor_id, marca_concorrente, ativo) VALUES (?,?,1) RETURNING concorrente_id",
-                (forn_id, nova_marca.strip()))
+            _dup_m = query("SELECT concorrente_id FROM concorrente WHERE LOWER(marca_concorrente)=LOWER(?) AND fornecedor_id=? AND ativo=1",
+                           (nova_marca.strip(), forn_id))
+            if _dup_m:
+                conc_id = _dup_m[0][0]
+            else:
+                conc_id = execute_write(
+                    "INSERT INTO concorrente (fornecedor_id, marca_concorrente, ativo) VALUES (?,?,1) RETURNING concorrente_id",
+                    (forn_id, nova_marca.strip()))
         else:
             idx = [m[1] for m in marcas_existentes].index(marca_sel)
             conc_id = marcas_existentes[idx][0]

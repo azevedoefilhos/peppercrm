@@ -1027,10 +1027,15 @@ def _gestao_por_ean():
             if marca_sel=="➕ Nova marca..." and not _nome:
                 st.error("Informe o nome da nova marca."); return
 
-            from database import conectar as _con
+            from database import conectar as _con, query as _q
             conn = _con()
             # Marca
             if marca_sel == "➕ Nova marca...":
+                _dup = _q("SELECT concorrente_id FROM concorrente WHERE LOWER(marca_concorrente)=LOWER(?) AND fornecedor_id=? AND ativo=1",
+                          (_nome, forn_sel[0]))
+                if _dup:
+                    st.error(f"⚠️ A marca **{_nome}** já está cadastrada para este fornecedor.")
+                    conn.close(); return
                 cur = conn.cursor()
                 cur.execute("INSERT INTO concorrente (fornecedor_id, marca_concorrente, ativo) VALUES (?,?,1)",
                             (forn_sel[0], _nome))
