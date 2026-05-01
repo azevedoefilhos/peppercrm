@@ -964,6 +964,9 @@ def _coleta_modo_ean(pq_id, forn_id):
 
     # Scanner — aparece no topo quando ativo
     if _cam_aberta:
+        # Preserva estado da pesquisa durante rerun da camera
+        st.session_state["pq_modo"] = "coleta"
+        st.session_state["pq_id_ativo"] = pq_id
         ean_cam = scanner_ean(key_suffix=str(pq_id))
         if ean_cam:
             st.session_state[_scan_key] = str(ean_cam)
