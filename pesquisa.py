@@ -969,8 +969,8 @@ def _coleta_modo_ean(pq_id, forn_id):
 
     # Scanner de câmera (abre/fecha)
     if st.session_state.get(f"cam_{pq_id}", False):
-        st.info("📷 Aponte a câmera para o código de barras")
-        ean_cam = scanner_ean(altura=340)
+        st.markdown("📷 **Centralize o código de barras e tire a foto**")
+        ean_cam = scanner_ean(key_suffix=str(pq_id))
         if ean_cam:
             st.session_state[_scan_key] = str(ean_cam)
             st.session_state[f"cam_{pq_id}"] = False
