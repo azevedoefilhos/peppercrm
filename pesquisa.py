@@ -1031,7 +1031,7 @@ def _coleta_modo_ean(pq_id, forn_id):
                         (ean, sel_vinc[0]))
                     conn.commit(); conn.close()
                     st.session_state[f"ean_vinculado_{pq_id}"] = sel_vinc[0]
-                    st.session_state[f"ean_input_{pq_id}"] = ""
+                    st.session_state.pop(f"ean_input_{pq_id}", None)
                     st.success(f"✅ EAN vinculado! Relançando pesquisa...")
                     st.rerun()
 
