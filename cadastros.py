@@ -214,7 +214,9 @@ def _lista_produtos():
     if msg_edit: st.success(msg_edit)
 
     # Query completa com todos os campos para exportação
-    dados = query("""
+    @st.cache_data(ttl=60, show_spinner=False)
+    def _load_produtos():
+        return query("""
         SELECT p.produto_id, f.nome_fantasia, m.nome_marca,
                COALESCE(cat.nome_categoria,'—'), COALESCE(l.nome_linha,'—'),
                p.codigo_produto, p.descricao, p.descricao_curta,
@@ -232,7 +234,8 @@ def _lista_produtos():
         LEFT JOIN categoria cat  ON p.categoria_id = cat.categoria_id
         LEFT JOIN linha l        ON p.linha_id = l.linha_id
         ORDER BY f.nome_fantasia, p.descricao
-    """)
+    """
+    dados = _load_produtos())
     if not dados:
         st.info("Nenhum produto cadastrado.")
         return
