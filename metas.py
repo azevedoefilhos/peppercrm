@@ -1,3 +1,4 @@
+from cache_helpers import cache_fornecedores
 # metas.py — PepperCRM
 # Módulo de metas mensais por fornecedor com acompanhamento % atingido
 
@@ -65,7 +66,7 @@ def _painel_unificado():
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+        forns = cache_fornecedores()
         forn_opts = [(0,"Todos os fornecedores")] + [(f[0],f[1]) for f in forns]
         forn_sel  = st.selectbox("Fornecedor", forn_opts,
                                  format_func=lambda x: x[1], key="pu_forn")

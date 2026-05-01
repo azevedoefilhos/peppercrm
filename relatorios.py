@@ -90,8 +90,7 @@ def _filtro_periodo(col_data, label="Período"):
 
 
 def _filtro_fornecedor(key="forn_rel"):
-    forns = [(None, "Todos")] + query(
-        "SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = [(None, "Todos")] + list(cache_fornecedores())
     sel = st.selectbox("Fornecedor", forns, format_func=lambda x: x[1], key=key)
     return sel[0] if sel else None
 

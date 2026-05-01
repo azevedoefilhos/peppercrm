@@ -1,3 +1,4 @@
+from cache_helpers import cache_clientes, cache_fornecedores
 # mix_analise.py — PepperCRM
 # Análise de cobertura de mix ideal por PDV / cliente
 # Mostra: cobertura %, produtos nunca pedidos, sugestão de oferta
