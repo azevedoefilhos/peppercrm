@@ -81,11 +81,47 @@ def _painel_unificado():
     fids = [f[0] for f in forns] if forn_sel[0]==0 else [forn_sel[0]]
     tem_algo = False
 
+    @st.cache_data(ttl=60, show_spinner=False)
+    def _metas_fat_cached(fid_, ano_, mes_):
+        return query("""
+            SELECT m.meta_id, m.meta_valor, m.meta_pedidos,
+                   COALESCE((
+                       SELECT ROUND(SUM(pi.quantidade*pi.preco_final
+                              *(1-COALESCE(p.desconto_geral,0)/100.0)),2)
+                       FROM pedido p JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
+                       WHERE p.fornecedor_id=? AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
+                         AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO')
+                         AND strftime('%Y',p.data_pedido)=?
+                         AND strftime('%m',p.data_pedido)=?
+                   ),0) AS realizado,
+                   COALESCE((
+                       SELECT COUNT(*) FROM pedido p
+                       WHERE p.fornecedor_id=? AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
+                         AND strftime('%Y',p.data_pedido)=?
+                         AND strftime('%m',p.data_pedido)=?
+                   ),0) AS pedidos_feitos
+            FROM meta_fornecedor m
+            WHERE m.fornecedor_id=? AND m.ano=? AND m.mes=? AND m.ativo=1
+        """, (fid_, str(ano_), f"{mes_:02d}",
+              fid_, str(ano_), f"{mes_:02d}",
+              fid_, ano_, mes_))
+
+    @st.cache_data(ttl=60, show_spinner=False)
+    def _metas_mix_cached(fid_, ano_, mes_):
+        return query("""
+            SELECT meta_mix_id, tipo, referencia_id, descricao,
+                   meta_qtd, meta_clientes, observacao
+            FROM meta_mix
+            WHERE fornecedor_id=? AND ano=? AND mes=? AND ativo=1
+            ORDER BY tipo, descricao
+        """, (fid_, ano_, mes_))
+
     for fid in fids:
         forn_nome = next((f[1] for f in forns if f[0]==fid), "—")
 
         # Metas de faturamento deste fornecedor/mês
-        metas_fat = query("""
+        metas_fat = _metas_fat_cached(fid, ano_sel, mes_sel)
+        if False: query("""
             SELECT m.meta_id, m.meta_valor, m.meta_pedidos,
                    COALESCE((
                        SELECT ROUND(SUM(pi.quantidade*pi.preco_final
@@ -108,14 +144,8 @@ def _painel_unificado():
               fid, str(ano_sel), f"{mes_sel:02d}",
               fid, ano_sel, mes_sel))
 
-        # Metas de mix deste fornecedor/mês
-        metas_mix = query("""
-            SELECT meta_mix_id, tipo, referencia_id, descricao,
-                   meta_qtd, meta_clientes, observacao
-            FROM meta_mix
-            WHERE fornecedor_id=? AND ano=? AND mes=? AND ativo=1
-            ORDER BY tipo, descricao
-        """, (fid, ano_sel, mes_sel))
+        # Metas de mix
+        metas_mix = _metas_mix_cached(fid, ano_sel, mes_sel)
 
         if not metas_fat and not metas_mix:
             continue
