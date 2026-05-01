@@ -1,21 +1,22 @@
 """
 scanner_ean.py -- Scanner de código de barras via câmera
-Usa st.camera_input + pyzbar para decodificação.
+Usa st.camera_input + zxing-cpp (puro Python, sem dependencias de sistema).
 """
 
 def scanner_ean(key_suffix=""):
-    """
-    Abre câmera e decodifica código de barras.
-    Retorna EAN como string ou None.
-    """
     import streamlit as st
 
     try:
-        from pyzbar.pyzbar import decode as pyzbar_decode
+        import zxingcpp
         from PIL import Image
         import io
+        import numpy as np
+        _ok = True
     except ImportError:
-        st.error("⚠️ pyzbar não instalado.")
+        _ok = False
+
+    if not _ok:
+        st.error("⚠️ Biblioteca de leitura não disponível.")
         return None
 
     img_file = st.camera_input(
@@ -28,15 +29,16 @@ def scanner_ean(key_suffix=""):
 
     try:
         img = Image.open(io.BytesIO(img_file.getvalue()))
-        codigos = pyzbar_decode(img)
+        img_array = np.array(img)
+        resultados = zxingcpp.read_barcodes(img_array)
 
-        if not codigos:
-            st.warning("❌ Código não detectado. Tente novamente com boa iluminação e centralizado.")
+        if not resultados:
+            st.warning("❌ Código não detectado. Tente com boa iluminação e código centralizado.")
             return None
 
-        ean = codigos[0].data.decode("utf-8")
-        tipo = codigos[0].type
-        st.success(f"✅ **{ean}** ({tipo})")
+        ean = resultados[0].text
+        formato = str(resultados[0].format)
+        st.success(f"✅ **{ean}** ({formato})")
         return ean
 
     except Exception as e:
