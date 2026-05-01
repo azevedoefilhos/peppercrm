@@ -1059,8 +1059,9 @@ def _coleta_modo_ean(pq_id, forn_id):
             _form_cadastro_rapido_ean(pq_id, forn_id, ean, None)
 
     # ── OPÇÃO 3: Cadastrar manualmente ────────────────────────────────────
-    with st.expander("✍️ Cadastrar manualmente (sem busca online)"):
-        _form_cadastro_rapido_ean(pq_id, forn_id, ean, None)
+    if not st.session_state.get(f"ean_buscar_off_{pq_id}"):
+        with st.expander("✍️ Cadastrar manualmente (sem busca online)"):
+            _form_cadastro_rapido_ean(pq_id, forn_id, ean, None)
 
 
 def _coleta_ean_produto_encontrado(pq_id, forn_id, resultado, ean):
