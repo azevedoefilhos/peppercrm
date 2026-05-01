@@ -939,17 +939,43 @@ def _coleta_modo_ean(pq_id, forn_id):
     )
 
     # ── Campo EAN + Scanner de câmera ──────────────────────────────────
-    # Se scanner retornou EAN, injeta no campo de texto
     _scan_key = f"scan_ean_{pq_id}"
+    _cam_aberta = st.session_state.get(f"cam_{pq_id}", False)
+
+    # Se scanner retornou EAN, injeta no campo
     if _scan_key in st.session_state and st.session_state[_scan_key]:
         st.session_state[f"ean_input_{pq_id}"] = st.session_state.pop(_scan_key)
+        _cam_aberta = False
+        st.session_state[f"cam_{pq_id}"] = False
 
-    # Linha com campo EAN + botão buscar + botão câmera
-    col_ean, col_btn, col_cam = st.columns([3, 1, 1])
+    # Botao câmera no topo
+    col_btn_cam, col_info = st.columns([1, 3])
+    with col_btn_cam:
+        if st.button("📷 Câmera" if not _cam_aberta else "✖️ Fechar",
+                     key=f"btn_cam_{pq_id}",
+                     use_container_width=True):
+            st.session_state[f"cam_{pq_id}"] = not _cam_aberta
+            st.rerun()
+    with col_info:
+        if not _cam_aberta:
+            st.caption("Escaneie o código ou digite o EAN abaixo")
+        else:
+            st.caption("📸 Tire a foto centralizando o código de barras")
+
+    # Scanner — aparece no topo quando ativo
+    if _cam_aberta:
+        ean_cam = scanner_ean(key_suffix=str(pq_id))
+        if ean_cam:
+            st.session_state[_scan_key] = str(ean_cam)
+            st.session_state[f"cam_{pq_id}"] = False
+            st.rerun()
+
+    # Campo EAN manual
+    col_ean, col_btn = st.columns([4, 1])
     with col_ean:
         ean_input = st.text_input(
             "EAN-13",
-            placeholder="7891234567890 ou use 📷",
+            placeholder="7891234567890",
             key=f"ean_input_{pq_id}",
             label_visibility="collapsed",
             max_chars=14
@@ -958,23 +984,6 @@ def _coleta_modo_ean(pq_id, forn_id):
         buscar = st.button("🔍", key=f"ean_buscar_{pq_id}",
                            use_container_width=True,
                            help="Buscar produto")
-    with col_cam:
-        _cam_aberta = st.session_state.get(f"cam_{pq_id}", False)
-        if st.button("📷" if not _cam_aberta else "✖️",
-                     key=f"btn_cam_{pq_id}",
-                     use_container_width=True,
-                     help="Abrir câmera para ler código de barras"):
-            st.session_state[f"cam_{pq_id}"] = not _cam_aberta
-            st.rerun()
-
-    # Scanner de câmera (abre/fecha)
-    if st.session_state.get(f"cam_{pq_id}", False):
-        st.markdown("📷 **Centralize o código de barras e tire a foto**")
-        ean_cam = scanner_ean(key_suffix=str(pq_id))
-        if ean_cam:
-            st.session_state[_scan_key] = str(ean_cam)
-            st.session_state[f"cam_{pq_id}"] = False
-            st.rerun()
 
     ean = ean_input.strip().replace(" ","").replace(".","").replace("-","")
 
