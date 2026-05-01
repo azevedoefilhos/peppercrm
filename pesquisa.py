@@ -1090,6 +1090,7 @@ def _coleta_ean_produto_encontrado(pq_id, forn_id, resultado, ean):
         _u3 = resultado.get("um","")
         st.info(f"Concorrente encontrado: {_m3} — {_d3} {_p3}{_u3} | {aud_label}")
         _form_coleta_rapida_ean(pq_id,
+                                 tipo="concorrente",
                                  produto_id=None,
                                  pc_id=resultado["pc_id"],
                                  label=resultado["descricao"],
