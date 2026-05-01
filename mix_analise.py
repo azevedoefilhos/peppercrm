@@ -51,10 +51,7 @@ def tela_mix_analise():
 def _analise_pdv():
     st.subheader("Cobertura de mix — PDV específico")
 
-    clientes = query("""
-        SELECT cliente_id, nome_fantasia, cidade, estado
-        FROM cliente WHERE ativo=1 ORDER BY nome_fantasia
-    """)
+    clientes = cache_clientes()
     if not clientes:
         st.info("Nenhum cliente cadastrado.")
         return
