@@ -948,30 +948,15 @@ def _coleta_modo_ean(pq_id, forn_id):
         _cam_aberta = False
         st.session_state[f"cam_{pq_id}"] = False
 
-    # Botao câmera no topo
-    col_btn_cam, col_info = st.columns([1, 3])
-    with col_btn_cam:
-        if st.button("📷 Câmera" if not _cam_aberta else "✖️ Fechar",
-                     key=f"btn_cam_{pq_id}",
-                     use_container_width=True):
-            st.session_state[f"cam_{pq_id}"] = not _cam_aberta
-            st.rerun()
-    with col_info:
-        if not _cam_aberta:
-            st.caption("Escaneie o código ou digite o EAN abaixo")
-        else:
-            st.caption("📸 Tire a foto centralizando o código de barras")
+    # Scanner sempre visivel no topo — sem botao intermediario
+    st.session_state["pq_modo"] = "coleta"
+    st.session_state["pq_id_ativo"] = pq_id
+    ean_cam = scanner_ean(key_suffix=str(pq_id))
+    if ean_cam:
+        st.session_state[_scan_key] = str(ean_cam)
+        st.rerun()
 
-    # Scanner — aparece no topo quando ativo
-    if _cam_aberta:
-        # Preserva estado da pesquisa durante rerun da camera
-        st.session_state["pq_modo"] = "coleta"
-        st.session_state["pq_id_ativo"] = pq_id
-        ean_cam = scanner_ean(key_suffix=str(pq_id))
-        if ean_cam:
-            st.session_state[_scan_key] = str(ean_cam)
-            st.session_state[f"cam_{pq_id}"] = False
-            st.rerun()
+    st.caption("Ou digite o EAN manualmente abaixo")
 
     # Campo EAN manual
     col_ean, col_btn = st.columns([4, 1])
