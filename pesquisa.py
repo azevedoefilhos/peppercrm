@@ -1000,6 +1000,11 @@ def _coleta_modo_ean(pq_id, forn_id):
         st.warning("EAN deve ter 8, 12 ou 13 dígitos.")
         return
 
+    # Verifica se veio de uma vinculação recente
+    _redirect_ean = st.session_state.pop(f"ean_vinc_ok_redirect_{pq_id}", None)
+    if _redirect_ean:
+        ean = _redirect_ean
+
     # ── LOOKUP LOCAL ──────────────────────────────────────────────────────
     resultado = _lookup_ean_local(ean)
 
@@ -1034,8 +1039,9 @@ def _coleta_modo_ean(pq_id, forn_id):
                         (ean, sel_vinc[0]))
                     conn.commit(); conn.close()
                     st.session_state[f"ean_vinculado_{pq_id}"] = sel_vinc[0]
-                    st.session_state.pop(f"ean_input_{pq_id}", None)
-                    st.success(f"✅ EAN vinculado! Relançando pesquisa...")
+                    # Mantém o EAN no campo para que o lookup encontre o produto recém vinculado
+                    st.session_state[f"ean_vinc_ok_redirect_{pq_id}"] = ean
+                    st.success(f"✅ EAN vinculado! Abrindo campos de preço...")
                     st.rerun()
 
     # ── OPÇÃO 2: Busca Open Food Facts ────────────────────────────────────
