@@ -1158,8 +1158,9 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
             conn = conectar()
 
             # Determina produto_id de referência
-            pid_ref    = produto_id if tipo == "nosso" else None
-            pc_id_ref  = pc_id     if tipo == "conc"  else None
+            # tipo pode ser: "nosso", "conc" ou "concorrente"
+            pid_ref   = produto_id if tipo == "nosso" else None
+            pc_id_ref = pc_id if tipo in ("conc", "concorrente") else None
 
             # Verifica se já existe item desta pesquisa + produto
             where_ex  = "pesquisa_id=? AND " +                         ("produto_id=?" if pid_ref else "produto_concorrente_id=?")
