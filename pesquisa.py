@@ -948,13 +948,17 @@ def _coleta_modo_ean(pq_id, forn_id):
         _cam_aberta = False
         st.session_state[f"cam_{pq_id}"] = False
 
-    # Scanner sempre visivel no topo — sem botao intermediario
+    # Scanner so aparece quando nao ha EAN digitado/capturado
     st.session_state["pq_modo"] = "coleta"
     st.session_state["pq_id_ativo"] = pq_id
-    ean_cam = scanner_ean(key_suffix=str(pq_id))
-    if ean_cam:
-        st.session_state[_scan_key] = str(ean_cam)
-        st.rerun()
+
+    # Verifica se ja tem EAN no campo (evita loop)
+    _ean_atual = st.session_state.get(f"ean_input_{pq_id}", "").strip()
+    if not _ean_atual:
+        ean_cam = scanner_ean(key_suffix=str(pq_id))
+        if ean_cam:
+            st.session_state[_scan_key] = str(ean_cam)
+            st.rerun()
 
     st.caption("Ou digite o EAN manualmente abaixo")
 
