@@ -1092,10 +1092,22 @@ def _coleta_ean_produto_encontrado(pq_id, forn_id, resultado, ean):
         _p3 = resultado.get("peso","")
         _u3 = resultado.get("um","")
         st.info(f"Concorrente encontrado: {_m3} — {_d3} {_p3}{_u3} | {aud_label}")
+
+        # Busca produto nosso vinculado a este concorrente (para gravar produto_id)
+        _pc_id = resultado["pc_id"]
+        _rel = query("""SELECT produto_id FROM produto_concorrente_relacao
+                        WHERE produto_concorrente_id=?
+                        AND produto_id IN (SELECT produto_id FROM produto WHERE fornecedor_id=?)
+                        LIMIT 1""", (_pc_id, forn_id))
+        _prod_id_vinculado = _rel[0][0] if _rel else None
+
+        if _prod_id_vinculado:
+            st.caption(f"✅ Vinculado ao nosso produto ID {_prod_id_vinculado}")
+
         _form_coleta_rapida_ean(pq_id,
                                  tipo="concorrente",
-                                 produto_id=None,
-                                 pc_id=resultado["pc_id"],
+                                 produto_id=_prod_id_vinculado,
+                                 pc_id=_pc_id,
                                  label=resultado["descricao"],
                                  ean=ean)
 
@@ -1159,7 +1171,7 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
 
             # Determina produto_id de referência
             # tipo pode ser: "nosso", "conc" ou "concorrente"
-            pid_ref   = produto_id if tipo == "nosso" else None
+            pid_ref   = produto_id  # produto_id pode vir preenchido mesmo para concorrente
             pc_id_ref = pc_id if tipo in ("conc", "concorrente") else None
 
             # Verifica se já existe item desta pesquisa + produto
