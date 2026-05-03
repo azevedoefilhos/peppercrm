@@ -1472,17 +1472,23 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
             pc_id_ref = pc_id if tipo in ("conc", "concorrente") else None
 
             # Verifica se já existe item desta pesquisa + produto
-            where_ex  = "pesquisa_id=? AND " +                         ("produto_id=?" if pid_ref else "produto_concorrente_id=?")
-            val_ex    = (pq_id, pid_ref if pid_ref else pc_id_ref)
+            # Busca por pc_id_ref primeiro (mais especifico), depois produto_id
+            if pc_id_ref:
+                where_ex = "pesquisa_id=? AND produto_concorrente_id=?"
+                val_ex   = (pq_id, pc_id_ref)
+            else:
+                where_ex = "pesquisa_id=? AND produto_id=? AND produto_concorrente_id IS NULL"
+                val_ex   = (pq_id, pid_ref)
             existente = conn.execute(
                 f"SELECT pesquisa_item_id FROM pesquisa_preco_item WHERE {where_ex} LIMIT 1",
                 val_ex).fetchone()
 
             if existente:
-                conn.execute("""UPDATE pesquisa_preco_item SET
-                    preco=?, frentes=?, em_oferta=?, ponto_extra=?,
-                    ruptura=?, observacao=?
-                    WHERE pesquisa_item_id=?""",
+                conn.execute(
+                    "UPDATE pesquisa_preco_item SET "
+                    "preco=?, frentes=?, em_oferta=?, ponto_extra=?, "
+                    "ruptura=?, observacao=? "
+                    "WHERE pesquisa_item_id=?",
                     (preco if not ruptura else None,
                      frentes, 1 if oferta else 0,
                      1 if ponto_extra else 0,
@@ -1514,8 +1520,11 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
             # Limpa campo EAN para próxima leitura
             st.session_state.pop(f"ean_input_{pq_id}", None)
             st.session_state.pop(f"ean_buscar_off_{pq_id}", None)
+            st.session_state.pop(f"nav_produto_pendente_{pq_id}", None)
+            st.session_state.pop(f"campo_busca_{pq_id}", None)
+            st.session_state.pop(f"{k}_confirmar_update", None)
             st.session_state[f"ean_ultimo_{pq_id}"] = label
-            st.success(f"✅ **{label}** — salvo! Digite o próximo EAN.")
+            st.success(f"✅ **{label}** — salvo!")
             st.rerun()
 
 
