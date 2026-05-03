@@ -1414,10 +1414,10 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
                 value=1, step=1, key=f"{k}_frt")
         with col3:
             col_of, col_pe = st.columns(2)
-            oferta    = col_of.checkbox("Oferta", key=f"{k}_of")
-            ponto_extra = col_pe.checkbox("P.Extra", key=f"{k}_pe")
+            oferta    = col_of.checkbox("Oferta", value=_v_oferta, key=f"{k}_of")
+            ponto_extra = col_pe.checkbox("P.Extra", value=_v_pe, key=f"{k}_pe")
 
-        ruptura = st.checkbox("⚠️ Ruptura (sem estoque)", key=f"{k}_rup")
+        ruptura = st.checkbox("⚠️ Ruptura (sem estoque)", value=_v_ruptura, key=f"{k}_rup")
 
         # Vínculo com produto próprio (só para concorrentes)
         prod_vinc_id = None
@@ -1438,7 +1438,7 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
                     key=f"{k}_vinc")
                 prod_vinc_id = pv_sel[0] if pv_sel else None
 
-        obs = st.text_input("Observação (opcional)", key=f"{k}_obs",
+        obs = st.text_input("Observação (opcional)", value=_v_obs, key=f"{k}_obs",
                             placeholder="Ex: produto em destaque no fim do corredor")
 
         _salvar = st.form_submit_button(
