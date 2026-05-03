@@ -1343,7 +1343,7 @@ def _coleta_ean_produto_encontrado(pq_id, forn_id, resultado, ean):
         _d3 = resultado.get("descricao","")
         _p3 = resultado.get("peso","")
         _u3 = resultado.get("um","")
-        st.info(f"Concorrente encontrado: {_m3} — {_d3} {_p3}{_u3} | {aud_label}")
+        st.info(f"Concorrente encontrado: {_m3} — {_d3} | {aud_label}")
 
         # Busca produto nosso vinculado a este concorrente (para gravar produto_id)
         _pc_id = resultado["pc_id"]
@@ -1536,8 +1536,6 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
                 st.session_state.pop(f"nav_produto_pendente_{pq_id}", None)
                 st.session_state.pop(f"campo_busca_{pq_id}", None)
                 st.session_state.pop(f"{k}_confirmar_update", None)
-                st.session_state["pq_modo"] = "coleta"
-                st.session_state["pq_id_ativo"] = pq_id
                 st.session_state[f"ean_ultimo_{pq_id}"] = label
                 st.success(f"✅ **{label}** — salvo!")
                 st.rerun()
