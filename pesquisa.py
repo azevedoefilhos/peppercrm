@@ -1387,19 +1387,32 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
         LIMIT 1
     """, (pq_id, pc_id, pc_id, produto_id, produto_id))
 
-    if _ja_existe and not st.session_state.get(_confirmar_key):
-        _preco_ant = _ja_existe[0][1]
-        _preco_fmt = f"R$ {_preco_ant:,.2f}".replace(",","X").replace(".",",").replace("X",".") if _preco_ant else "Ruptura"
-        st.warning(f"⚠️ **{label}** já foi pesquisado nesta visita (preço: {_preco_fmt}). Deseja atualizar?")
-        col_s, col_n = st.columns(2)
-        if col_s.button("✅ Sim, atualizar", key=f"{k}_sim", use_container_width=True):
-            st.session_state[_confirmar_key] = True
-            st.rerun()
-        if col_n.button("❌ Não, próximo", key=f"{k}_nao", use_container_width=True):
+    # Busca dados ja coletados para pre-preencher
+    _dados_anteriores = None
+    if _ja_existe:
+        _item_id = _ja_existe[0][0]
+        _r = query("""SELECT preco, frentes, em_oferta, ponto_extra, ruptura, observacao
+            FROM pesquisa_preco_item WHERE pesquisa_item_id=?""", (_item_id,))
+        if _r: _dados_anteriores = _r[0]
+
+    # Valores para pre-preencher (anteriores ou padrao)
+    _v_preco   = float(_dados_anteriores[0]) if _dados_anteriores and _dados_anteriores[0] else 0.0
+    _v_frentes = int(_dados_anteriores[1])   if _dados_anteriores and _dados_anteriores[1] else 1
+    _v_oferta  = bool(_dados_anteriores[2])  if _dados_anteriores else False
+    _v_pe      = bool(_dados_anteriores[3])  if _dados_anteriores else False
+    _v_ruptura = bool(_dados_anteriores[4])  if _dados_anteriores else False
+    _v_obs     = str(_dados_anteriores[5])   if _dados_anteriores and _dados_anteriores[5] else ""
+
+    if _ja_existe:
+        _preco_fmt = f"R$ {_v_preco:,.2f}".replace(",","X").replace(".",",").replace("X",".") if _v_preco else "Ruptura"
+        st.markdown(f"### ⚠️ Produto já pesquisado")
+        st.warning(f"**{label}** já coletado nesta visita — preço anterior: **{_preco_fmt}**. Atualize abaixo ou pule.")
+        if st.button("❌ Não atualizar — próximo produto",
+                     key=f"{k}_nao", use_container_width=True):
             st.session_state.pop(f"ean_input_{pq_id}", None)
             st.session_state.pop(f"campo_busca_{pq_id}", None)
+            st.session_state.pop(f"nav_produto_pendente_{pq_id}", None)
             st.rerun()
-
 
     with st.form(key=f"{k}_form", border=True):
         col1, col2, col3 = st.columns(3)
@@ -1407,11 +1420,12 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
             preco = st.number_input(
                 "💰 Preço (R$) *",
                 min_value=0.0, format="%.2f",
+                value=_v_preco,
                 step=0.01, key=f"{k}_preco")
         with col2:
             frentes = st.number_input(
                 "Frentes", min_value=0,
-                value=1, step=1, key=f"{k}_frt")
+                value=_v_frentes, step=1, key=f"{k}_frt")
         with col3:
             col_of, col_pe = st.columns(2)
             oferta    = col_of.checkbox("Oferta", value=_v_oferta, key=f"{k}_of")
