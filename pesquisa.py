@@ -776,11 +776,11 @@ def _tela_coleta(pq_id):
             st.session_state[modo_key] = "classico"; st.rerun()
     with col_m2:
         if st.button(
-            "⚡ Campo" if st.session_state[modo_key] != "campo" else "⚡ Campo ✓",
+            "⚡ Rápido" if st.session_state[modo_key] != "campo" else "⚡ Rápido ✓",
             use_container_width=True,
             type="primary" if st.session_state[modo_key] == "campo" else "secondary",
             key="btn_modo_campo",
-            help="Escanear EAN ou buscar por nome/categoria — modo campo unificado"
+            help="Escanear EAN ou buscar por nome/categoria — modo rápido unificado"
         ):
             st.session_state[modo_key] = "campo"; st.rerun()
 
@@ -924,7 +924,7 @@ def _coleta_modo_campo(pq_id, forn_id):
     Modo Campo: scanner EAN + busca por nome + navegação por categoria.
     Tudo numa única tela sem troca de abas.
     """
-    st.subheader("⚡ Modo Campo")
+    st.subheader("⚡ Modo Rápido")
 
     # ── Scanner + Campo de busca unificado ────────────────────────────────
     _scan_key = f"scan_ean_{pq_id}"
@@ -1358,7 +1358,9 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
     Formulário ultra-enxuto de coleta de dados da gôndola.
     Foco total em velocidade — só os campos essenciais.
     """
-    k = f"ean_coleta_{pq_id}_{ean}"
+    # Chave unica baseada em produto_id ou pc_id (nao apenas EAN que pode ser vazio)
+    _k_id = produto_id if produto_id else f"pc{pc_id}" if pc_id else ean
+    k = f"ean_coleta_{pq_id}_{_k_id}"
 
     # Verifica se produto ja foi pesquisado hoje nesta pesquisa
     _ja_existe = query("""
@@ -1383,11 +1385,12 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
             st.session_state[_confirmar_key] = True
         if col_n.button("❌ Não, próximo", key=f"{k}_nao", use_container_width=True):
             st.session_state.pop(f"ean_input_{pq_id}", None)
+            st.session_state.pop(f"campo_busca_{pq_id}", None)
             st.rerun()
         if not st.session_state.get(_confirmar_key):
             return
 
-    with st.container(border=True):
+    with st.form(key=f"{k}_form", border=True):
         col1, col2, col3 = st.columns(3)
         with col1:
             preco = st.number_input(
@@ -1408,7 +1411,6 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
         # Vínculo com produto próprio (só para concorrentes)
         prod_vinc_id = None
         if tipo == "conc":
-            # Busca produtos nossos do mesmo fornecedor para vincular
             prods_n = query("""SELECT produto_id, descricao_curta, codigo_produto
                 FROM produto WHERE fornecedor_id=(
                     SELECT conc.fornecedor_id FROM produto_concorrente pc
@@ -1428,9 +1430,11 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
         obs = st.text_input("Observação (opcional)", key=f"{k}_obs",
                             placeholder="Ex: produto em destaque no fim do corredor")
 
-        if st.button(f"💾 Salvar e próximo EAN",
-                     type="primary", use_container_width=True,
-                     key=f"{k}_salvar"):
+        _salvar = st.form_submit_button(
+            f"💾 Salvar e próximo",
+            type="primary", use_container_width=True)
+
+        if _salvar:
             if preco <= 0 and not ruptura:
                 st.error("Informe o preço ou marque Ruptura.")
                 return
