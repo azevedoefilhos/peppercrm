@@ -1414,7 +1414,6 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
             st.session_state.pop(f"nav_produto_pendente_{pq_id}", None)
             st.rerun()
 
-    st.caption(f"DEBUG form key: {k}")
     with st.form(key=f"{k}_form", border=True):
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -1461,7 +1460,6 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
             type="primary", use_container_width=True)
 
         if _salvar:
-            st.info(f"DEBUG: salvando {label} | preco={preco} | pc_id={pc_id} | produto_id={produto_id} | tipo={tipo}")
             if preco <= 0 and not ruptura:
                 st.error("Informe o preço ou marque Ruptura.")
                 return
