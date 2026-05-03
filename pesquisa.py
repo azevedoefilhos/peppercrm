@@ -983,7 +983,9 @@ def _coleta_modo_campo(pq_id, forn_id):
         st.warning(f"EAN **{_ean_limpo}** não encontrado na base local.")
 
         # Opcao 1: vincular a concorrente sem EAN
+        st.caption(f"DEBUG: forn_id={forn_id} | ean={_ean_limpo}")
         sem_ean = _lookup_ean_concorrentes_sem_ean(_ean_limpo, forn_id)
+        st.caption(f"DEBUG: sem_ean count={len(sem_ean) if sem_ean else 0}")
         if sem_ean:
             with st.expander(
                 f"🔗 É um produto já cadastrado sem EAN? ({len(sem_ean)} disponíveis)",
