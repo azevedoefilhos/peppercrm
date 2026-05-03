@@ -1359,7 +1359,7 @@ def _coleta_ean_produto_encontrado(pq_id, forn_id, resultado, ean):
                 WHERE p.produto_id=? LIMIT 1""", (_prod_id_vinculado,))
             if _desc_vinc:
                 _dv = _desc_vinc[0]
-                _label_vinc = f"{_dv[1]} — {_dv[0]}" + (f" {_dv[3]}{_dv[2]}" if _dv[3] else "")
+                _label_vinc = f"{_dv[1]} — {_dv[0]}"
             else:
                 _label_vinc = f"ID {_prod_id_vinculado}"
             st.caption(f"✅ Vinculado ao nosso produto: **{_label_vinc}**")
