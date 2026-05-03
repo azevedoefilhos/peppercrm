@@ -1375,7 +1375,7 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
         LIMIT 1
     """, (pq_id, pc_id, pc_id, produto_id, produto_id))
 
-    if _ja_existe:
+    if _ja_existe and not st.session_state.get(_confirmar_key):
         _preco_ant = _ja_existe[0][1]
         _preco_fmt = f"R$ {_preco_ant:,.2f}".replace(",","X").replace(".",",").replace("X",".") if _preco_ant else "Ruptura"
         _confirmar_key = f"{k}_confirmar_update"
@@ -1383,12 +1383,12 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
         col_s, col_n = st.columns(2)
         if col_s.button("✅ Sim, atualizar", key=f"{k}_sim", use_container_width=True):
             st.session_state[_confirmar_key] = True
+            st.rerun()
         if col_n.button("❌ Não, próximo", key=f"{k}_nao", use_container_width=True):
             st.session_state.pop(f"ean_input_{pq_id}", None)
             st.session_state.pop(f"campo_busca_{pq_id}", None)
             st.rerun()
-        if not st.session_state.get(_confirmar_key):
-            return
+
 
     with st.form(key=f"{k}_form", border=True):
         col1, col2, col3 = st.columns(3)
