@@ -1363,6 +1363,7 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
     k = f"ean_coleta_{pq_id}_{_k_id}"
 
     # Verifica se produto ja foi pesquisado hoje nesta pesquisa
+    _confirmar_key = f"{k}_confirmar_update"
     _ja_existe = query("""
         SELECT ppi.pesquisa_item_id, ppi.preco
         FROM pesquisa_preco_item ppi
@@ -1378,7 +1379,6 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
     if _ja_existe and not st.session_state.get(_confirmar_key):
         _preco_ant = _ja_existe[0][1]
         _preco_fmt = f"R$ {_preco_ant:,.2f}".replace(",","X").replace(".",",").replace("X",".") if _preco_ant else "Ruptura"
-        _confirmar_key = f"{k}_confirmar_update"
         st.warning(f"⚠️ **{label}** já foi pesquisado nesta visita (preço: {_preco_fmt}). Deseja atualizar?")
         col_s, col_n = st.columns(2)
         if col_s.button("✅ Sim, atualizar", key=f"{k}_sim", use_container_width=True):
