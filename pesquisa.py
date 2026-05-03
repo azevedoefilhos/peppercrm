@@ -1145,10 +1145,10 @@ def _campo_navegacao(pq_id, forn_id):
         ORDER BY conc.marca_concorrente, pc.descricao_curta
     """, (forn_id, cat_id))
 
-    # Verifica se ha produto pendente (apos rerun do confirmar)
+    # Verifica se ha produto pendente (apos rerun do confirmar ou submit do form)
     _prod_pendente = st.session_state.get(f"nav_produto_pendente_{pq_id}")
     if _prod_pendente:
-        st.session_state.pop(f"nav_produto_pendente_{pq_id}", None)
+        # NAO remove aqui - so remove apos save bem-sucedido
         _coleta_ean_produto_encontrado(pq_id, forn_id, _prod_pendente["resultado"],
                                        _prod_pendente["ean"])
         return
