@@ -1145,6 +1145,14 @@ def _campo_navegacao(pq_id, forn_id):
         ORDER BY conc.marca_concorrente, pc.descricao_curta
     """, (forn_id, cat_id))
 
+    # Verifica se ha produto pendente (apos rerun do confirmar)
+    _prod_pendente = st.session_state.get(f"nav_produto_pendente_{pq_id}")
+    if _prod_pendente:
+        st.session_state.pop(f"nav_produto_pendente_{pq_id}", None)
+        _coleta_ean_produto_encontrado(pq_id, forn_id, _prod_pendente["resultado"],
+                                       _prod_pendente["ean"])
+        return
+
     if nossos:
         st.markdown("**🟢 Nossos:**")
         for pid, desc, marca in nossos:
@@ -1153,7 +1161,9 @@ def _campo_navegacao(pq_id, forn_id):
                         use_container_width=True):
                 resultado = {"tipo":"nosso","produto_id":pid,
                             "descricao":desc,"marca":marca,"ean":None,"pc_id":None}
-                _coleta_ean_produto_encontrado(pq_id, forn_id, resultado, "")
+                st.session_state[f"nav_produto_pendente_{pq_id}"] = {
+                    "resultado": resultado, "ean": ""}
+                st.rerun()
 
     if concs:
         st.markdown("**🔴 Concorrentes:**")
@@ -1164,8 +1174,9 @@ def _campo_navegacao(pq_id, forn_id):
                 resultado = {"tipo":"conc","pc_id":pc_id,
                             "descricao":desc,"marca":marca,
                             "ean":ean,"auditavel":1}
-                _coleta_ean_produto_encontrado(pq_id, forn_id, resultado,
-                                               ean or "")
+                st.session_state[f"nav_produto_pendente_{pq_id}"] = {
+                    "resultado": resultado, "ean": ean or ""}
+                st.rerun()
 
 def _coleta_modo_ean(pq_id, forn_id):
     """
