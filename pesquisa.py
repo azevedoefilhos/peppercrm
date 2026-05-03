@@ -1460,6 +1460,7 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
             type="primary", use_container_width=True)
 
         if _salvar:
+            st.info(f"DEBUG: salvando {label} | preco={preco} | pc_id={pc_id} | produto_id={produto_id} | tipo={tipo}")
             if preco <= 0 and not ruptura:
                 st.error("Informe o preço ou marque Ruptura.")
                 return
