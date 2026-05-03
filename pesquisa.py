@@ -1464,68 +1464,67 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
                 st.error("Informe o preço ou marque Ruptura.")
                 return
 
-            conn = conectar()
+            try:
+                conn = conectar()
+                pid_ref   = produto_id
+                pc_id_ref = pc_id if tipo in ("conc", "concorrente") else None
 
-            # Determina produto_id de referência
-            # tipo pode ser: "nosso", "conc" ou "concorrente"
-            pid_ref   = produto_id  # produto_id pode vir preenchido mesmo para concorrente
-            pc_id_ref = pc_id if tipo in ("conc", "concorrente") else None
+                if pc_id_ref:
+                    where_ex = "pesquisa_id=? AND produto_concorrente_id=?"
+                    val_ex   = (pq_id, pc_id_ref)
+                else:
+                    where_ex = "pesquisa_id=? AND produto_id=? AND produto_concorrente_id IS NULL"
+                    val_ex   = (pq_id, pid_ref)
 
-            # Verifica se já existe item desta pesquisa + produto
-            # Busca por pc_id_ref primeiro (mais especifico), depois produto_id
-            if pc_id_ref:
-                where_ex = "pesquisa_id=? AND produto_concorrente_id=?"
-                val_ex   = (pq_id, pc_id_ref)
-            else:
-                where_ex = "pesquisa_id=? AND produto_id=? AND produto_concorrente_id IS NULL"
-                val_ex   = (pq_id, pid_ref)
-            existente = conn.execute(
-                f"SELECT pesquisa_item_id FROM pesquisa_preco_item WHERE {where_ex} LIMIT 1",
-                val_ex).fetchone()
+                existente = conn.execute(
+                    f"SELECT pesquisa_item_id FROM pesquisa_preco_item WHERE {where_ex} LIMIT 1",
+                    val_ex).fetchone()
 
-            if existente:
-                conn.execute(
-                    "UPDATE pesquisa_preco_item SET "
-                    "preco=?, frentes=?, em_oferta=?, ponto_extra=?, "
-                    "ruptura=?, observacao=? "
-                    "WHERE pesquisa_item_id=?",
-                    (preco if not ruptura else None,
-                     frentes, 1 if oferta else 0,
-                     1 if ponto_extra else 0,
-                     1 if ruptura else 0,
-                     obs.strip() or None,
-                     existente[0]))
-            else:
-                conn.execute("""INSERT INTO pesquisa_preco_item
-                    (pesquisa_id, produto_id, produto_concorrente_id,
-                     preco, frentes, em_oferta, ponto_extra, ruptura,
-                     observacao)
-                    VALUES (?,?,?,?,?,?,?,?,?)""",
-                    (pq_id,
-                     pid_ref, pc_id_ref,
-                     preco if not ruptura else None,
-                     frentes, 1 if oferta else 0,
-                     1 if ponto_extra else 0,
-                     1 if ruptura else 0,
-                     obs.strip() or None))
+                if existente:
+                    conn.execute(
+                        "UPDATE pesquisa_preco_item SET "
+                        "preco=?, frentes=?, em_oferta=?, ponto_extra=?, "
+                        "ruptura=?, observacao=? "
+                        "WHERE pesquisa_item_id=?",
+                        (preco if not ruptura else None,
+                         frentes, 1 if oferta else 0,
+                         1 if ponto_extra else 0,
+                         1 if ruptura else 0,
+                         obs.strip() or None,
+                         existente[0]))
+                else:
+                    conn.execute(
+                        "INSERT INTO pesquisa_preco_item "
+                        "(pesquisa_id, produto_id, produto_concorrente_id, "
+                        "preco, frentes, em_oferta, ponto_extra, ruptura, observacao) "
+                        "VALUES (?,?,?,?,?,?,?,?,?)",
+                        (pq_id, pid_ref, pc_id_ref,
+                         preco if not ruptura else None,
+                         frentes, 1 if oferta else 0,
+                         1 if ponto_extra else 0,
+                         1 if ruptura else 0,
+                         obs.strip() or None))
 
-            # Registra vínculo se informado
-            if prod_vinc_id and pc_id_ref:
-                conn.execute("""INSERT OR IGNORE INTO produto_concorrente_relacao
-                    (produto_id, produto_concorrente_id, tipo_relacao)
-                    VALUES (?,?,'indireto')""", (prod_vinc_id, pc_id_ref))
+                if prod_vinc_id and pc_id_ref:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO produto_concorrente_relacao "
+                        "(produto_id, produto_concorrente_id, tipo_relacao) "
+                        "VALUES (?,?,'indireto')", (prod_vinc_id, pc_id_ref))
 
-            conn.commit(); conn.close()
+                conn.commit()
+                conn.close()
 
-            # Limpa campo EAN para próxima leitura
-            st.session_state.pop(f"ean_input_{pq_id}", None)
-            st.session_state.pop(f"ean_buscar_off_{pq_id}", None)
-            st.session_state.pop(f"nav_produto_pendente_{pq_id}", None)
-            st.session_state.pop(f"campo_busca_{pq_id}", None)
-            st.session_state.pop(f"{k}_confirmar_update", None)
-            st.session_state[f"ean_ultimo_{pq_id}"] = label
-            st.success(f"✅ **{label}** — salvo!")
-            st.rerun()
+                st.session_state.pop(f"ean_input_{pq_id}", None)
+                st.session_state.pop(f"ean_buscar_off_{pq_id}", None)
+                st.session_state.pop(f"nav_produto_pendente_{pq_id}", None)
+                st.session_state.pop(f"campo_busca_{pq_id}", None)
+                st.session_state.pop(f"{k}_confirmar_update", None)
+                st.session_state[f"ean_ultimo_{pq_id}"] = label
+                st.success(f"✅ **{label}** — salvo!")
+                st.rerun()
+
+            except Exception as _e:
+                st.error(f"Erro ao salvar: {_e}")
 
 
 def _form_cadastro_rapido_ean(pq_id, forn_id, ean, dados_off):
