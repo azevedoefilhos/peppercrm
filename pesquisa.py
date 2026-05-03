@@ -1354,7 +1354,15 @@ def _coleta_ean_produto_encontrado(pq_id, forn_id, resultado, ean):
         _prod_id_vinculado = _rel[0][0] if _rel else None
 
         if _prod_id_vinculado:
-            st.caption(f"✅ Vinculado ao nosso produto ID {_prod_id_vinculado}")
+            _desc_vinc = query("""SELECT p.descricao_curta, m.nome_marca, p.unidade_medida, p.peso
+                FROM produto p JOIN marca m ON p.marca_id=m.marca_id
+                WHERE p.produto_id=? LIMIT 1""", (_prod_id_vinculado,))
+            if _desc_vinc:
+                _dv = _desc_vinc[0]
+                _label_vinc = f"{_dv[1]} — {_dv[0]}" + (f" {_dv[3]}{_dv[2]}" if _dv[3] else "")
+            else:
+                _label_vinc = f"ID {_prod_id_vinculado}"
+            st.caption(f"✅ Vinculado ao nosso produto: **{_label_vinc}**")
 
         _form_coleta_rapida_ean(pq_id,
                                  tipo="concorrente",
@@ -1433,6 +1441,12 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
 
         ruptura = st.checkbox("⚠️ Ruptura (sem estoque)", value=_v_ruptura, key=f"{k}_rup")
 
+        # Nota: em st.form, os valores dos checkboxes sao lidos do session_state
+        # apos submit para garantir valores corretos
+        _oferta_val = st.session_state.get(f"{k}_of", oferta)
+        _pe_val = st.session_state.get(f"{k}_pe", ponto_extra)
+        _rup_val = st.session_state.get(f"{k}_rup", ruptura)
+
         # Vínculo com produto próprio (só para concorrentes)
         prod_vinc_id = None
         if tipo == "conc":
@@ -1460,7 +1474,10 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
             type="primary", use_container_width=True)
 
         if _salvar:
-            if preco <= 0 and not ruptura:
+            _oferta_val = st.session_state.get(f"{k}_of", oferta)
+            _pe_val = st.session_state.get(f"{k}_pe", ponto_extra)
+            _rup_val = st.session_state.get(f"{k}_rup", ruptura)
+            if preco <= 0 and not _rup_val:
                 st.error("Informe o preço ou marque Ruptura.")
                 return
 
@@ -1486,10 +1503,10 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
                         "preco=?, frentes=?, em_oferta=?, ponto_extra=?, "
                         "ruptura=?, observacao=? "
                         "WHERE pesquisa_item_id=?",
-                        (preco if not ruptura else None,
-                         frentes, 1 if oferta else 0,
-                         1 if ponto_extra else 0,
-                         1 if ruptura else 0,
+                        (preco if not _rup_val else None,
+                         frentes, 1 if _oferta_val else 0,
+                         1 if _pe_val else 0,
+                         1 if _rup_val else 0,
                          obs.strip() or None,
                          existente[0]))
                 else:
@@ -1499,10 +1516,10 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
                         "preco, frentes, em_oferta, ponto_extra, ruptura, observacao) "
                         "VALUES (?,?,?,?,?,?,?,?,?)",
                         (pq_id, pid_ref, pc_id_ref,
-                         preco if not ruptura else None,
-                         frentes, 1 if oferta else 0,
-                         1 if ponto_extra else 0,
-                         1 if ruptura else 0,
+                         preco if not _rup_val else None,
+                         frentes, 1 if _oferta_val else 0,
+                         1 if _pe_val else 0,
+                         1 if _rup_val else 0,
                          obs.strip() or None))
 
                 if prod_vinc_id and pc_id_ref:
