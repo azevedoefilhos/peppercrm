@@ -903,7 +903,7 @@ def _lookup_ean_concorrentes_sem_ean(ean_digitado: str, forn_id):
         FROM produto_concorrente pc
         JOIN concorrente conc ON pc.concorrente_id=conc.concorrente_id
         WHERE conc.fornecedor_id=?
-          AND (pc.ean_concorrente IS NULL OR pc.ean_concorrente='')
+          AND (pc.ean_concorrente IS NULL OR pc.ean_concorrente='' OR pc.ean_concorrente='nan')
           AND pc.ativo=1
         ORDER BY conc.marca_concorrente, pc.descricao_curta
     """, (forn_id,))
