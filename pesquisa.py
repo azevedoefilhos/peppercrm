@@ -1657,7 +1657,7 @@ def _form_cadastro_rapido_ean(pq_id, forn_id, ean, dados_off):
              peso, unidade_medida, ean_concorrente, auditavel, observacao, ativo)
             VALUES (?,?,?,?,?,?,?,?,?,1)""",
             (conc_id,
-             (cat_sel[0] if hasattr(cat_sel, '__getitem__') else cat_sel) if cat_sel else None, else None,
+             (cat_sel[0] if hasattr(cat_sel, '__getitem__') else cat_sel) if cat_sel else None,
              desc.strip(), desc_c.strip() or None,
              peso or None, um, ean, 1 if auditavel else 0))
         pc_novo = cur.lastrowid
