@@ -1536,6 +1536,8 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
                 st.session_state.pop(f"nav_produto_pendente_{pq_id}", None)
                 st.session_state.pop(f"campo_busca_{pq_id}", None)
                 st.session_state.pop(f"{k}_confirmar_update", None)
+                st.session_state["pq_modo"] = "coleta"
+                st.session_state["pq_id_ativo"] = pq_id
                 st.session_state[f"ean_ultimo_{pq_id}"] = label
                 st.success(f"✅ **{label}** — salvo!")
                 st.rerun()
