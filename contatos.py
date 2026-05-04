@@ -783,7 +783,7 @@ def _form_novo_topico():
             (_iso(_data_c), _via, tipo_ent.lower(), cli_id, forn_ent_id,
              _pessoa_nome or None, _assunto, _desc or None, _result or None,
              _iso(_followup), _status, _prior, _tipo_top))
-        novo_cid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        novo_cid = conn.execute("SELECT lastval()").fetchone()[0]
 
         for ft in _forns:
             fid = ft[0] if isinstance(ft,(list,tuple)) else ft
