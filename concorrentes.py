@@ -625,7 +625,7 @@ def _form_novo_produto_relacao(concs, cats, forns, forn_fil=None):
 def _form_editar_produto_relacao(pc_id, concs, cats, forns):
     """Edita produto concorrente e gerencia seus vinculos na mesma tela."""
     prod = query("""SELECT pc.concorrente_id, pc.descricao, pc.descricao_curta,
-               pc.categoria_id, pc.peso, pc.unidade_medida, pc.ean, pc.observacao, pc.ativo
+               pc.categoria_id, pc.peso, pc.unidade_medida, pc.ean_concorrente, pc.observacao, pc.ativo
         FROM produto_concorrente pc WHERE pc.produto_concorrente_id=?""", (pc_id,))
     if not prod: return
 
