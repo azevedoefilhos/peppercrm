@@ -2552,20 +2552,33 @@ def _tela_pdvs():
         if st.session_state.get("pdv_excluir_id") == sel[0]:
             _confirmacao_excluir_pdv(sel[0], sel[1])
         elif sel:
-            _form_editar_pdv(sel[0])
+            _editar_key = f"pdv_editar_{sel[0]}"
+            if st.session_state.get(_editar_key):
+                _form_editar_pdv(sel[0])
+                if st.button("✖️ Fechar edição", key=f"fechar_pdv_{sel[0]}"):
+                    st.session_state.pop(_editar_key, None)
+                    st.rerun()
+            else:
+                if st.button("✏️ Editar PDV selecionado", key=f"btn_editar_pdv_{sel[0]}",
+                             type="primary", use_container_width=True):
+                    st.session_state[_editar_key] = True
+                    st.rerun()
     else:
         st.info("Nenhum PDV encontrado para os filtros selecionados.")
 
     st.divider()
-    cli_novo_opts = [(c[0],c[1]) for c in clientes_all] if clientes_all else []
-    if not cli_novo_opts:
+    # Novo PDV - cliente deve ser selecionado explicitamente
+    st.subheader("➕ Novo PDV")
+    cli_novo_opts = [(None, "— Selecione o cliente —")] + [(c[0],c[1]) for c in clientes_all] if clientes_all else []
+    if not cli_novo_opts or len(cli_novo_opts) <= 1:
         st.info("Cadastre um cliente primeiro."); return
-    cli_novo_idx = next((i for i,c in enumerate(cli_novo_opts) if c[0]==cli_fil[0]), 0)
-    cli_novo = st.selectbox("Cliente para novo PDV", cli_novo_opts,
-                            index=cli_novo_idx,
+    cli_novo = st.selectbox("Cliente *", cli_novo_opts,
+                            index=0,
                             format_func=lambda x: x[1], key="pdv_cli_novo")
-    st.subheader("Novo PDV")
-    _form_novo_pdv(cli_novo[0])
+    if not cli_novo or not cli_novo[0]:
+        st.warning("⚠️ Selecione o cliente antes de cadastrar o PDV.")
+    else:
+        _form_novo_pdv(cli_novo[0])
 
 
 def _form_novo_pdv(cli_id):
@@ -2621,6 +2634,16 @@ def _form_novo_pdv(cli_id):
                                             ["GG","G","M","P","PP","—"],
                                             key="pdv_tamanho",
                                             help="GG=hipermercado, G=grande, M=medio, P=pequeno, PP=micro")
+        status_pdv = st.selectbox("Status do PDV *",
+                                   ["Prospecto", "Ativo", "Inativo", "Bloqueado"],
+                                   index=0,
+                                   key="pdv_status_novo",
+                                   help="Prospecto = cliente em prospecção, ainda não compra")
+        status_pdv = st.selectbox("Status do PDV *",
+                                   ["Prospecto", "Ativo", "Inativo", "Bloqueado"],
+                                   index=0,
+                                   key="pdv_status_novo",
+                                   help="Prospecto = cliente em prospecção, ainda não compra")
         obs    = st.text_area("Observacao")
         salvar = st.form_submit_button("Salvar PDV", type="primary")
 
@@ -2637,8 +2660,8 @@ def _form_novo_pdv(cli_id):
             (cliente_id, numero_loja, nome_loja, tipo_pdv, cnpj, ie,
              endereco, bairro, cidade, estado,
              gerente, fone_gerente, encarregado, fone_encarregado,
-             horario_recebimento, setor, cluster, tamanho_pdv, observacao, ativo)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
+             horario_recebimento, setor, cluster, tamanho_pdv, observacao, status, ativo)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
         """, (cli_id, numero or None, nome_loja.strip(), tipo_pdv,
               cnpj or None, None,
               endereco or None, bairro or None, cidade or None, estado,
@@ -2647,7 +2670,8 @@ def _form_novo_pdv(cli_id):
               horario or None, setor or None,
               cluster if cluster != "—" else None,
               tamanho_pdv if tamanho_pdv != "—" else None,
-              obs or None))
+              obs or None,
+              status_pdv))
         conn.commit(); conn.close()
         _sucesso(f"PDV '{nome_loja}' cadastrado!")
         st.rerun()
