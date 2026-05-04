@@ -380,7 +380,8 @@ def _produtos_e_relacoes():
     elif fil_aud == "🚫 Não auditáveis":
         where.append("COALESCE(pc.auditavel,1)=0")
     if fil_busca.strip():
-        b = f"%{fil_busca.strip()}%"
+        _term = fil_busca.strip().replace("%","%%").replace("_","\_")
+        b = f"%{_term}%"
         where.append("(pc.descricao LIKE ? OR pc.descricao_curta LIKE ? OR conc.marca_concorrente LIKE ?)")
         params.extend([b, b, b])
 

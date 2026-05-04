@@ -106,6 +106,10 @@ def _traduzir_julianday(sql):
 def _traduzir_sql_pg(sql):
     import re
     sql = sql.replace("?", "%s")
+    # Escapa % literais no SQL (nao sao parametros)
+    # Nota: %s ja foi inserido, entao escapamos apenas os outros %
+    import re
+    sql = re.sub(r'%(?!s)', '%%', sql)
     sql = re.sub(r"date\('now',\s*'start of month',\s*'-1 day'\)",
         "(DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 day')", sql)
     sql = re.sub(r"date\('now',\s*'start of month',\s*'-1 month'\)",
