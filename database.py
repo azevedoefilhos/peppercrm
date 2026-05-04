@@ -106,6 +106,9 @@ def _traduzir_julianday(sql):
 def _traduzir_sql_pg(sql):
     import re
     sql = sql.replace("?", "%s")
+    # PostgreSQL: ILIKE e case-insensitive (equivalente ao LIKE do SQLite)
+    import re as _re
+    sql = _re.sub(r'\bLIKE\b', 'ILIKE', sql)
     # Escapa % literais no SQL (nao sao parametros)
     # Nota: %s ja foi inserido, entao escapamos apenas os outros %
     import re
