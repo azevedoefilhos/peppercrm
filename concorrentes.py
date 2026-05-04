@@ -671,7 +671,7 @@ def _form_editar_produto_relacao(pc_id, concs, cats, forns):
                 conn = conectar()
                 conn.execute("""UPDATE produto_concorrente SET
                     concorrente_id=?,descricao=?,descricao_curta=?,categoria_id=?,
-                    peso=?,unidade_medida=?,ean=?,observacao=?,ativo=?
+                    peso=?,unidade_medida=?,ean_concorrente=?,observacao=?,ativo=?
                     WHERE produto_concorrente_id=?""",
                     (conc_e[0], desc_e.strip(), desc_ce.strip() or None,
                      cat_e[0] if cat_e and cat_e[0] else None,
