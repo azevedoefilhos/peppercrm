@@ -157,7 +157,7 @@ def _traduzir_sql_pg(sql):
     sql = re.sub(r"INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT", "SERIAL PRIMARY KEY", sql, flags=re.IGNORECASE)
     sql = re.sub(r"INTEGER\s+AUTOINCREMENT", "SERIAL", sql, flags=re.IGNORECASE)
     _cols = r"data_pedido|data_contato|data_pesquisa|data_followup|data_entrega|data_visita|data_pagamento|data_inicio|data_fim|data_registro|data_vigencia|data_upload"
-    sql = re.sub(rf"\b({_cols})\b(\s*)(>=|<=|=|>|<)", r"\1::DATE\2\3", sql)
+    sql = re.sub(rf"\b({_cols})\b(\s*)(>=|<=|>|<)", r"\1::DATE\2\3", sql)
     sql = re.sub(rf"\b({_cols})\b(\s+)BETWEEN\b", r"\1::DATE\2BETWEEN", sql)
     result = []; i = 0; sql_up = sql.upper()
     while i < len(sql):
