@@ -157,8 +157,25 @@ def _traduzir_sql_pg(sql):
     sql = re.sub(r"INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT", "SERIAL PRIMARY KEY", sql, flags=re.IGNORECASE)
     sql = re.sub(r"INTEGER\s+AUTOINCREMENT", "SERIAL", sql, flags=re.IGNORECASE)
     _cols = r"data_pedido|data_contato|data_pesquisa|data_followup|data_entrega|data_visita|data_pagamento|data_inicio|data_fim|data_registro|data_vigencia|data_upload"
-    sql = re.sub(rf"\b({_cols})\b(\s*)(>=|<=|>|<)", r"\1::DATE\2\3", sql)
-    sql = re.sub(rf"\b({_cols})\b(\s+)BETWEEN\b", r"\1::DATE\2BETWEEN", sql)
+    # Adiciona ::DATE apenas em comparacoes WHERE (nao em SET do UPDATE)
+    def _add_date_cast(sql_in, cols_pattern):
+        import re as _re3
+        result = []
+        # Divide o SQL em clausulas SET e resto
+        # Aplica ::DATE apenas fora de clausulas SET
+        set_mode = False
+        tokens = _re3.split(r'(SET|WHERE|ON|AND|OR)', sql_in, flags=_re3.IGNORECASE)
+        for token in tokens:
+            if _re3.match(r'SET', token, _re3.IGNORECASE):
+                set_mode = True
+            elif _re3.match(r'WHERE|ON', token, _re3.IGNORECASE):
+                set_mode = False
+            if not set_mode:
+                token = _re3.sub(rf"\b({cols_pattern})\b(\s*)(>=|<=|>|<)", r"\1::DATE\2\3", token)
+                token = _re3.sub(rf"\b({cols_pattern})\b(\s+)BETWEEN\b", r"\1::DATE\2BETWEEN", token)
+            result.append(token)
+        return ''.join(result)
+    sql = _add_date_cast(sql, _cols)
     result = []; i = 0; sql_up = sql.upper()
     while i < len(sql):
         if sql_up[i:i+6] == "ROUND(":
