@@ -106,6 +106,22 @@ def _traduzir_julianday(sql):
 def _traduzir_sql_pg(sql):
     import re
     sql = sql.replace("?", "%s")
+    # Traduz strftime do SQLite para TO_CHAR do PostgreSQL
+    sql = re.sub(
+        r"strftime\('(%Y-%m-%d)',\s*([^)]+)\)",
+        lambda m: f"TO_CHAR(({m.group(2)})::date, 'YYYY-MM-DD')", sql)
+    sql = re.sub(
+        r"strftime\('(%Y-%m)',\s*([^)]+)\)",
+        lambda m: f"TO_CHAR(({m.group(2)})::date, 'YYYY-MM')", sql)
+    sql = re.sub(
+        r"strftime\('(%Y)',\s*([^)]+)\)",
+        lambda m: f"TO_CHAR(({m.group(2)})::date, 'YYYY')", sql)
+    sql = re.sub(
+        r"strftime\('(%m)',\s*([^)]+)\)",
+        lambda m: f"TO_CHAR(({m.group(2)})::date, 'MM')", sql)
+    sql = re.sub(
+        r"strftime\('(%d)',\s*([^)]+)\)",
+        lambda m: f"TO_CHAR(({m.group(2)})::date, 'DD')", sql)
     # PostgreSQL: ILIKE e case-insensitive (equivalente ao LIKE do SQLite)
     import re as _re
     sql = _re.sub(r'\bLIKE\b', 'ILIKE', sql)
