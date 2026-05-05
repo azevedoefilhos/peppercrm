@@ -100,12 +100,20 @@ def _lista_topicos():
     with col4:
         busca = st.text_input("🔍 Buscar", placeholder="Assunto ou cliente...", key="fl_busca")
 
-    col_f, col_exp = st.columns([3,1])
+    col_f, col_per, col_ord = st.columns([2, 1.5, 1.5])
     with col_f:
         forns = cache_fornecedores()
         forn_opts = [(0,"Todos os fornecedores")] + [(f[0],f[1]) for f in forns]
         fil_forn = st.selectbox("Fornecedor tratado", forn_opts,
                                 format_func=lambda x: x[1], key="fl_forn")
+    with col_per:
+        fil_periodo = st.selectbox("Período", 
+                                   ["Todos", "Hoje", "Esta semana", "Este mês", "Últimos 30 dias", "Últimos 90 dias"],
+                                   key="fl_periodo")
+    with col_ord:
+        fil_ordem = st.selectbox("Ordenar por",
+                                 ["Status/Prioridade", "Mais recentes", "Mais antigos", "Próx. followup"],
+                                 key="fl_ordem")
 
     # Query
     where = ["cr.ativo=1"]
@@ -125,6 +133,16 @@ def _lista_topicos():
             SELECT cxf.contato_id FROM contato_x_fornecedor cxf
             WHERE cxf.fornecedor_id=?)""")
         params.append(fil_forn[0])
+    if fil_periodo == "Hoje":
+        where.append("cr.data_contato = date('now')")
+    elif fil_periodo == "Esta semana":
+        where.append("cr.data_contato >= date('now', '-7 days')")
+    elif fil_periodo == "Este mês":
+        where.append("cr.data_contato >= date('now', 'start of month')")
+    elif fil_periodo == "Últimos 30 dias":
+        where.append("cr.data_contato >= date('now', '-30 days')")
+    elif fil_periodo == "Últimos 90 dias":
+        where.append("cr.data_contato >= date('now', '-90 days')")
 
     topicos = query(f"""
         SELECT cr.contato_id,
@@ -149,14 +167,21 @@ def _lista_topicos():
         LEFT JOIN fornecedor f ON cr.fornecedor_id = f.fornecedor_id
         WHERE {' AND '.join(where)}
         ORDER BY
-            CASE cr.status
-                WHEN 'A contatar' THEN 1 WHEN 'Em andamento' THEN 2
-                WHEN 'Em negociação' THEN 3 WHEN 'Aguardando retorno' THEN 4
-                WHEN 'Proposta enviada' THEN 5 WHEN 'Concluído' THEN 6 ELSE 7
+            CASE WHEN ? = 'Mais recentes' THEN cr.data_contato END DESC,
+            CASE WHEN ? = 'Mais antigos' THEN cr.data_contato END ASC,
+            CASE WHEN ? = 'Próx. followup' THEN cr.data_followup END ASC NULLS LAST,
+            CASE WHEN ? NOT IN ('Mais recentes','Mais antigos','Próx. followup') THEN
+                CASE cr.status
+                    WHEN 'A contatar' THEN 1 WHEN 'Em andamento' THEN 2
+                    WHEN 'Em negociação' THEN 3 WHEN 'Aguardando retorno' THEN 4
+                    WHEN 'Proposta enviada' THEN 5 WHEN 'Concluído' THEN 6 ELSE 7
+                END
             END,
-            CASE cr.prioridade WHEN 'Alta' THEN 1 WHEN 'Média' THEN 2 ELSE 3 END,
+            CASE WHEN ? NOT IN ('Mais recentes','Mais antigos','Próx. followup') THEN
+                CASE cr.prioridade WHEN 'Alta' THEN 1 WHEN 'Média' THEN 2 ELSE 3 END
+            END,
             cr.data_contato DESC
-    """, tuple(params))
+    """, tuple(params) + (fil_ordem, fil_ordem, fil_ordem, fil_ordem, fil_ordem))
 
     if not topicos:
         st.info("Nenhum registro encontrado para os filtros selecionados.")
