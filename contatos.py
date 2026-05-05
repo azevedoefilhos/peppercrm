@@ -573,7 +573,8 @@ def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual):
         for k in [f"ncn_{cid}",f"ncc_{cid}",f"ncf_{cid}",f"ncw_{cid}",f"nce_{cid}"]:
             st.session_state.pop(k, None)
         st.session_state[_mk] = "sel"
-        st.session_state["ct_msg"] = "✅ Interação registrada!"
+        st.session_state.pop(f"exp_inter_{cid}", None)
+        st.session_state["ct_msg"] = "✅ Interação registrada com sucesso!"
         st.rerun()
 
 
