@@ -134,15 +134,15 @@ def _lista_topicos():
             WHERE cxf.fornecedor_id=?)""")
         params.append(fil_forn[0])
     if fil_periodo == "Hoje":
-        where.append("cr.data_contato = date('now')")
+        where.append("cr.data_contato::date = CURRENT_DATE")
     elif fil_periodo == "Esta semana":
-        where.append("cr.data_contato >= date('now', '-7 days')")
+        where.append("cr.data_contato::date >= CURRENT_DATE - INTERVAL '7 days'")
     elif fil_periodo == "Este mês":
-        where.append("cr.data_contato >= date('now', 'start of month')")
+        where.append("cr.data_contato::date >= DATE_TRUNC('month', CURRENT_DATE)")
     elif fil_periodo == "Últimos 30 dias":
-        where.append("cr.data_contato >= date('now', '-30 days')")
+        where.append("cr.data_contato::date >= CURRENT_DATE - INTERVAL '30 days'")
     elif fil_periodo == "Últimos 90 dias":
-        where.append("cr.data_contato >= date('now', '-90 days')")
+        where.append("cr.data_contato::date >= CURRENT_DATE - INTERVAL '90 days'")
 
     topicos = query(f"""
         SELECT cr.contato_id,
