@@ -141,12 +141,7 @@ def _traduzir_sql_pg(sql):
     sql = re.sub(r"date\('now',\s*'\+(\d+)\s*(day|days)'\)",
         lambda m: f"(CURRENT_DATE + INTERVAL '{m.group(1)} {m.group(2)}')", sql)
     sql = sql.replace("date('now')", "CURRENT_DATE")
-    sql = re.sub(r"strftime\('%Y-%m',\s*([^)]+)\)",
-        lambda m: f"TO_CHAR({m.group(1).strip()}::DATE, 'YYYY-MM')", sql)
-    sql = re.sub(r"strftime\('%Y',\s*([^)]+)\)",
-        lambda m: f"TO_CHAR({m.group(1).strip()}::DATE, 'YYYY')", sql)
-    sql = re.sub(r"strftime\('%m',\s*([^)]+)\)",
-        lambda m: f"TO_CHAR({m.group(1).strip()}::DATE, 'MM')", sql)
+
     sql = re.sub(r"printf\('%02d',\s*([^)]+)\)",
         lambda m: f"LPAD(CAST({m.group(1).strip()} AS TEXT), 2, '0')", sql)
     sql = _traduzir_julianday(sql)
