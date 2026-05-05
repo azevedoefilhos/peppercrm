@@ -107,21 +107,15 @@ def _traduzir_sql_pg(sql):
     import re
     sql = sql.replace("?", "%s")
     # Traduz strftime do SQLite para TO_CHAR do PostgreSQL
+    # strftime SQLite -> TO_CHAR PostgreSQL
+    # Regex restrito: captura apenas nomes de campo simples (sem espacos ou virgulas)
+    def _conv_strftime(fmt, campo):
+        pg_fmt = fmt.replace('%Y-%m-%d','YYYY-MM-DD').replace('%Y-%m','YYYY-MM')\
+                    .replace('%Y','YYYY').replace('%m','MM').replace('%d','DD')
+        return f"TO_CHAR(({campo})::date, '{pg_fmt}')"
     sql = re.sub(
-        r"strftime\('(%Y-%m-%d)',\s*([^)]+)\)",
-        lambda m: f"TO_CHAR(({m.group(2)})::date, 'YYYY-MM-DD')", sql)
-    sql = re.sub(
-        r"strftime\('(%Y-%m)',\s*([^)]+)\)",
-        lambda m: f"TO_CHAR(({m.group(2)})::date, 'YYYY-MM')", sql)
-    sql = re.sub(
-        r"strftime\('(%Y)',\s*([^)]+)\)",
-        lambda m: f"TO_CHAR(({m.group(2)})::date, 'YYYY')", sql)
-    sql = re.sub(
-        r"strftime\('(%m)',\s*([^)]+)\)",
-        lambda m: f"TO_CHAR(({m.group(2)})::date, 'MM')", sql)
-    sql = re.sub(
-        r"strftime\('(%d)',\s*([^)]+)\)",
-        lambda m: f"TO_CHAR(({m.group(2)})::date, 'DD')", sql)
+        r"strftime\('([^']+)',\s*([a-zA-Z0-9_.]+)\)",
+        lambda m: _conv_strftime(m.group(1), m.group(2)), sql)
     # PostgreSQL: ILIKE e case-insensitive (equivalente ao LIKE do SQLite)
     import re as _re
     sql = _re.sub(r'\bLIKE\b', 'ILIKE', sql)
