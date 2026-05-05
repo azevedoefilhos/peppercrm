@@ -561,10 +561,13 @@ def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual):
              _via, pessoa_nome or None, novo_ct_id or ct_cli_id,
              _dc or None, _re or None,
              _fup.isoformat() if _fup and hasattr(_fup,'isoformat') else None))
-        conn.execute("""UPDATE contato_registro SET status=?, tipo_topico=?,
-            data_followup=COALESCE(?,data_followup) WHERE contato_id=?""",
-            (_nst, _ntp,
-             _fup.isoformat() if _fup and hasattr(_fup,'isoformat') else None, cid))
+        _fup_val = _fup.isoformat() if _fup and hasattr(_fup,'isoformat') else None
+        if _fup_val:
+            conn.execute("UPDATE contato_registro SET status=?, tipo_topico=?, data_followup=? WHERE contato_id=?",
+                (_nst, _ntp, _fup_val, cid))
+        else:
+            conn.execute("UPDATE contato_registro SET status=?, tipo_topico=? WHERE contato_id=?",
+                (_nst, _ntp, cid))
         conn.commit(); conn.close()
 
         for k in [f"ncn_{cid}",f"ncc_{cid}",f"ncf_{cid}",f"ncw_{cid}",f"nce_{cid}"]:
