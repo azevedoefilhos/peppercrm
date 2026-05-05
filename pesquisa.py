@@ -3437,7 +3437,7 @@ def _tela_analise_consolidada():
     a = st.session_state["ac_aba"]
     if a=="prod":  _ac_por_produto(where_base, params_base, tipo_rel_where, cat_where, cat_params, fil_forn[0])
     elif a=="marca":_ac_por_marca(where_base, params_base, tipo_rel_where, cat_where, cat_params, fil_forn[0])
-    elif a=="cat": _ac_por_categoria(where_base, params_base, fil_forn[0])
+    elif a=="cat": _ac_por_categoria(where_base, params_base, fil_forn[0], fil_cat)
     elif a=="pdv": _ac_por_pdv(where_base, params_base, tipo_rel_where, cat_where, cat_params, fil_forn[0])
 
 
@@ -3821,21 +3821,25 @@ def _ac_por_marca(where_base, params_base, tipo_rel_where, cat_where, cat_params
 
 # ── ABA 3: Por categoria ──────────────────────────────
 
-def _ac_por_categoria(where_base, params_base, forn_id_global):
+def _ac_por_categoria(where_base, params_base, forn_id_global, fil_cat_global=None):
     st.subheader("Comparativo por categoria")
     st.caption("Share de presenca e posicionamento de preco por marca dentro da categoria.")
 
-    if forn_id_global:
-        cats = query("""SELECT DISTINCT cat.categoria_id, cat.nome_categoria
-            FROM produto p JOIN categoria cat ON p.categoria_id=cat.categoria_id
-            WHERE p.fornecedor_id=? AND p.ativo=1 AND cat.ativo=1
-            ORDER BY cat.nome_categoria""", (forn_id_global,))
+    # Se ja ha categoria selecionada no filtro global, usa ela diretamente
+    if fil_cat_global and fil_cat_global[0]:
+        cat_sel = fil_cat_global
+        st.info(f"Categoria: **{fil_cat_global[1]}** (selecionada no filtro global)")
     else:
-        cats = cache_categorias()
-    if not cats:
-        st.info("Nenhuma categoria encontrada."); return
-
-    cat_sel = st.selectbox("Categoria", cats, format_func=lambda x: x[1], key="ac_c_cat")
+        if forn_id_global:
+            cats = query("""SELECT DISTINCT cat.categoria_id, cat.nome_categoria
+                FROM produto p JOIN categoria cat ON p.categoria_id=cat.categoria_id
+                WHERE p.fornecedor_id=? AND p.ativo=1 AND cat.ativo=1
+                ORDER BY cat.nome_categoria""", (forn_id_global,))
+        else:
+            cats = cache_categorias()
+        if not cats:
+            st.info("Nenhuma categoria encontrada."); return
+        cat_sel = st.selectbox("Categoria", cats, format_func=lambda x: x[1], key="ac_c_cat")
 
     dados = query(f"""
         SELECT
