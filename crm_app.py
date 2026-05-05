@@ -8,6 +8,9 @@ _nome = get_nome_empresa()
 
 st.set_page_config(page_title=_nome, layout="wide")
 
+# Scroll para topo a cada rerun
+st.components.v1.html("<script>window.parent.document.querySelector('section.main').scrollTo(0,0);</script>", height=0)
+
 if "pagina"         not in st.session_state: st.session_state["pagina"]         = "home"
 if "id_selecionado" not in st.session_state: st.session_state["id_selecionado"] = None
 # estado do módulo de pesquisa
