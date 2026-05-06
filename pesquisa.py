@@ -2306,7 +2306,10 @@ def _card_item_editavel(key_prefix, label, cor, item_id, dados_atuais, on_save):
                 else:
                     on_save((preco or None, 1 if em_oferta else 0,
                              frentes or None, 1 if ruptura else 0,
-                             1 if pe else 0, tpe if pe else None, obs or None))
+                             1 if pe else 0, tpe if pe else None, obs or None,
+                             unidade_coleta if 'unidade_coleta' in dir() else 'UN',
+                             peso_coleta if 'peso_coleta' in dir() else None,
+                             preco_kg if 'preco_kg' in dir() else None))
                     st.session_state.pop(f"edit_{key_prefix}", None)
                     st.rerun()
 
@@ -2316,16 +2319,22 @@ def _card_item_editavel(key_prefix, label, cor, item_id, dados_atuais, on_save):
 
 
 def _upsert_item(pq_id, prod_id, pc_id, dados):
-    preco, oferta, frentes, ruptura, pe, tpe, obs = dados
+    if len(dados) == 10:
+        preco, oferta, frentes, ruptura, pe, tpe, obs, unidade_coleta, peso_coleta, preco_kg = dados
+    else:
+        preco, oferta, frentes, ruptura, pe, tpe, obs = dados
+        unidade_coleta, peso_coleta, preco_kg = 'UN', None, None
     conn = conectar()
     conn.execute("""DELETE FROM pesquisa_preco_item
         WHERE pesquisa_id=? AND produto_id=? AND produto_concorrente_id=?""",
         (pq_id, prod_id, pc_id))
     conn.execute("""INSERT INTO pesquisa_preco_item
         (pesquisa_id, produto_id, produto_concorrente_id,
-         preco, em_oferta, frentes, ruptura, ponto_extra, tipo_ponto_extra, observacao)
-        VALUES (?,?,?,?,?,?,?,?,?,?)""",
-        (pq_id, prod_id, pc_id, preco, oferta, frentes, ruptura, pe, tpe, obs))
+         preco, em_oferta, frentes, ruptura, ponto_extra, tipo_ponto_extra, observacao,
+         unidade_coleta, peso_coleta, preco_kg)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (pq_id, prod_id, pc_id, preco, oferta, frentes, ruptura, pe, tpe, obs,
+         unidade_coleta, peso_coleta, preco_kg))
     conn.commit(); conn.close()
 
 
@@ -3334,18 +3343,17 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
         _rup_val = st.session_state.get(f"{k}_rup", ruptura)
 
 
-        # Coleta por Kg
-        _col_un, _col_peso, _col_pkg = st.columns([1, 1.5, 1.5])
-        unidade_coleta = _col_un.selectbox("Unidade", ["UN", "Kg"], key=f"{k}_un")
+        # Coleta por Kg - peso aparece abaixo quando Kg selecionado
         peso_coleta = None
         preco_kg = None
         if unidade_coleta == "Kg":
-            peso_coleta = _col_peso.number_input("Peso (Kg)",
+            _cp3, _cu3 = st.columns([2, 1])
+            peso_coleta = _cp3.number_input("Peso (Kg)",
                 min_value=0.001, value=1.0, step=0.001,
                 format="%.3f", key=f"{k}_peso")
             if peso_coleta and preco > 0:
                 preco_kg = round(preco / peso_coleta, 2)
-                _col_pkg.metric("Preco/Kg", f"R$ {preco_kg:.2f}")
+                _cu3.metric("R$/Kg", f"{preco_kg:.2f}")
         # Vínculo com produto próprio (só para concorrentes)
         prod_vinc_id = None
         if tipo == "conc":
