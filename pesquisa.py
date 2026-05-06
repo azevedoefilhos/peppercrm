@@ -1501,26 +1501,29 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
                     conn.execute(
                         "UPDATE pesquisa_preco_item SET "
                         "preco=?, frentes=?, em_oferta=?, ponto_extra=?, "
-                        "ruptura=?, observacao=? "
+                        "ruptura=?, observacao=?, unidade_coleta=?, peso_coleta=?, preco_kg=? "
                         "WHERE pesquisa_item_id=?",
                         (preco if not _rup_val else None,
                          frentes, 1 if _oferta_val else 0,
                          1 if _pe_val else 0,
                          1 if _rup_val else 0,
                          obs.strip() or None,
+                         unidade_coleta, peso_coleta, preco_kg,
                          existente[0]))
                 else:
                     conn.execute(
                         "INSERT INTO pesquisa_preco_item "
                         "(pesquisa_id, produto_id, produto_concorrente_id, "
-                        "preco, frentes, em_oferta, ponto_extra, ruptura, observacao) "
-                        "VALUES (?,?,?,?,?,?,?,?,?)",
+                        "preco, frentes, em_oferta, ponto_extra, ruptura, observacao, "
+                        "unidade_coleta, peso_coleta, preco_kg) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                         (pq_id, pid_ref, pc_id_ref,
                          preco if not _rup_val else None,
                          frentes, 1 if _oferta_val else 0,
                          1 if _pe_val else 0,
                          1 if _rup_val else 0,
-                         obs.strip() or None))
+                         obs.strip() or None,
+                         unidade_coleta, peso_coleta, preco_kg))
 
                 if prod_vinc_id and pc_id_ref:
                     conn.execute(
