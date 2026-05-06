@@ -420,8 +420,12 @@ def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual):
 
             with st.expander(lbl, expanded=False):
                 # Exibição
-                if desc:   st.write(f"📝 {desc}")
-                if result: st.write(f"✔ {result}")
+                if desc:
+                    st.caption("**O que foi tratado:**")
+                    st.code(desc, language=None)
+                if result:
+                    st.caption("**Resultado / próximo passo:**")
+                    st.code(result, language=None)
                 if fup:    st.caption(f"📅 Próximo contato agendado: {fup}")
 
                 st.divider()
