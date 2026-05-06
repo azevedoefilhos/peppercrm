@@ -1447,22 +1447,21 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
         _pe_val = st.session_state.get(f"{k}_pe", ponto_extra)
         _rup_val = st.session_state.get(f"{k}_rup", ruptura)
 
-        # Toggle UN/Kg para produtos vendidos por peso
-        col_un, col_peso = st.columns([1, 2])
+        # Coleta por Kg
+        col_un, col_peso, col_pkg = st.columns([1, 1.5, 1.5])
         with col_un:
-            unidade_coleta = st.radio("Unidade", ["UN", "Kg"],
-                                      horizontal=True, key=f"{k}_un")
-        with col_peso:
-            peso_coleta = None
-            preco_kg = None
-            if unidade_coleta == "Kg":
-                peso_coleta = st.number_input("Peso coletado (Kg)",
+            unidade_coleta = st.selectbox("Unidade", ["UN", "Kg"], key=f"{k}_un")
+        peso_coleta = None
+        preco_kg = None
+        if unidade_coleta == "Kg":
+            with col_peso:
+                peso_coleta = st.number_input("Peso (Kg)",
                     min_value=0.001, value=1.0, step=0.001,
-                    format="%.3f", key=f"{k}_peso",
-                    help="Peso do produto na embalagem pesada")
+                    format="%.3f", key=f"{k}_peso")
+            with col_pkg:
                 if peso_coleta and preco > 0:
                     preco_kg = round(preco / peso_coleta, 2)
-                    st.caption(f"= R$ {preco_kg:.2f}/Kg")
+                    st.metric("Preco/Kg", f"R$ {preco_kg:.2f}")
 
         # Vínculo com produto próprio (só para concorrentes)
         prod_vinc_id = None
