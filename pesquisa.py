@@ -1159,9 +1159,14 @@ def _campo_navegacao(pq_id, forn_id):
     """, (pq_id,))
     _mp = {}
     for _r in _pesq:
-        _p, _c, _pr, _of, _pe, _ru = _r
-        if _p: _mp[("n", _p)] = (_pr, _of, _pe, _ru)
-        if _c: _mp[("c", _c)] = (_pr, _of, _pe, _ru)
+        _p  = _r[0]
+        _c  = _r[1]
+        _pr = _r[2]
+        _of = _r[3]
+        _pe = _r[4]
+        _ru = _r[5]
+        if _p: _mp[("n", int(_p))] = (_pr, _of, _pe, _ru)
+        if _c: _mp[("c", int(_c))] = (_pr, _of, _pe, _ru)
 
     def _lbl(tipo_k, id_k, marca_k, desc_k):
         base = f"{marca_k} — {desc_k}"
