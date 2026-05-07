@@ -3343,7 +3343,9 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
         _rup_val = st.session_state.get(f"{k}_rup", ruptura)
 
 
-        # Coleta por Kg - peso aparece abaixo quando Kg selecionado
+        # Coleta por Kg
+        _cu_col = st.columns([2, 1, 2])
+        unidade_coleta = _cu_col[1].selectbox("Unidade", ["UN", "Kg"], key=f"{k}_un")
         peso_coleta = None
         preco_kg = None
         if unidade_coleta == "Kg":
