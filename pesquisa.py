@@ -2331,16 +2331,22 @@ def _card_item_editavel(key_prefix, label, cor, item_id, dados_atuais, on_save):
 
 
 def _upsert_item(pq_id, prod_id, pc_id, dados):
-    preco, oferta, frentes, ruptura, pe, tpe, obs = dados
+    if len(dados) == 10:
+        preco, oferta, frentes, ruptura, pe, tpe, obs, unidade_coleta, peso_coleta, preco_kg = dados
+    else:
+        preco, oferta, frentes, ruptura, pe, tpe, obs = dados
+        unidade_coleta, peso_coleta, preco_kg = 'UN', None, None
     conn = conectar()
     conn.execute("""DELETE FROM pesquisa_preco_item
         WHERE pesquisa_id=? AND produto_id=? AND produto_concorrente_id=?""",
         (pq_id, prod_id, pc_id))
     conn.execute("""INSERT INTO pesquisa_preco_item
         (pesquisa_id, produto_id, produto_concorrente_id,
-         preco, em_oferta, frentes, ruptura, ponto_extra, tipo_ponto_extra, observacao)
-        VALUES (?,?,?,?,?,?,?,?,?,?)""",
-        (pq_id, prod_id, pc_id, preco, oferta, frentes, ruptura, pe, tpe, obs))
+         preco, em_oferta, frentes, ruptura, ponto_extra, tipo_ponto_extra, observacao,
+         unidade_coleta, peso_coleta, preco_kg)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (pq_id, prod_id, pc_id, preco, oferta, frentes, ruptura, pe, tpe, obs,
+         unidade_coleta, peso_coleta, preco_kg))
     conn.commit(); conn.close()
 
 
