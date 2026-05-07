@@ -3811,7 +3811,30 @@ def _coleta_modo_rapido(pq_id, forn_id):
         st.info("Nenhum produto encontrado para os filtros selecionados.")
         return
 
-    prod_opts = [(None, None, None, "— Selecione um produto")] + lista_prods
+    # Busca itens ja pesquisados para indicar status na lista
+    _pesquisados = query("""
+        SELECT produto_id, produto_concorrente_id, preco, em_oferta, ponto_extra, ruptura
+        FROM pesquisa_preco_item WHERE pesquisa_id=?
+    """, (pq_id,))
+    _map_pesq = {}
+    for _row in _pesquisados:
+        _pid, _pcid, _preco, _of, _pe, _rup = _row
+        if _pid:  _map_pesq[("nosso", _pid)]  = (_preco, _of, _pe, _rup)
+        if _pcid: _map_pesq[("conc",  _pcid)] = (_preco, _of, _pe, _rup)
+
+    def _label_status(tipo, id_, label_base):
+        d = _map_pesq.get((tipo, id_))
+        if not d: return label_base
+        preco, of, pe, rup = d
+        if rup: return f"✅ {label_base}  —  ⚠️ Ruptura"
+        ps = f"R$ {preco:,.2f}".replace(",","X").replace(".",",").replace("X",".") if preco else "?"
+        bgs = ("🏷️" if of else "") + (" 📌" if pe else "")
+        return f"✅ {label_base}  —  {ps}{bgs}"
+
+    prod_opts = [(None, None, None, "📋 Selecione um produto")] + [
+        (tipo, id_, ean, _label_status(tipo, id_, lbl))
+        for tipo, id_, ean, lbl in lista_prods
+    ]
     prod_sel_r = st.selectbox("3. Produto", prod_opts,
                               format_func=lambda x: x[3], key=f"rp_prod_{pq_id}")
 
@@ -3820,10 +3843,20 @@ def _coleta_modo_rapido(pq_id, forn_id):
 
     tipo_sel, id_sel, _, label_sel = prod_sel_r
 
+    # Mostra status do produto selecionado
+    dados_sel = _map_pesq.get((tipo_sel, id_sel))
+    if dados_sel:
+        preco_s2, of2, pe2, rup2 = dados_sel
+        if rup2:
+            st.warning(f"⚠️ **Ruptura** já registrada. Edite abaixo se quiser atualizar.")
+        else:
+            pf = f"R$ {preco_s2:,.2f}".replace(",","X").replace(".",",").replace("X",".") if preco_s2 else "?"
+            bgs2 = (" 🏷️ Oferta" if of2 else "") + (" 📌 P.Extra" if pe2 else "")
+            st.info(f"✅ Já pesquisado: **{pf}**{bgs2} — Edite abaixo se quiser atualizar.")
+
     st.divider()
 
-    # ── Resolução do produto selecionado ─────────────
-    # Função central: futuramente receberá EAN do leitor de câmera
+    # Resolucao do produto selecionado
     _resolver_e_coletar(pq_id, forn_id, tipo_sel, id_sel, label_sel)
 
 
