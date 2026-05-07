@@ -2320,7 +2320,8 @@ def _card_item_editavel(key_prefix, label, cor, item_id, dados_atuais, on_save):
                 else:
                     on_save((preco or None, 1 if em_oferta else 0,
                              frentes or None, 1 if ruptura else 0,
-                             1 if pe else 0, tpe if pe else None, obs or None))
+                             1 if pe else 0, tpe if pe else None, obs or None,
+                             unidade_coleta, peso_coleta, preco_kg))
                     st.session_state.pop(f"edit_{key_prefix}", None)
                     st.rerun()
 
@@ -4211,7 +4212,8 @@ def _card_item_editavel(key_prefix, label, cor, item_id, dados_atuais, on_save):
                 else:
                     on_save((preco or None, 1 if em_oferta else 0,
                              frentes or None, 1 if ruptura else 0,
-                             1 if pe else 0, tpe if pe else None, obs or None))
+                             1 if pe else 0, tpe if pe else None, obs or None,
+                             unidade_coleta, peso_coleta, preco_kg))
                     st.session_state.pop(f"edit_{key_prefix}", None)
                     st.rerun()
 
