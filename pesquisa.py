@@ -1153,12 +1153,33 @@ def _campo_navegacao(pq_id, forn_id):
                                        _prod_pendente["ean"])
         return
 
+    # Busca itens ja pesquisados para destacar na lista
+    _pesq = query("""SELECT produto_id, produto_concorrente_id, preco,
+        em_oferta, ponto_extra, ruptura FROM pesquisa_preco_item WHERE pesquisa_id=?
+    """, (pq_id,))
+    _mp = {}
+    for _r in _pesq:
+        _p, _c, _pr, _of, _pe, _ru = _r
+        if _p: _mp[("n", _p)] = (_pr, _of, _pe, _ru)
+        if _c: _mp[("c", _c)] = (_pr, _of, _pe, _ru)
+
+    def _lbl(tipo_k, id_k, marca_k, desc_k):
+        base = f"{marca_k} — {desc_k}"
+        d = _mp.get((tipo_k, id_k))
+        if not d: return base, False
+        pr, of, pe, ru = d
+        if ru: return f"✓ {base}  ·  ⚠️ Ruptura", True
+        ps = f"R$ {pr:,.2f}".replace(",","X").replace(".",",").replace("X",".") if pr else "?"
+        bgs = (" 🏷️" if of else "") + (" 📌" if pe else "")
+        return f"✓ {base}  ·  {ps}{bgs}", True
+
     if nossos:
         st.markdown("**🟢 Nossos:**")
         for pid, desc, marca in nossos:
-            if st.button(f"{marca} — {desc}",
-                        key=f"campo_nav_n_{pq_id}_{pid}",
-                        use_container_width=True):
+            _label, _pesquisado = _lbl("n", pid, marca, desc)
+            _tipo = "secondary"
+            if st.button(_label, key=f"campo_nav_n_{pq_id}_{pid}",
+                        use_container_width=True, type=_tipo):
                 resultado = {"tipo":"nosso","produto_id":pid,
                             "descricao":desc,"marca":marca,"ean":None,"pc_id":None}
                 st.session_state[f"nav_produto_pendente_{pq_id}"] = {
@@ -1168,9 +1189,10 @@ def _campo_navegacao(pq_id, forn_id):
     if concs:
         st.markdown("**🔴 Concorrentes:**")
         for pc_id, desc, marca, ean in concs:
-            if st.button(f"{marca} — {desc}",
-                        key=f"campo_nav_c_{pq_id}_{pc_id}",
-                        use_container_width=True):
+            _label, _pesquisado = _lbl("c", pc_id, marca, desc)
+            _tipo = "secondary"
+            if st.button(_label, key=f"campo_nav_c_{pq_id}_{pc_id}",
+                        use_container_width=True, type=_tipo):
                 resultado = {"tipo":"conc","pc_id":pc_id,
                             "descricao":desc,"marca":marca,
                             "ean":ean,"auditavel":1}
