@@ -4198,7 +4198,6 @@ def _card_item_editavel(key_prefix, label, cor, item_id, dados_atuais, on_save):
                         key=f"tpe_{key_prefix}")
                 obs = st.text_input("Observação", value=obs_d or "",
                     key=f"obs_{key_prefix}")
-                                        key=f"obs_{key_prefix}")
 
                 col_s, col_c = st.columns(2)
                 with col_s:
