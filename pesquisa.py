@@ -2268,31 +2268,45 @@ def _card_item_editavel(key_prefix, label, cor, item_id, dados_atuais, on_save):
             preco_d, oferta_d, frentes_d, ruptura_d, pe_d, tpe_d, obs_d = defaults
 
             with st.form(f"form_{key_prefix}"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    preco    = st.number_input("💰 Preço (R$) *", min_value=0.0,
-                                               value=float(preco_d or 0),
-                                               step=0.01, format="%.2f",
-                                               key=f"preco_{key_prefix}")
-                    em_oferta = st.checkbox("🏷️ Em oferta", value=bool(oferta_d),
-                                            key=f"oferta_{key_prefix}")
-                    frentes  = st.number_input("🧱 Frentes de gôndola",
-                                               min_value=0, value=int(frentes_d or 0),
-                                               key=f"frentes_{key_prefix}")
-                with col2:
-                    ruptura  = st.checkbox("⚠️ Ruptura (ausente)", value=bool(ruptura_d),
-                                           key=f"ruptura_{key_prefix}")
-                    pe       = st.checkbox("📍 Ponto extra", value=bool(pe_d),
-                                           key=f"pe_{key_prefix}")
-                    tpe = None
-                    if pe:
-                        tpe = st.selectbox("Tipo de ponto extra",
-                                           TIPOS_PONTO_EXTRA,
-                                           index=TIPOS_PONTO_EXTRA.index(tpe_d)
-                                                 if tpe_d in TIPOS_PONTO_EXTRA else 0,
-                                           key=f"tpe_{key_prefix}")
-                    obs = st.text_input("Observação", value=obs_d or "",
-                                        key=f"obs_{key_prefix}")
+                # Linha 1: Preco | Unidade | Frentes
+                c1, c2, c3 = st.columns([3, 1.5, 2])
+                preco = c1.number_input("💰 Preço (R$) *",
+                    min_value=0.0, format="%.2f", value=float(preco_d or 0),
+                    step=0.01, key=f"preco_{key_prefix}")
+                unidade_coleta = c2.selectbox("Unidade", ["UN", "Kg"],
+                    key=f"un_{key_prefix}")
+                frentes = c3.number_input("Frentes", min_value=0,
+                    value=int(frentes_d or 0), key=f"frentes_{key_prefix}")
+
+                # Linha 2: Oferta | P.Extra | Ruptura
+                c4, c5, c6 = st.columns(3)
+                em_oferta = c4.checkbox("🏷️ Oferta", value=bool(oferta_d),
+                    key=f"oferta_{key_prefix}")
+                pe = c5.checkbox("📌 P.Extra", value=bool(pe_d),
+                    key=f"pe_{key_prefix}")
+                ruptura = c6.checkbox("⚠️ Ruptura", value=bool(ruptura_d),
+                    key=f"ruptura_{key_prefix}")
+
+                # Linha 3: Peso (se Kg) + Tipo ponto extra + Obs
+                peso_coleta = None
+                preco_kg = None
+                if unidade_coleta == "Kg":
+                    _cp, _cpkg = st.columns([2, 2])
+                    peso_coleta = _cp.number_input("Peso coletado (Kg)",
+                        min_value=0.001, value=1.0, step=0.001,
+                        format="%.3f", key=f"peso_{key_prefix}")
+                    if peso_coleta and preco > 0:
+                        preco_kg = round(preco / peso_coleta, 2)
+                        _cpkg.metric("Preço/Kg", f"R$ {preco_kg:.2f}")
+
+                tpe = None
+                if pe:
+                    tpe = st.selectbox("Tipo de ponto extra", TIPOS_PONTO_EXTRA,
+                        index=TIPOS_PONTO_EXTRA.index(tpe_d)
+                              if tpe_d in TIPOS_PONTO_EXTRA else 0,
+                        key=f"tpe_{key_prefix}")
+                obs = st.text_input("Observação", value=obs_d or "",
+                    key=f"obs_{key_prefix}")
 
                 col_s, col_c = st.columns(2)
                 with col_s:
@@ -3309,43 +3323,37 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
             st.rerun()
 
     with st.form(key=f"{k}_form", border=True):
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            preco = st.number_input(
-                "💰 Preço (R$) *",
-                min_value=0.0, format="%.2f",
-                value=_v_preco,
-                step=0.01, key=f"{k}_preco")
-        with col2:
-            frentes = st.number_input(
-                "Frentes", min_value=0,
-                value=_v_frentes, step=1, key=f"{k}_frt")
-        with col3:
-            col_of, col_pe = st.columns(2)
-            oferta    = col_of.checkbox("Oferta", value=_v_oferta, key=f"{k}_of")
-            ponto_extra = col_pe.checkbox("P.Extra", value=_v_pe, key=f"{k}_pe")
+        # Linha 1: Preco | Unidade | Frentes
+        c1, c2, c3 = st.columns([3, 1.5, 2])
+        preco = c1.number_input("💰 Preço (R$) *",
+            min_value=0.0, format="%.2f", value=_v_preco,
+            step=0.01, key=f"{k}_preco")
+        unidade_coleta = c2.selectbox("Unidade", ["UN", "Kg"], key=f"{k}_un")
+        frentes = c3.number_input("Frentes", min_value=0,
+            value=_v_frentes, step=1, key=f"{k}_frt")
 
-        ruptura = st.checkbox("⚠️ Ruptura (sem estoque)", value=_v_ruptura, key=f"{k}_rup")
+        # Linha 2: Oferta | P.Extra | Ruptura
+        c4, c5, c6 = st.columns(3)
+        oferta = c4.checkbox("🏷️ Oferta", value=_v_oferta, key=f"{k}_of")
+        ponto_extra = c5.checkbox("📌 P.Extra", value=_v_pe, key=f"{k}_pe")
+        ruptura = c6.checkbox("⚠️ Ruptura", value=_v_ruptura, key=f"{k}_rup")
 
-        # Nota: em st.form, os valores dos checkboxes sao lidos do session_state
-        # apos submit para garantir valores corretos
-        _oferta_val = st.session_state.get(f"{k}_of", oferta)
-        _pe_val = st.session_state.get(f"{k}_pe", ponto_extra)
-        _rup_val = st.session_state.get(f"{k}_rup", ruptura)
-
-
-        # Coleta por Kg
-        _col_un, _col_peso, _col_pkg = st.columns([1, 1.5, 1.5])
-        unidade_coleta = _col_un.selectbox("Unidade", ["UN", "Kg"], key=f"{k}_un")
+        # Linha 3: Peso (apenas se Kg selecionado)
         peso_coleta = None
         preco_kg = None
         if unidade_coleta == "Kg":
-            peso_coleta = _col_peso.number_input("Peso (Kg)",
+            _cp, _cpkg = st.columns([2, 2])
+            peso_coleta = _cp.number_input("Peso coletado (Kg)",
                 min_value=0.001, value=1.0, step=0.001,
                 format="%.3f", key=f"{k}_peso")
             if peso_coleta and preco > 0:
                 preco_kg = round(preco / peso_coleta, 2)
-                _col_pkg.metric("Preco/Kg", f"R$ {preco_kg:.2f}")
+                _cpkg.metric("Preco/Kg", f"R$ {preco_kg:.2f}")
+
+        # Leitura dos checkboxes do session_state apos submit
+        _oferta_val = st.session_state.get(f"{k}_of", oferta)
+        _pe_val     = st.session_state.get(f"{k}_pe", ponto_extra)
+        _rup_val    = st.session_state.get(f"{k}_rug", ruptura)
         # Vínculo com produto próprio (só para concorrentes)
         prod_vinc_id = None
         if tipo == "conc":
