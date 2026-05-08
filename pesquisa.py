@@ -1146,14 +1146,11 @@ def _campo_navegacao(pq_id, forn_id):
     """, (forn_id, cat_id))
 
     # Mapa de itens ja pesquisados nesta pesquisa
-    _pesq = query(
-        "SELECT produto_id, produto_concorrente_id, preco, em_oferta, ponto_extra, ruptura"
-        " FROM pesquisa_preco_item WHERE pesquisa_id=?", (pq_id,))
+    _pesq = query("SELECT produto_id, produto_concorrente_id, preco, em_oferta, ponto_extra, ruptura FROM pesquisa_preco_item WHERE pesquisa_id=?", (pq_id,))
     _mp = {}
     for _r in _pesq:
         if _r[0]: _mp[("n", int(_r[0]))] = (_r[2], _r[3], _r[4], _r[5])
         if _r[1]: _mp[("c", int(_r[1]))] = (_r[2], _r[3], _r[4], _r[5])
-
     def _lbl(tk, ik, mk, dk):
         base = f"{mk} — {dk}"
         d = _mp.get((tk, ik))
