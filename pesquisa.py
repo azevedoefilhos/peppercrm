@@ -3089,14 +3089,16 @@ def _campo_navegacao(pq_id, forn_id):
                                        _prod_pendente["ean"])
         return
 
-    # CSS para cor azul nos produtos ja pesquisados
+    # CSS: botoes pesquisados em verde elegante
     st.markdown("""<style>
-    button[data-testid="baseButton-secondary"].pesquisado p {color:#0000CC !important; font-weight:600;}
-    </style>""", unsafe_allow_html=True)
-
-    # CSS para cor azul nos produtos ja pesquisados
-    st.markdown("""<style>
-    button[data-testid="baseButton-secondary"].pesquisado p {color:#0000CC !important; font-weight:600;}
+    div[class*="campo_nav_"] button[kind="primary"] {
+        background-color: #2E7D32 !important;
+        border-color: #2E7D32 !important;
+        color: white !important;
+    }
+    div[class*="campo_nav_"] button[kind="primary"]:hover {
+        background-color: #1B5E20 !important;
+    }
     </style>""", unsafe_allow_html=True)
 
     if nossos:
@@ -3111,6 +3113,21 @@ def _campo_navegacao(pq_id, forn_id):
                             "descricao":desc,"marca":marca,"ean":None,"pc_id":None}
                 st.session_state[f"nav_produto_pendente_{pq_id}"] = {
                     "resultado": resultado, "ean": ""}
+                st.rerun()
+
+    if concs:
+        st.markdown("**🔴 Concorrentes:**")
+        for pc_id, desc, marca, ean in concs:
+            _label = _lbl("c", pc_id, marca, desc)
+            _pesquisado = _mp.get(("c", pc_id)) is not None
+            if st.button(_label, key=f"campo_nav_c_{pq_id}_{pc_id}",
+                        use_container_width=True,
+                        type="primary" if _pesquisado else "secondary"):
+                resultado = {"tipo":"conc","pc_id":pc_id,
+                            "descricao":desc,"marca":marca,
+                            "ean":ean,"auditavel":1}
+                st.session_state[f"nav_produto_pendente_{pq_id}"] = {
+                    "resultado": resultado, "ean": ean or ""}
                 st.rerun()
 
     if concs:
