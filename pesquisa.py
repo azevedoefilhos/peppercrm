@@ -3094,6 +3094,11 @@ def _campo_navegacao(pq_id, forn_id):
     button[data-testid="baseButton-secondary"].pesquisado p {color:#0000CC !important; font-weight:600;}
     </style>""", unsafe_allow_html=True)
 
+    # CSS para cor azul nos produtos ja pesquisados
+    st.markdown("""<style>
+    button[data-testid="baseButton-secondary"].pesquisado p {color:#0000CC !important; font-weight:600;}
+    </style>""", unsafe_allow_html=True)
+
     if nossos:
         st.markdown("**🟢 Nossos:**")
         for pid, desc, marca in nossos:
