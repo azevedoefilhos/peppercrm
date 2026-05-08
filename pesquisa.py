@@ -1172,7 +1172,7 @@ def _campo_navegacao(pq_id, forn_id):
         st.markdown("**🟢 Nossos:**")
         for pid, desc, marca in nossos:
             if st.button(_lbl("n", pid, marca, desc),
-                        key=f"campo_nav_n_{pq_id}_{pid}",
+                        key=f"campo_nav_n_{pq_id}_{pid}_a",
                         use_container_width=True):
                 resultado = {"tipo":"nosso","produto_id":pid,
                             "descricao":desc,"marca":marca,"ean":None,"pc_id":None}
@@ -1184,7 +1184,7 @@ def _campo_navegacao(pq_id, forn_id):
         st.markdown("**🔴 Concorrentes:**")
         for pc_id, desc, marca, ean in concs:
             if st.button(_lbl("c", pc_id, marca, desc),
-                        key=f"campo_nav_c_{pq_id}_{pc_id}",
+                        key=f"campo_nav_c_{pq_id}_{pc_id}_a",
                         use_container_width=True):
                 resultado = {"tipo":"conc","pc_id":pc_id,
                             "descricao":desc,"marca":marca,
