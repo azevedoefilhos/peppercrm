@@ -1383,17 +1383,16 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
 
     # Verifica se produto ja foi pesquisado hoje nesta pesquisa
     _confirmar_key = f"{k}_confirmar_update"
-    _ja_existe = query("""
-        SELECT ppi.pesquisa_item_id, ppi.preco
-        FROM pesquisa_preco_item ppi
-        WHERE ppi.pesquisa_id=?
-          AND (
-              (? IS NOT NULL AND ppi.produto_concorrente_id=?)
-              OR
-              (? IS NOT NULL AND ppi.produto_id=? AND ppi.produto_concorrente_id IS NULL)
-          )
-        LIMIT 1
-    """, (pq_id, pc_id, pc_id, produto_id, produto_id))
+    if pc_id:
+        _ja_existe = query(
+            "SELECT pesquisa_item_id, preco FROM pesquisa_preco_item WHERE pesquisa_id=? AND produto_concorrente_id=? LIMIT 1",
+            (pq_id, pc_id))
+    elif produto_id:
+        _ja_existe = query(
+            "SELECT pesquisa_item_id, preco FROM pesquisa_preco_item WHERE pesquisa_id=? AND produto_id=? AND produto_concorrente_id IS NULL LIMIT 1",
+            (pq_id, produto_id))
+    else:
+        _ja_existe = []
 
     # Busca dados ja coletados para pre-preencher
     _dados_anteriores = None
@@ -3290,17 +3289,16 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
 
     # Verifica se produto ja foi pesquisado hoje nesta pesquisa
     _confirmar_key = f"{k}_confirmar_update"
-    _ja_existe = query("""
-        SELECT ppi.pesquisa_item_id, ppi.preco
-        FROM pesquisa_preco_item ppi
-        WHERE ppi.pesquisa_id=?
-          AND (
-              (? IS NOT NULL AND ppi.produto_concorrente_id=?)
-              OR
-              (? IS NOT NULL AND ppi.produto_id=? AND ppi.produto_concorrente_id IS NULL)
-          )
-        LIMIT 1
-    """, (pq_id, pc_id, pc_id, produto_id, produto_id))
+    if pc_id:
+        _ja_existe = query(
+            "SELECT pesquisa_item_id, preco FROM pesquisa_preco_item WHERE pesquisa_id=? AND produto_concorrente_id=? LIMIT 1",
+            (pq_id, pc_id))
+    elif produto_id:
+        _ja_existe = query(
+            "SELECT pesquisa_item_id, preco FROM pesquisa_preco_item WHERE pesquisa_id=? AND produto_id=? AND produto_concorrente_id IS NULL LIMIT 1",
+            (pq_id, produto_id))
+    else:
+        _ja_existe = []
 
     # Busca dados ja coletados para pre-preencher
     _dados_anteriores = None
