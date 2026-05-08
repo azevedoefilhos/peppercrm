@@ -1214,20 +1214,6 @@ def _campo_navegacao(pq_id, forn_id):
                     "resultado": resultado, "ean": ean or ""}
                 st.rerun()
 
-    if concs:
-        st.markdown("**🔴 Concorrentes:**")
-        for pc_id, desc, marca, ean in concs:
-            _label = _lbl("c", pc_id, marca, desc)
-            _pesquisado = _mp.get(("c", pc_id)) is not None
-            if st.button(_label, key=f"campo_nav_c_{pq_id}_{pc_id}",
-                        use_container_width=True,
-                        type="primary" if _pesquisado else "secondary"):
-                resultado = {"tipo":"conc","pc_id":pc_id,
-                            "descricao":desc,"marca":marca,
-                            "ean":ean,"auditavel":1}
-                st.session_state[f"nav_produto_pendente_{pq_id}"] = {
-                    "resultado": resultado, "ean": ean or ""}
-                st.rerun()
 def _coleta_modo_ean(pq_id, forn_id):
     """
     Modo mais rápido: digita EAN → app identifica o produto →
