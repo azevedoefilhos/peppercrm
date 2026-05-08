@@ -1145,10 +1145,28 @@ def _campo_navegacao(pq_id, forn_id):
         ORDER BY conc.marca_concorrente, pc.descricao_curta
     """, (forn_id, cat_id))
 
-    # Verifica se ha produto pendente (apos rerun do confirmar ou submit do form)
+    # Mapa de itens ja pesquisados nesta pesquisa
+    _pesq = query(
+        "SELECT produto_id, produto_concorrente_id, preco, em_oferta, ponto_extra, ruptura"
+        " FROM pesquisa_preco_item WHERE pesquisa_id=?", (pq_id,))
+    _mp = {}
+    for _r in _pesq:
+        if _r[0]: _mp[("n", int(_r[0]))] = (_r[2], _r[3], _r[4], _r[5])
+        if _r[1]: _mp[("c", int(_r[1]))] = (_r[2], _r[3], _r[4], _r[5])
+
+    def _lbl(tk, ik, mk, dk):
+        base = f"{mk} — {dk}"
+        d = _mp.get((tk, ik))
+        if not d: return base
+        pr, of, pe, ru = d
+        if ru: return f"✓ {base}  ·  ⚠️ Ruptura"
+        ps = f"R$ {pr:,.2f}".replace(",","X").replace(".",",").replace("X",".") if pr else "?"
+        ex = (" 🏷️" if of else "") + (" 📌" if pe else "")
+        return f"✓ {base}  ·  {ps}{ex}"
+
+    # Produto pendente apos submit do form
     _prod_pendente = st.session_state.get(f"nav_produto_pendente_{pq_id}")
     if _prod_pendente:
-        # NAO remove aqui - so remove apos save bem-sucedido
         _coleta_ean_produto_encontrado(pq_id, forn_id, _prod_pendente["resultado"],
                                        _prod_pendente["ean"])
         return
@@ -1156,7 +1174,7 @@ def _campo_navegacao(pq_id, forn_id):
     if nossos:
         st.markdown("**🟢 Nossos:**")
         for pid, desc, marca in nossos:
-            if st.button(f"{marca} — {desc}",
+            if st.button(_lbl("n", pid, marca, desc),
                         key=f"campo_nav_n_{pq_id}_{pid}",
                         use_container_width=True):
                 resultado = {"tipo":"nosso","produto_id":pid,
@@ -1168,7 +1186,7 @@ def _campo_navegacao(pq_id, forn_id):
     if concs:
         st.markdown("**🔴 Concorrentes:**")
         for pc_id, desc, marca, ean in concs:
-            if st.button(f"{marca} — {desc}",
+            if st.button(_lbl("c", pc_id, marca, desc),
                         key=f"campo_nav_c_{pq_id}_{pc_id}",
                         use_container_width=True):
                 resultado = {"tipo":"conc","pc_id":pc_id,
@@ -1177,7 +1195,6 @@ def _campo_navegacao(pq_id, forn_id):
                 st.session_state[f"nav_produto_pendente_{pq_id}"] = {
                     "resultado": resultado, "ean": ean or ""}
                 st.rerun()
-
 def _coleta_modo_ean(pq_id, forn_id):
     """
     Modo mais rápido: digita EAN → app identifica o produto →
