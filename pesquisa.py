@@ -2685,14 +2685,14 @@ def _tela_detalhe(pq_id):
 
 
 
-    # Fotos da gôndola - lightbox nativo Streamlit
+
+    # Fotos da gôndola - grade com expandão ao clicar
     fotos_det = query(
         "SELECT foto_id, foto_path, legenda FROM pesquisa_foto"
         " WHERE pesquisa_id=? AND ativo=1 ORDER BY foto_id", (pq_id,)) or []
     if fotos_det:
         with st.expander(f"📷 Fotos da gôndola ({len(fotos_det)})", expanded=False):
             import base64 as _b64
-            # Carrega imagens como base64
             imgs_ok = []
             for fid, fpath, fleg in fotos_det:
                 if fpath and os.path.exists(fpath):
@@ -2701,40 +2701,44 @@ def _tela_detalhe(pq_id):
                     _ext = fpath.rsplit(".", 1)[-1].lower()
                     _mime = "image/jpeg" if _ext in ("jpg","jpeg") else f"image/{_ext}"
                     imgs_ok.append({"src": f"data:{_mime};base64,{_data}",
-                                   "caption": fleg or f"Foto {len(imgs_ok)+1}",
-                                   "fid": fid})
+                                   "caption": fleg or f"Foto {len(imgs_ok)+1}"})
             if not imgs_ok:
-                st.caption("Fotos não disponíveis neste dispositivo.")
+                st.caption("📷 Fotos não disponíveis neste dispositivo.")
             else:
-                # Grade de thumbnails
                 _lb_key = f"lb_foto_{pq_id}"
-                _cols = st.columns(min(len(imgs_ok), 4))
-                for _idx, _im in enumerate(imgs_ok):
-                    with _cols[_idx % 4]:
-                        st.image(_im["src"], use_container_width=True)
-                        if st.button(f"🔍 {_im['caption']}", key=f"lb_open_{pq_id}_{_idx}",
-                                     use_container_width=True):
-                            st.session_state[_lb_key] = _idx
-                            st.session_state[f"lb_imgs_{pq_id}"] = imgs_ok
-                # Lightbox quando foto selecionada
-                if _lb_key in st.session_state:
-                    _cur = st.session_state[_lb_key]
-                    _all = st.session_state.get(f"lb_imgs_{pq_id}", imgs_ok)
-                    _im_cur = _all[_cur]
-                    st.divider()
-                    st.markdown(f"**📷 {_im_cur['caption']}** ({_cur+1}/{len(_all)})")
-                    st.image(_im_cur["src"], use_container_width=True)
-                    _n1, _n2, _n3 = st.columns([1, 3, 1])
+                _cur = st.session_state.get(_lb_key, None)
+                # Se ha foto selecionada, mostra expandida no topo
+                if _cur is not None:
+                    _im = imgs_ok[_cur]
+                    st.markdown(f"**📷 {_im['caption']}** &nbsp; ({_cur+1}/{len(imgs_ok)})")
+                    st.image(_im["src"], use_container_width=True)
+                    _n1, _n2, _n3 = st.columns([1, 2, 1])
                     with _n1:
                         if st.button("← Anterior", key=f"lb_prev_{pq_id}",
-                                     use_container_width=True,
-                                     disabled=_cur == 0):
-                            st.session_state[_lb_key] = _cur - 1
-                            st.rerun()
+                                     use_container_width=True, disabled=_cur==0):
+                            st.session_state[_lb_key] = _cur - 1; st.rerun()
                     with _n2:
-                        if st.button("❌ Fechar", key=f"lb_close_{pq_id}",
+                        if st.button("❌ Fechar visualização", key=f"lb_close_{pq_id}",
                                      use_container_width=True):
-                            st.session_state.pop(_lb_key, None)
+                            st.session_state.pop(_lb_key, None); st.rerun()
+                    with _n3:
+                        if st.button("Próxima →", key=f"lb_next_{pq_id}",
+                                     use_container_width=True, disabled=_cur==len(imgs_ok)-1):
+                            st.session_state[_lb_key] = _cur + 1; st.rerun()
+                    st.divider()
+                # Grade de thumbnails - clique seleciona
+                _cols = st.columns(4)
+                for _idx, _im in enumerate(imgs_ok):
+                    with _cols[_idx % 4]:
+                        st.image(_im["src"], use_container_width=True,
+                                 caption=_im["caption"])
+                        if st.button("🔍 Ver", key=f"lb_open_{pq_id}_{_idx}",
+                                     use_container_width=True,
+                                     type="primary" if _cur==_idx else "secondary"):
+                            if _cur == _idx:
+                                st.session_state.pop(_lb_key, None)
+                            else:
+                                st.session_state[_lb_key] = _idx
                             st.rerun()
                     with _n3:
                         if st.button("Próxima →", key=f"lb_next_{pq_id}",
