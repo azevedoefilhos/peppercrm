@@ -682,13 +682,14 @@ def _gerenciar_fotos(pq_id):
                 _ext  = arq.name.rsplit(".", 1)[-1].lower()
                 _mime = "image/jpeg" if _ext in ("jpg","jpeg") else f"image/{_ext}"
                 _b64s = f"data:{_mime};base64,{_b64.b64encode(_bytes).decode()}"
-                # Tenta salvar arquivo local; se falhar, usa base64 no path
+                # Sempre salva base64 como path principal (funciona Railway/celular)
+                _path_salvo = _b64s
+                # Tenta salvar arquivo local como cache (opcional)
                 try:
                     with open(caminho, "wb") as f_out:
                         f_out.write(_bytes)
-                    _path_salvo = caminho
                 except Exception:
-                    _path_salvo = _b64s  # base64 como fallback
+                    pass
                 conn.execute(
                     """INSERT INTO pesquisa_foto
                        (pesquisa_id, foto_path, legenda, data_upload, ativo)
