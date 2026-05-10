@@ -2710,18 +2710,17 @@ def _tela_detalhe(pq_id):
             import base64 as _b64
             imgs_ok = []
             for fid, fpath, fleg in fotos_det:
+                _caption = fleg or f"Foto {len(imgs_ok)+1}"
                 if fpath:
                     if fpath.startswith("data:image"):
-                        imgs_data.append({"src": fpath, "caption": fleg or f"Foto {len(imgs_data)+1}"})
+                        imgs_ok.append({"src": fpath, "caption": _caption})
                     elif os.path.exists(fpath):
                         import base64 as _b64x
                         _ext2 = fpath.rsplit(".", 1)[-1].lower()
                         _mime2 = "image/jpeg" if _ext2 in ("jpg","jpeg") else f"image/{_ext2}"
                         with open(fpath, "rb") as _lf:
                             _lb64 = f"data:{_mime2};base64,{_b64x.b64encode(_lf.read()).decode()}"
-                        imgs_data.append({"src": _lb64, "caption": fleg or f"Foto {len(imgs_data)+1}"})
-                elif fdata:
-                    imgs_data.append({"src": fdata, "caption": fleg or f"Foto {len(imgs_data)+1}"})
+                        imgs_ok.append({"src": _lb64, "caption": _caption})
             if not imgs_ok:
                 st.caption("📷 Fotos não disponíveis neste dispositivo.")
             else:
