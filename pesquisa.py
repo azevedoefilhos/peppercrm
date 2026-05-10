@@ -2683,7 +2683,8 @@ def _tela_detalhe(pq_id):
                                         data, obs)
 
 
-    # Fotos da gôndola com lightbox
+
+    # Fotos da gôndola com lightbox (pan + zoom)
     fotos_det = query(
         "SELECT foto_id, foto_path, legenda FROM pesquisa_foto"
         " WHERE pesquisa_id=? AND ativo=1 ORDER BY foto_id", (pq_id,)) or []
@@ -2703,73 +2704,128 @@ def _tela_detalhe(pq_id):
                 _imgs_json = json.dumps(imgs_data)
                 _uid = str(pq_id)
                 _html = """<style>
-    .lbg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
-    .lbt{cursor:pointer;border-radius:8px;overflow:hidden;aspect-ratio:4/3;}
-    .lbt img{width:100%;height:100%;object-fit:cover;}
-    .lbt:hover img{opacity:.85;}
+    .lbg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:8px;}
+    .lbt{cursor:pointer;border-radius:8px;overflow:hidden;aspect-ratio:4/3;border:1px solid rgba(0,0,0,.1);}
+    .lbt img{width:100%;height:100%;object-fit:cover;transition:opacity .2s;}
+    .lbt:hover img{opacity:.8;}
     .lbo{display:none;position:fixed;top:0;left:0;width:100%;height:100%;
-      background:rgba(0,0,0,.92);z-index:9999;align-items:center;
-      justify-content:center;flex-direction:column;}
+      background:rgba(0,0,0,.95);z-index:9999;align-items:center;justify-content:center;flex-direction:column;}
     .lbo.on{display:flex;}
-    .lbi{max-width:90vw;max-height:75vh;object-fit:contain;border-radius:8px;transition:transform .2s;}
-    .lbc{color:#fff;margin-top:10px;font-size:14px;opacity:.8;}
-    .lbpv,.lbnx{position:fixed;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.2);
-      border:none;color:#fff;font-size:32px;padding:10px 18px;cursor:pointer;border-radius:8px;}
-    .lbpv{left:12px;}.lbnx{right:12px;}
-    .lbcl{position:fixed;top:12px;right:12px;background:rgba(255,255,255,.2);
-      border:none;color:#fff;font-size:22px;padding:8px 14px;cursor:pointer;border-radius:8px;}
-    .lbzm{position:fixed;bottom:16px;right:16px;display:flex;gap:6px;}
-    .lbzm button{background:rgba(255,255,255,.2);border:none;color:#fff;
-      font-size:20px;padding:8px 14px;cursor:pointer;border-radius:8px;}
+    .lbwrap{overflow:hidden;width:90vw;height:78vh;display:flex;align-items:center;justify-content:center;
+      cursor:grab;user-select:none;}
+    .lbwrap.dragging{cursor:grabbing;}
+    .lbi{max-width:none;max-height:none;object-fit:contain;border-radius:4px;
+      transition:none;pointer-events:none;transform-origin:center;}
+    .lbc{color:rgba(255,255,255,.7);margin-top:8px;font-size:13px;text-align:center;}
+    .lbpv,.lbnx{position:fixed;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);
+      border:none;color:#fff;font-size:36px;padding:8px 16px;cursor:pointer;border-radius:8px;
+      transition:background .2s;}
+    .lbpv:hover,.lbnx:hover{background:rgba(255,255,255,.3);}
+    .lbpv{left:10px;}.lbnx{right:10px;}
+    .lbcl{position:fixed;top:12px;right:12px;background:rgba(255,255,255,.15);
+      border:none;color:#fff;font-size:20px;padding:8px 14px;cursor:pointer;border-radius:8px;}
+    .lbcl:hover{background:rgba(255,255,255,.3);}
+    .lbbar{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
+      display:flex;gap:8px;align-items:center;background:rgba(0,0,0,.5);
+      padding:8px 14px;border-radius:24px;}
+    .lbbar button{background:rgba(255,255,255,.15);border:none;color:#fff;
+      font-size:18px;width:36px;height:36px;cursor:pointer;border-radius:50%;}
+    .lbbar button:hover{background:rgba(255,255,255,.3);}
+    .lbzlbl{color:#fff;font-size:13px;min-width:44px;text-align:center;}
+    .lbcnt{color:rgba(255,255,255,.5);font-size:12px;position:fixed;top:16px;left:50%;transform:translateX(-50%);}
     </style>""" + f"""
     <div class="lbg" id="g{_uid}"></div>
     <div class="lbo" id="o{_uid}">
-      <button class="lbcl" id="cl{_uid}">&#10005;</button>
-      <button class="lbpv" id="pv{_uid}">&#8249;</button>
-      <img class="lbi" id="i{_uid}" src="" />
+      <div class="lbcnt" id="cnt{_uid}"></div>
+      <button class="lbcl" id="cl{_uid}" title="Fechar (Esc)">&#10005;</button>
+      <button class="lbpv" id="pv{_uid}" title="Anterior (&#8592;)">&#8249;</button>
+      <div class="lbwrap" id="w{_uid}">
+        <img class="lbi" id="i{_uid}" src="" draggable="false"/>
+      </div>
       <div class="lbc" id="c{_uid}"></div>
-      <button class="lbnx" id="nx{_uid}">&#8250;</button>
-      <div class="lbzm">
-        <button id="zm{_uid}">&#8722;</button>
-        <button id="zp{_uid}">&#43;</button>
+      <button class="lbnx" id="nx{_uid}" title="Pr&oacute;xima (&#8594;)">&#8250;</button>
+      <div class="lbbar">
+        <button id="zo{_uid}" title="Zoom -">&#8722;</button>
+        <span class="lbzlbl" id="zl{_uid}">100%</span>
+        <button id="zi{_uid}" title="Zoom +">&#43;</button>
+        <button id="zr{_uid}" title="Reset">&#8635;</button>
       </div>
     </div>
     <script>
     (function(){{
-      var imgs={_imgs_json}, cur=0, zm=1, uid="{_uid}";
+      var imgs={_imgs_json}, cur=0, zm=1, tx=0, ty=0, uid="{_uid}";
+      var dragging=false, sx=0, sy=0, stx=0, sty=0;
       var g=document.getElementById("g"+uid);
       imgs.forEach(function(im,idx){{
         var d=document.createElement("div"); d.className="lbt";
         var t=document.createElement("img"); t.src=im.src; t.loading="lazy";
-        d.onclick=function(){{cur=idx;zm=1;show();}};
+        d.onclick=function(){{cur=idx;reset();show();}};
         d.appendChild(t); g.appendChild(d);
       }});
+      function reset(){{zm=1;tx=0;ty=0;applyTransform();document.getElementById("zl"+uid).textContent="100%";}}
+      function applyTransform(){{
+        document.getElementById("i"+uid).style.transform=
+          "translate("+tx+"px,"+ty+"px) scale("+zm+")";
+      }}
       function show(){{
         document.getElementById("i"+uid).src=imgs[cur].src;
-        document.getElementById("i"+uid).style.transform="scale("+zm+")";
         document.getElementById("c"+uid).textContent=imgs[cur].caption;
+        document.getElementById("cnt"+uid).textContent=(cur+1)+" / "+imgs.length;
         document.getElementById("o"+uid).className="lbo on";
+        applyTransform();
       }}
-      document.getElementById("cl"+uid).onclick=function(){{
-        document.getElementById("o"+uid).className="lbo";
+      function close(){{document.getElementById("o"+uid).className="lbo";}}
+      document.getElementById("cl"+uid).onclick=close;
+      document.getElementById("pv"+uid).onclick=function(){{cur=(cur-1+imgs.length)%imgs.length;reset();show();}};
+      document.getElementById("nx"+uid).onclick=function(){{cur=(cur+1)%imgs.length;reset();show();}};
+      document.getElementById("zo"+uid).onclick=function(){{
+        zm=Math.max(0.25,zm-0.25);applyTransform();
+        document.getElementById("zl"+uid).textContent=Math.round(zm*100)+"%";
       }};
-      document.getElementById("pv"+uid).onclick=function(){{
-        cur=(cur-1+imgs.length)%imgs.length;zm=1;show();
+      document.getElementById("zi"+uid).onclick=function(){{
+        zm=Math.min(5,zm+0.25);applyTransform();
+        document.getElementById("zl"+uid).textContent=Math.round(zm*100)+"%";
       }};
-      document.getElementById("nx"+uid).onclick=function(){{
-        cur=(cur+1)%imgs.length;zm=1;show();
-      }};
-      document.getElementById("zm"+uid).onclick=function(){{
-        zm=Math.max(0.5,zm-0.25);show();
-      }};
-      document.getElementById("zp"+uid).onclick=function(){{
-        zm=Math.min(3,zm+0.25);show();
-      }};
+      document.getElementById("zr"+uid).onclick=function(){{reset();}};
+      var wrap=document.getElementById("w"+uid);
+      wrap.addEventListener("mousedown",function(e){{
+        if(zm<=1) return;
+        dragging=true; sx=e.clientX; sy=e.clientY; stx=tx; sty=ty;
+        wrap.classList.add("dragging"); e.preventDefault();
+      }});
+      document.addEventListener("mousemove",function(e){{
+        if(!dragging) return;
+        tx=stx+(e.clientX-sx); ty=sty+(e.clientY-sy); applyTransform();
+      }});
+      document.addEventListener("mouseup",function(){{dragging=false;wrap.classList.remove("dragging");}});
+      wrap.addEventListener("touchstart",function(e){{
+        if(e.touches.length===1 && zm>1){{
+          dragging=true; sx=e.touches[0].clientX; sy=e.touches[0].clientY;
+          stx=tx; sty=ty; e.preventDefault();
+        }}
+      }},{{passive:false}});
+      wrap.addEventListener("touchmove",function(e){{
+        if(!dragging||e.touches.length!==1) return;
+        tx=stx+(e.touches[0].clientX-sx); ty=sty+(e.touches[0].clientY-sy);
+        applyTransform(); e.preventDefault();
+      }},{{passive:false}});
+      wrap.addEventListener("touchend",function(){{dragging=false;}});
+      wrap.addEventListener("wheel",function(e){{
+        e.preventDefault();
+        var delta=e.deltaY>0?-0.15:0.15;
+        zm=Math.min(5,Math.max(0.25,zm+delta));
+        applyTransform();
+        document.getElementById("zl"+uid).textContent=Math.round(zm*100)+"%";
+      }},{{passive:false}});
       document.addEventListener("keydown",function(e){{
         if(!document.getElementById("o"+uid).classList.contains("on")) return;
-        if(e.key=="ArrowRight"){{cur=(cur+1)%imgs.length;zm=1;show();}}
-        if(e.key=="ArrowLeft"){{cur=(cur-1+imgs.length)%imgs.length;zm=1;show();}}
-        if(e.key=="Escape"){{document.getElementById("o"+uid).className="lbo";}}
+        if(e.key=="ArrowRight"){{cur=(cur+1)%imgs.length;reset();show();}}
+        if(e.key=="ArrowLeft"){{cur=(cur-1+imgs.length)%imgs.length;reset();show();}}
+        if(e.key=="Escape"){{close();}}
+        if(e.key=="+"){{zm=Math.min(5,zm+0.25);applyTransform();
+          document.getElementById("zl"+uid).textContent=Math.round(zm*100)+"%";}}
+        if(e.key=="-"){{zm=Math.max(0.25,zm-0.25);applyTransform();
+          document.getElementById("zl"+uid).textContent=Math.round(zm*100)+"%";}}
       }});
     }})();
     </script>"""
