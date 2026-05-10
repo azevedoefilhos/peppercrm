@@ -2712,16 +2712,16 @@ def _tela_detalhe(pq_id):
                     _im = imgs_ok[_cur]
                     st.markdown(f"**📷 {_im['caption']}** &nbsp; ({_cur+1}/{len(imgs_ok)})")
                     st.image(_im["src"], use_container_width=True)
-                    _n1, _n2, _n3 = st.columns([1, 2, 1])
-                    with _n1:
+                    _lbn1, _lbn2, _lbn3 = st.columns([1, 2, 1])
+                    with _lbn1:
                         if st.button("← Anterior", key=f"lb_prev_{pq_id}",
                                      use_container_width=True, disabled=_cur==0):
                             st.session_state[_lb_key] = _cur - 1; st.rerun()
-                    with _n2:
+                    with _lbn2:
                         if st.button("❌ Fechar visualização", key=f"lb_close_{pq_id}",
                                      use_container_width=True):
                             st.session_state.pop(_lb_key, None); st.rerun()
-                    with _n3:
+                    with _lbn3:
                         if st.button("Próxima →", key=f"lb_next_{pq_id}",
                                      use_container_width=True, disabled=_cur==len(imgs_ok)-1):
                             st.session_state[_lb_key] = _cur + 1; st.rerun()
@@ -2740,7 +2740,7 @@ def _tela_detalhe(pq_id):
                             else:
                                 st.session_state[_lb_key] = _idx
                             st.rerun()
-                    with _n3:
+                    with _lbn3:
                         if st.button("Próxima →", key=f"lb_next_{pq_id}",
                                      use_container_width=True,
                                      disabled=_cur == len(_all) - 1):
