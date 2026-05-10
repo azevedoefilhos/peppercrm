@@ -722,13 +722,28 @@ def _form_editar_produto_relacao(pc_id, concs, cats, forns):
                             st.success(f"Alterado para {novo_tipo}!")
                             st.rerun()
                     with b2:
-                        if st.button("🗑️", key=f"del_rel_{rel_id}",
-                                     use_container_width=True,
-                                     help="Remover vinculo"):
-                            conn = conectar()
-                            conn.execute("DELETE FROM produto_concorrente_relacao WHERE relacao_id=?",
-                                         (rel_id,))
-                            conn.commit(); conn.close(); st.rerun()
+                        if not st.session_state.get(f"conf_del_rel_{rel_id}"):
+                            if st.button("🗑️", key=f"del_rel_{rel_id}",
+                                         use_container_width=True,
+                                         help="Remover vínculo"):
+                                st.session_state[f"conf_del_rel_{rel_id}"] = True
+                                st.rerun()
+                        else:
+                            st.warning("⚠️ Remover este vínculo?")
+                            _r1, _r2 = st.columns(2)
+                            with _r1:
+                                if st.button("✅ Sim", key=f"conf_rel_ok_{rel_id}",
+                                             type="primary", use_container_width=True):
+                                    conn = conectar()
+                                    conn.execute("DELETE FROM produto_concorrente_relacao WHERE relacao_id=?", (rel_id,))
+                                    conn.commit(); conn.close()
+                                    st.session_state.pop(f"conf_del_rel_{rel_id}", None)
+                                    st.rerun()
+                            with _r2:
+                                if st.button("❌ Não", key=f"conf_rel_no_{rel_id}",
+                                             use_container_width=True):
+                                    st.session_state.pop(f"conf_del_rel_{rel_id}", None)
+                                    st.rerun()
         else:
             st.caption("Nenhum vinculo cadastrado para este produto.")
 

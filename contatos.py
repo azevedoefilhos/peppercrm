@@ -471,12 +471,27 @@ def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual):
                     st.session_state["ct_msg"] = "✅ Interação atualizada."
                     st.rerun()
 
-                if col_ei_d.button("🗑️ Remover", key=f"ei_del_{iid}",
-                                   use_container_width=True):
-                    conn = conectar()
-                    conn.execute("UPDATE contato_interacao SET ativo=0 WHERE interacao_id=?",
-                                 (iid,))
-                    conn.commit(); conn.close(); st.rerun()
+                if not st.session_state.get(f"conf_ei_del_{iid}"):
+                    if col_ei_d.button("🗑️ Remover", key=f"ei_del_{iid}",
+                                       use_container_width=True):
+                        st.session_state[f"conf_ei_del_{iid}"] = True
+                        st.rerun()
+                else:
+                    st.warning("⚠️ Remover esta interação?")
+                    _i1, _i2 = st.columns(2)
+                    with _i1:
+                        if st.button("✅ Sim", key=f"conf_ei_ok_{iid}",
+                                     type="primary", use_container_width=True):
+                            conn = conectar()
+                            conn.execute("UPDATE contato_interacao SET ativo=0 WHERE interacao_id=?", (iid,))
+                            conn.commit(); conn.close()
+                            st.session_state.pop(f"conf_ei_del_{iid}", None)
+                            st.rerun()
+                    with _i2:
+                        if st.button("❌ Não", key=f"conf_ei_no_{iid}",
+                                     use_container_width=True):
+                            st.session_state.pop(f"conf_ei_del_{iid}", None)
+                            st.rerun()
     else:
         st.info("Ainda sem interações. Registre a primeira abaixo.")
 
