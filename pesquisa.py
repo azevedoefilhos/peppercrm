@@ -2740,12 +2740,6 @@ def _tela_detalhe(pq_id):
                             else:
                                 st.session_state[_lb_key] = _idx
                             st.rerun()
-                    with _lbn3:
-                        if st.button("Próxima →", key=f"lb_next_{pq_id}",
-                                     use_container_width=True,
-                                     disabled=_cur == len(_all) - 1):
-                            st.session_state[_lb_key] = _cur + 1
-                            st.rerun()
 
     # Opção: comparar com tabela de preços do cliente
     tabelas_cli = query("""
