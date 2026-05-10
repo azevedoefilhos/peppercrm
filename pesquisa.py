@@ -611,7 +611,6 @@ def _gerenciar_fotos(pq_id):
     fotos = query(
         "SELECT foto_id, foto_path, legenda FROM pesquisa_foto WHERE pesquisa_id=? AND ativo=1 ORDER BY foto_id",
         (pq_id,)) or []
-
     # Exibe fotos já cadastradas em grade
     if fotos:
         st.caption(f"{len(fotos)} foto(s) registrada(s)")
@@ -619,10 +618,16 @@ def _gerenciar_fotos(pq_id):
         cols   = st.columns(n_cols)
         for i, (fid, fpath, fleg) in enumerate(fotos):
             with cols[i % n_cols]:
-                if fpath and os.path.exists(fpath):
-                    st.image(fpath, caption=fleg or f"Foto {i+1}",
+                _img_src = None
+                if fpath:
+                    if fpath.startswith("data:image"):
+                        _img_src = fpath  # base64 inline
+                    elif os.path.exists(fpath):
+                        _img_src = fpath  # arquivo local
+                    _img_src = fdata
+                if _img_src:
+                    st.image(_img_src, caption=fleg or f"Foto {i+1}",
                              use_container_width=True)
-                else:
                     st.caption(f"⚠️ Arquivo não encontrado: {fpath}")
                 # Botão excluir individual
                 if st.button("🗑️ Excluir", key=f"del_foto_{fid}",
@@ -661,8 +666,9 @@ def _gerenciar_fotos(pq_id):
                                 key=f"leg_foto_{pq_id}_{i}")
             legendas.append(leg)
 
-        if st.button("💾 Salvar fotos", key=f"btn_salvar_fotos_{pq_id}",
+        if st.button("✅ Salvar fotos", key=f"btn_salvar_fotos_{pq_id}",
                      type="primary", use_container_width=True):
+            import base64 as _b64
             pasta = os.path.join(os.path.dirname(__file__), "fotos_pesquisa")
             os.makedirs(pasta, exist_ok=True)
             conn  = conectar()
@@ -671,17 +677,26 @@ def _gerenciar_fotos(pq_id):
                 ts       = int(time.time() * 1000)
                 nome_arq = f"pq{pq_id}_{ts}_{i}_{arq.name}"
                 caminho  = os.path.join(pasta, nome_arq)
-                with open(caminho, "wb") as f_out:
-                    f_out.write(arq.read())
+                caminho  = os.path.join(pasta, nome_arq)
+                _bytes   = arq.read()
+                _ext  = arq.name.rsplit(".", 1)[-1].lower()
+                _mime = "image/jpeg" if _ext in ("jpg","jpeg") else f"image/{_ext}"
+                _b64s = f"data:{_mime};base64,{_b64.b64encode(_bytes).decode()}"
+                # Tenta salvar arquivo local; se falhar, usa base64 no path
+                try:
+                    with open(caminho, "wb") as f_out:
+                        f_out.write(_bytes)
+                    _path_salvo = caminho
+                except Exception:
+                    _path_salvo = _b64s  # base64 como fallback
                 conn.execute(
                     """INSERT INTO pesquisa_foto
                        (pesquisa_id, foto_path, legenda, data_upload, ativo)
                        VALUES (?,?,?,?,1)""",
-                    (pq_id, caminho,
+                    (pq_id, _path_salvo,
                      legendas[i].strip() or None,
                      _dt.now().strftime("%Y-%m-%d %H:%M")))
                 saved += 1
-            conn.commit(); conn.close()
             st.success(f"✅ {saved} foto(s) salva(s)!")
             st.rerun()
 
@@ -718,11 +733,11 @@ def _tela_coleta(pq_id):
         with st.expander(f"📷 Fotos da gôndola ({len(fotos_det)})"):
             cols_f = st.columns(min(len(fotos_det), 3))
             for i, (fid, fpath, fleg) in enumerate(fotos_det):
-                if fpath and os.path.exists(fpath):
-                    cols_f[i % 3].image(fpath,
+                _isrc = fpath if fpath and (fpath.startswith("data:image") or os.path.exists(fpath)) else None
+                if _isrc:
+                    cols_f[i % 3].image(_isrc,
                         caption=fleg or f"Foto {i+1}",
                         use_container_width=True)
-    st.success(f"📍 **{cli}**  |  {loc}  |  {forn_n}  |  {data}")
 
     col1, col2, col3, col4 = st.columns([3,1,1,1])
     with col2:
@@ -2695,13 +2710,18 @@ def _tela_detalhe(pq_id):
             import base64 as _b64
             imgs_ok = []
             for fid, fpath, fleg in fotos_det:
-                if fpath and os.path.exists(fpath):
-                    with open(fpath, "rb") as _f:
-                        _data = _b64.b64encode(_f.read()).decode()
-                    _ext = fpath.rsplit(".", 1)[-1].lower()
-                    _mime = "image/jpeg" if _ext in ("jpg","jpeg") else f"image/{_ext}"
-                    imgs_ok.append({"src": f"data:{_mime};base64,{_data}",
-                                   "caption": fleg or f"Foto {len(imgs_ok)+1}"})
+                if fpath:
+                    if fpath.startswith("data:image"):
+                        imgs_data.append({"src": fpath, "caption": fleg or f"Foto {len(imgs_data)+1}"})
+                    elif os.path.exists(fpath):
+                        import base64 as _b64x
+                        _ext2 = fpath.rsplit(".", 1)[-1].lower()
+                        _mime2 = "image/jpeg" if _ext2 in ("jpg","jpeg") else f"image/{_ext2}"
+                        with open(fpath, "rb") as _lf:
+                            _lb64 = f"data:{_mime2};base64,{_b64x.b64encode(_lf.read()).decode()}"
+                        imgs_data.append({"src": _lb64, "caption": fleg or f"Foto {len(imgs_data)+1}"})
+                elif fdata:
+                    imgs_data.append({"src": fdata, "caption": fleg or f"Foto {len(imgs_data)+1}"})
             if not imgs_ok:
                 st.caption("📷 Fotos não disponíveis neste dispositivo.")
             else:
