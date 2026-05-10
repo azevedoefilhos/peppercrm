@@ -2683,21 +2683,97 @@ def _tela_detalhe(pq_id):
                                         data, obs)
 
 
-    # Fotos da gôndola no modo visualização
+    # Fotos da gôndola com lightbox
     fotos_det = query(
         "SELECT foto_id, foto_path, legenda FROM pesquisa_foto"
         " WHERE pesquisa_id=? AND ativo=1 ORDER BY foto_id", (pq_id,)) or []
     if fotos_det:
         with st.expander(f"📷 Fotos da gôndola ({len(fotos_det)})", expanded=False):
-            cols_f = st.columns(min(len(fotos_det), 3))
-            for i, (fid, fpath, fleg) in enumerate(fotos_det):
+            import base64, json
+            imgs_data = []
+            for fid, fpath, fleg in fotos_det:
                 if fpath and os.path.exists(fpath):
-                    cols_f[i % 3].image(fpath,
-                        caption=fleg or f"Foto {i+1}",
-                        use_container_width=True)
-                else:
-                    cols_f[i % 3].caption(f"📷 Arquivo não encontrado")
-    st.divider()
+                    with open(fpath, "rb") as _f:
+                        _b64 = base64.b64encode(_f.read()).decode()
+                    _ext = fpath.rsplit(".", 1)[-1].lower()
+                    _mime = "image/jpeg" if _ext in ("jpg","jpeg") else f"image/{_ext}"
+                    imgs_data.append({"src": f"data:{_mime};base64,{_b64}",
+                                      "caption": fleg or f"Foto {len(imgs_data)+1}"})
+            if imgs_data:
+                _imgs_json = json.dumps(imgs_data)
+                _uid = str(pq_id)
+                _html = """<style>
+    .lbg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
+    .lbt{cursor:pointer;border-radius:8px;overflow:hidden;aspect-ratio:4/3;}
+    .lbt img{width:100%;height:100%;object-fit:cover;}
+    .lbt:hover img{opacity:.85;}
+    .lbo{display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+      background:rgba(0,0,0,.92);z-index:9999;align-items:center;
+      justify-content:center;flex-direction:column;}
+    .lbo.on{display:flex;}
+    .lbi{max-width:90vw;max-height:75vh;object-fit:contain;border-radius:8px;transition:transform .2s;}
+    .lbc{color:#fff;margin-top:10px;font-size:14px;opacity:.8;}
+    .lbpv,.lbnx{position:fixed;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.2);
+      border:none;color:#fff;font-size:32px;padding:10px 18px;cursor:pointer;border-radius:8px;}
+    .lbpv{left:12px;}.lbnx{right:12px;}
+    .lbcl{position:fixed;top:12px;right:12px;background:rgba(255,255,255,.2);
+      border:none;color:#fff;font-size:22px;padding:8px 14px;cursor:pointer;border-radius:8px;}
+    .lbzm{position:fixed;bottom:16px;right:16px;display:flex;gap:6px;}
+    .lbzm button{background:rgba(255,255,255,.2);border:none;color:#fff;
+      font-size:20px;padding:8px 14px;cursor:pointer;border-radius:8px;}
+    </style>""" + f"""
+    <div class="lbg" id="g{_uid}"></div>
+    <div class="lbo" id="o{_uid}">
+      <button class="lbcl" id="cl{_uid}">&#10005;</button>
+      <button class="lbpv" id="pv{_uid}">&#8249;</button>
+      <img class="lbi" id="i{_uid}" src="" />
+      <div class="lbc" id="c{_uid}"></div>
+      <button class="lbnx" id="nx{_uid}">&#8250;</button>
+      <div class="lbzm">
+        <button id="zm{_uid}">&#8722;</button>
+        <button id="zp{_uid}">&#43;</button>
+      </div>
+    </div>
+    <script>
+    (function(){{
+      var imgs={_imgs_json}, cur=0, zm=1, uid="{_uid}";
+      var g=document.getElementById("g"+uid);
+      imgs.forEach(function(im,idx){{
+        var d=document.createElement("div"); d.className="lbt";
+        var t=document.createElement("img"); t.src=im.src; t.loading="lazy";
+        d.onclick=function(){{cur=idx;zm=1;show();}};
+        d.appendChild(t); g.appendChild(d);
+      }});
+      function show(){{
+        document.getElementById("i"+uid).src=imgs[cur].src;
+        document.getElementById("i"+uid).style.transform="scale("+zm+")";
+        document.getElementById("c"+uid).textContent=imgs[cur].caption;
+        document.getElementById("o"+uid).className="lbo on";
+      }}
+      document.getElementById("cl"+uid).onclick=function(){{
+        document.getElementById("o"+uid).className="lbo";
+      }};
+      document.getElementById("pv"+uid).onclick=function(){{
+        cur=(cur-1+imgs.length)%imgs.length;zm=1;show();
+      }};
+      document.getElementById("nx"+uid).onclick=function(){{
+        cur=(cur+1)%imgs.length;zm=1;show();
+      }};
+      document.getElementById("zm"+uid).onclick=function(){{
+        zm=Math.max(0.5,zm-0.25);show();
+      }};
+      document.getElementById("zp"+uid).onclick=function(){{
+        zm=Math.min(3,zm+0.25);show();
+      }};
+      document.addEventListener("keydown",function(e){{
+        if(!document.getElementById("o"+uid).classList.contains("on")) return;
+        if(e.key=="ArrowRight"){{cur=(cur+1)%imgs.length;zm=1;show();}}
+        if(e.key=="ArrowLeft"){{cur=(cur-1+imgs.length)%imgs.length;zm=1;show();}}
+        if(e.key=="Escape"){{document.getElementById("o"+uid).className="lbo";}}
+      }});
+    }})();
+    </script>"""
+                st.components.v1.html(_html, height=max(220, (len(imgs_data)//3+1)*170))
 
     # Opção: comparar com tabela de preços do cliente
     tabelas_cli = query("""
