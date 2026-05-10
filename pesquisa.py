@@ -299,28 +299,14 @@ def _tela_lista():
                         st.session_state["pq_modo"] = "coleta"
                         st.rerun()
             with col4:
-                if not st.session_state.get(f"conf_del_pq_{pid}"):
-                    if st.button("🗑️", key=f"del_{pid}", help="Excluir pesquisa",
-                                 use_container_width=True):
-                        st.session_state[f"conf_del_pq_{pid}"] = True
-                        st.rerun()
-                else:
-                    st.warning("⚠️ Excluir esta pesquisa permanentemente?")
-                    _c1, _c2 = st.columns(2)
-                    with _c1:
-                        if st.button("✅ Confirmar", key=f"conf_del_pq_ok_{pid}",
-                                     type="primary", use_container_width=True):
-                            conn = conectar()
-                            conn.execute("DELETE FROM pesquisa_preco_item WHERE pesquisa_id=?", (pid,))
-                            conn.execute("DELETE FROM pesquisa_preco WHERE pesquisa_id=?", (pid,))
-                            conn.commit(); conn.close()
-                            st.session_state.pop(f"conf_del_pq_{pid}", None)
-                            st.rerun()
-                    with _c2:
-                        if st.button("❌ Cancelar", key=f"conf_del_pq_no_{pid}",
-                                     use_container_width=True):
-                            st.session_state.pop(f"conf_del_pq_{pid}", None)
-                            st.rerun()
+                if st.button("🗑️", key=f"del_{pid}", help="Excluir pesquisa",
+                             use_container_width=True):
+                    conn = conectar()
+                    conn.execute("DELETE FROM pesquisa_preco_item WHERE pesquisa_id=?", (pid,))
+                    conn.execute("DELETE FROM pesquisa_preco WHERE pesquisa_id=?", (pid,))
+                    conn.commit(); conn.close()
+                    st.rerun()
+            st.divider()
 
 
 # ═══════════════════════════════════════════════════════
@@ -639,30 +625,19 @@ def _gerenciar_fotos(pq_id):
                 else:
                     st.caption(f"⚠️ Arquivo não encontrado: {fpath}")
                 # Botão excluir individual
-                if not st.session_state.get(f"conf_del_foto_{fid}"):
-                    if st.button("🗑️ Excluir", key=f"del_foto_{fid}",
-                                 use_container_width=True):
-                        st.session_state[f"conf_del_foto_{fid}"] = True
-                        st.rerun()
-                else:
-                    st.warning("⚠️ Excluir esta foto?")
-                    _fc1, _fc2 = st.columns(2)
-                    with _fc1:
-                        if st.button("✅ Sim", key=f"conf_foto_ok_{fid}",
-                                     type="primary", use_container_width=True):
-                            conn = conectar()
-                            conn.execute("UPDATE pesquisa_foto SET ativo=0 WHERE foto_id=?", (fid,))
-                            conn.commit(); conn.close()
-                            try:
-                                if fpath and os.path.exists(fpath): os.remove(fpath)
-                            except: pass
-                            st.session_state.pop(f"conf_del_foto_{fid}", None)
-                            st.rerun()
-                    with _fc2:
-                        if st.button("❌ Não", key=f"conf_foto_no_{fid}",
-                                     use_container_width=True):
-                            st.session_state.pop(f"conf_del_foto_{fid}", None)
-                            st.rerun()
+                if st.button("🗑️ Excluir", key=f"del_foto_{fid}",
+                             use_container_width=True):
+                    conn = conectar()
+                    conn.execute(
+                        "UPDATE pesquisa_foto SET ativo=0 WHERE foto_id=?", (fid,))
+                    conn.commit(); conn.close()
+                    # Remove arquivo do disco
+                    try:
+                        if fpath and os.path.exists(fpath):
+                            os.remove(fpath)
+                    except Exception:
+                        pass
+                    st.rerun()
     else:
         st.caption("Nenhuma foto registrada ainda.")
 
@@ -2707,6 +2682,21 @@ def _tela_detalhe(pq_id):
                                         pdv_id_atual,
                                         data, obs)
 
+
+    # Fotos da gôndola no modo visualização
+    fotos_det = query(
+        "SELECT foto_id, foto_path, legenda FROM pesquisa_foto"
+        " WHERE pesquisa_id=? AND ativo=1 ORDER BY foto_id", (pq_id,)) or []
+    if fotos_det:
+        with st.expander(f"📷 Fotos da gôndola ({len(fotos_det)})", expanded=False):
+            cols_f = st.columns(min(len(fotos_det), 3))
+            for i, (fid, fpath, fleg) in enumerate(fotos_det):
+                if fpath and os.path.exists(fpath):
+                    cols_f[i % 3].image(fpath,
+                        caption=fleg or f"Foto {i+1}",
+                        use_container_width=True)
+                else:
+                    cols_f[i % 3].caption(f"📷 Arquivo não encontrado")
     st.divider()
 
     # Opção: comparar com tabela de preços do cliente
