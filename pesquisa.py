@@ -2684,152 +2684,64 @@ def _tela_detalhe(pq_id):
 
 
 
-    # Fotos da gôndola com lightbox (pan + zoom)
+
+    # Fotos da gôndola - lightbox nativo Streamlit
     fotos_det = query(
         "SELECT foto_id, foto_path, legenda FROM pesquisa_foto"
         " WHERE pesquisa_id=? AND ativo=1 ORDER BY foto_id", (pq_id,)) or []
     if fotos_det:
         with st.expander(f"📷 Fotos da gôndola ({len(fotos_det)})", expanded=False):
-            import base64, json
-            imgs_data = []
+            import base64 as _b64
+            # Carrega imagens como base64
+            imgs_ok = []
             for fid, fpath, fleg in fotos_det:
                 if fpath and os.path.exists(fpath):
                     with open(fpath, "rb") as _f:
-                        _b64 = base64.b64encode(_f.read()).decode()
+                        _data = _b64.b64encode(_f.read()).decode()
                     _ext = fpath.rsplit(".", 1)[-1].lower()
                     _mime = "image/jpeg" if _ext in ("jpg","jpeg") else f"image/{_ext}"
-                    imgs_data.append({"src": f"data:{_mime};base64,{_b64}",
-                                      "caption": fleg or f"Foto {len(imgs_data)+1}"})
-            if imgs_data:
-                _imgs_json = json.dumps(imgs_data)
-                _uid = str(pq_id)
-                _html = """<style>
-    .lbg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:8px;}
-    .lbt{cursor:pointer;border-radius:8px;overflow:hidden;aspect-ratio:4/3;border:1px solid rgba(0,0,0,.1);}
-    .lbt img{width:100%;height:100%;object-fit:cover;transition:opacity .2s;}
-    .lbt:hover img{opacity:.8;}
-    .lbo{display:none;position:fixed;top:0;left:0;width:100%;height:100%;
-      background:rgba(0,0,0,.95);z-index:9999;align-items:center;justify-content:center;flex-direction:column;}
-    .lbo.on{display:flex;}
-    .lbwrap{overflow:hidden;width:90vw;height:78vh;display:flex;align-items:center;justify-content:center;
-      cursor:grab;user-select:none;}
-    .lbwrap.dragging{cursor:grabbing;}
-    .lbi{max-width:none;max-height:none;object-fit:contain;border-radius:4px;
-      transition:none;pointer-events:none;transform-origin:center;}
-    .lbc{color:rgba(255,255,255,.7);margin-top:8px;font-size:13px;text-align:center;}
-    .lbpv,.lbnx{position:fixed;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);
-      border:none;color:#fff;font-size:36px;padding:8px 16px;cursor:pointer;border-radius:8px;
-      transition:background .2s;}
-    .lbpv:hover,.lbnx:hover{background:rgba(255,255,255,.3);}
-    .lbpv{left:10px;}.lbnx{right:10px;}
-    .lbcl{position:fixed;top:12px;right:12px;background:rgba(255,255,255,.15);
-      border:none;color:#fff;font-size:20px;padding:8px 14px;cursor:pointer;border-radius:8px;}
-    .lbcl:hover{background:rgba(255,255,255,.3);}
-    .lbbar{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
-      display:flex;gap:8px;align-items:center;background:rgba(0,0,0,.5);
-      padding:8px 14px;border-radius:24px;}
-    .lbbar button{background:rgba(255,255,255,.15);border:none;color:#fff;
-      font-size:18px;width:36px;height:36px;cursor:pointer;border-radius:50%;}
-    .lbbar button:hover{background:rgba(255,255,255,.3);}
-    .lbzlbl{color:#fff;font-size:13px;min-width:44px;text-align:center;}
-    .lbcnt{color:rgba(255,255,255,.5);font-size:12px;position:fixed;top:16px;left:50%;transform:translateX(-50%);}
-    </style>""" + f"""
-    <div class="lbg" id="g{_uid}"></div>
-    <div class="lbo" id="o{_uid}">
-      <div class="lbcnt" id="cnt{_uid}"></div>
-      <button class="lbcl" id="cl{_uid}" title="Fechar (Esc)">&#10005;</button>
-      <button class="lbpv" id="pv{_uid}" title="Anterior (&#8592;)">&#8249;</button>
-      <div class="lbwrap" id="w{_uid}">
-        <img class="lbi" id="i{_uid}" src="" draggable="false"/>
-      </div>
-      <div class="lbc" id="c{_uid}"></div>
-      <button class="lbnx" id="nx{_uid}" title="Pr&oacute;xima (&#8594;)">&#8250;</button>
-      <div class="lbbar">
-        <button id="zo{_uid}" title="Zoom -">&#8722;</button>
-        <span class="lbzlbl" id="zl{_uid}">100%</span>
-        <button id="zi{_uid}" title="Zoom +">&#43;</button>
-        <button id="zr{_uid}" title="Reset">&#8635;</button>
-      </div>
-    </div>
-    <script>
-    (function(){{
-      var imgs={_imgs_json}, cur=0, zm=1, tx=0, ty=0, uid="{_uid}";
-      var dragging=false, sx=0, sy=0, stx=0, sty=0;
-      var g=document.getElementById("g"+uid);
-      imgs.forEach(function(im,idx){{
-        var d=document.createElement("div"); d.className="lbt";
-        var t=document.createElement("img"); t.src=im.src; t.loading="lazy";
-        d.onclick=function(){{cur=idx;reset();show();}};
-        d.appendChild(t); g.appendChild(d);
-      }});
-      function reset(){{zm=1;tx=0;ty=0;applyTransform();document.getElementById("zl"+uid).textContent="100%";}}
-      function applyTransform(){{
-        document.getElementById("i"+uid).style.transform=
-          "translate("+tx+"px,"+ty+"px) scale("+zm+")";
-      }}
-      function show(){{
-        document.getElementById("i"+uid).src=imgs[cur].src;
-        document.getElementById("c"+uid).textContent=imgs[cur].caption;
-        document.getElementById("cnt"+uid).textContent=(cur+1)+" / "+imgs.length;
-        document.getElementById("o"+uid).className="lbo on";
-        applyTransform();
-      }}
-      function close(){{document.getElementById("o"+uid).className="lbo";}}
-      document.getElementById("cl"+uid).onclick=close;
-      document.getElementById("pv"+uid).onclick=function(){{cur=(cur-1+imgs.length)%imgs.length;reset();show();}};
-      document.getElementById("nx"+uid).onclick=function(){{cur=(cur+1)%imgs.length;reset();show();}};
-      document.getElementById("zo"+uid).onclick=function(){{
-        zm=Math.max(0.25,zm-0.25);applyTransform();
-        document.getElementById("zl"+uid).textContent=Math.round(zm*100)+"%";
-      }};
-      document.getElementById("zi"+uid).onclick=function(){{
-        zm=Math.min(5,zm+0.25);applyTransform();
-        document.getElementById("zl"+uid).textContent=Math.round(zm*100)+"%";
-      }};
-      document.getElementById("zr"+uid).onclick=function(){{reset();}};
-      var wrap=document.getElementById("w"+uid);
-      wrap.addEventListener("mousedown",function(e){{
-        if(zm<=1) return;
-        dragging=true; sx=e.clientX; sy=e.clientY; stx=tx; sty=ty;
-        wrap.classList.add("dragging"); e.preventDefault();
-      }});
-      document.addEventListener("mousemove",function(e){{
-        if(!dragging) return;
-        tx=stx+(e.clientX-sx); ty=sty+(e.clientY-sy); applyTransform();
-      }});
-      document.addEventListener("mouseup",function(){{dragging=false;wrap.classList.remove("dragging");}});
-      wrap.addEventListener("touchstart",function(e){{
-        if(e.touches.length===1 && zm>1){{
-          dragging=true; sx=e.touches[0].clientX; sy=e.touches[0].clientY;
-          stx=tx; sty=ty; e.preventDefault();
-        }}
-      }},{{passive:false}});
-      wrap.addEventListener("touchmove",function(e){{
-        if(!dragging||e.touches.length!==1) return;
-        tx=stx+(e.touches[0].clientX-sx); ty=sty+(e.touches[0].clientY-sy);
-        applyTransform(); e.preventDefault();
-      }},{{passive:false}});
-      wrap.addEventListener("touchend",function(){{dragging=false;}});
-      wrap.addEventListener("wheel",function(e){{
-        e.preventDefault();
-        var delta=e.deltaY>0?-0.15:0.15;
-        zm=Math.min(5,Math.max(0.25,zm+delta));
-        applyTransform();
-        document.getElementById("zl"+uid).textContent=Math.round(zm*100)+"%";
-      }},{{passive:false}});
-      document.addEventListener("keydown",function(e){{
-        if(!document.getElementById("o"+uid).classList.contains("on")) return;
-        if(e.key=="ArrowRight"){{cur=(cur+1)%imgs.length;reset();show();}}
-        if(e.key=="ArrowLeft"){{cur=(cur-1+imgs.length)%imgs.length;reset();show();}}
-        if(e.key=="Escape"){{close();}}
-        if(e.key=="+"){{zm=Math.min(5,zm+0.25);applyTransform();
-          document.getElementById("zl"+uid).textContent=Math.round(zm*100)+"%";}}
-        if(e.key=="-"){{zm=Math.max(0.25,zm-0.25);applyTransform();
-          document.getElementById("zl"+uid).textContent=Math.round(zm*100)+"%";}}
-      }});
-    }})();
-    </script>"""
-                st.components.v1.html(_html, height=max(220, (len(imgs_data)//3+1)*170))
+                    imgs_ok.append({"src": f"data:{_mime};base64,{_data}",
+                                   "caption": fleg or f"Foto {len(imgs_ok)+1}",
+                                   "fid": fid})
+            if not imgs_ok:
+                st.caption("Fotos não disponíveis neste dispositivo.")
+            else:
+                # Grade de thumbnails
+                _lb_key = f"lb_foto_{pq_id}"
+                _cols = st.columns(min(len(imgs_ok), 4))
+                for _idx, _im in enumerate(imgs_ok):
+                    with _cols[_idx % 4]:
+                        st.image(_im["src"], use_container_width=True)
+                        if st.button(f"🔍 {_im['caption']}", key=f"lb_open_{pq_id}_{_idx}",
+                                     use_container_width=True):
+                            st.session_state[_lb_key] = _idx
+                            st.session_state[f"lb_imgs_{pq_id}"] = imgs_ok
+                # Lightbox quando foto selecionada
+                if _lb_key in st.session_state:
+                    _cur = st.session_state[_lb_key]
+                    _all = st.session_state.get(f"lb_imgs_{pq_id}", imgs_ok)
+                    _im_cur = _all[_cur]
+                    st.divider()
+                    st.markdown(f"**📷 {_im_cur['caption']}** ({_cur+1}/{len(_all)})")
+                    st.image(_im_cur["src"], use_container_width=True)
+                    _n1, _n2, _n3 = st.columns([1, 3, 1])
+                    with _n1:
+                        if st.button("← Anterior", key=f"lb_prev_{pq_id}",
+                                     use_container_width=True,
+                                     disabled=_cur == 0):
+                            st.session_state[_lb_key] = _cur - 1
+                            st.rerun()
+                    with _n2:
+                        if st.button("❌ Fechar", key=f"lb_close_{pq_id}",
+                                     use_container_width=True):
+                            st.session_state.pop(_lb_key, None)
+                            st.rerun()
+                    with _n3:
+                        if st.button("Próxima →", key=f"lb_next_{pq_id}",
+                                     use_container_width=True,
+                                     disabled=_cur == len(_all) - 1):
+                            st.session_state[_lb_key] = _cur + 1
+                            st.rerun()
 
     # Opção: comparar com tabela de preços do cliente
     tabelas_cli = query("""
