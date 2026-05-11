@@ -1446,6 +1446,23 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
     else:
         _ja_existe = []
 
+
+        # Toggle UN/Kg para produtos vendidos por peso
+        col_un, col_peso = st.columns([1, 2])
+        with col_un:
+            unidade_coleta = st.radio("Unidade", ["UN", "Kg"],
+                                      horizontal=True, key=f"{k}_un")
+        with col_peso:
+            peso_coleta = None
+            preco_kg = None
+            if unidade_coleta == "Kg":
+                peso_coleta = st.number_input("Peso coletado (Kg)",
+                    min_value=0.001, value=1.0, step=0.001,
+                    format="%.3f", key=f"{k}_peso",
+                    help="Peso do produto na embalagem pesada")
+                if peso_coleta and preco > 0:
+                    preco_kg = round(preco / peso_coleta, 2)
+                    st.caption(f"= R$ {preco_kg:.2f}/Kg")
     # Busca dados ja coletados para pre-preencher
     _dados_anteriores = None
     if _ja_existe:
