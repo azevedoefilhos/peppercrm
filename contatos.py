@@ -208,52 +208,23 @@ def _lista_topicos():
         vencido = followup and followup < hoje and status not in ("Concluído","Cancelado")
 
         with st.container(border=True):
-            # Layout: [controles (3.2) | conteúdo (4.0) | info (1.5) | ▼ (0.4) | 🗑️ (0.4)]
-            c1, c2, c3, c4, c5 = st.columns([3.2, 4.0, 1.6, 0.4, 0.4])
+            # 5 colunas: [selects(2.5) | conteúdo(4.0) | info(1.6) | ▼(0.4) | 🗑️(0.4)]
+            c1, c2, c3, c4, c5 = st.columns([2.5, 4.0, 1.6, 0.4, 0.4])
 
             with c1:
-                # Label inline via markdown + selectbox com label oculto,
-                # usando CSS para alinhar verticalmente em 3 linhas compactas
-                st.markdown("""<style>
-                .sel-row {display:flex;align-items:center;gap:6px;margin-bottom:-18px}
-                .sel-lbl {font-size:11px;color:#555;min-width:62px;text-align:right;
-                           font-weight:600;white-space:nowrap}
-                </style>""", unsafe_allow_html=True)
+                novo_tipo_card = st.selectbox(
+                    "Tipo", TIPO_TOPICO,
+                    index=TIPO_TOPICO.index(tipo) if tipo in TIPO_TOPICO else 0,
+                    key=f"ct_tipo_{cid}", label_visibility="collapsed")
+                novo_st_card = st.selectbox(
+                    "Status", STATUS_TOPICO,
+                    index=STATUS_TOPICO.index(status) if status in STATUS_TOPICO else 0,
+                    key=f"ct_st_{cid}", label_visibility="collapsed")
+                novo_pr_card = st.selectbox(
+                    "Prioridade", PRIOR,
+                    index=PRIOR.index(prioridade) if prioridade in PRIOR else 1,
+                    key=f"ct_pr_{cid}", label_visibility="collapsed")
 
-                _lbl_col, _sel_col = st.columns([1, 2.2])
-                with _lbl_col:
-                    st.markdown("<p style='font-size:11px;color:#555;font-weight:600;"
-                                "text-align:right;margin-top:32px'>Tipo</p>",
-                                unsafe_allow_html=True)
-                with _sel_col:
-                    novo_tipo_card = st.selectbox(
-                        "Tipo", TIPO_TOPICO,
-                        index=TIPO_TOPICO.index(tipo) if tipo in TIPO_TOPICO else 0,
-                        key=f"ct_tipo_{cid}", label_visibility="collapsed")
-
-                _lbl_col2, _sel_col2 = st.columns([1, 2.2])
-                with _lbl_col2:
-                    st.markdown("<p style='font-size:11px;color:#555;font-weight:600;"
-                                "text-align:right;margin-top:32px'>Status</p>",
-                                unsafe_allow_html=True)
-                with _sel_col2:
-                    novo_st_card = st.selectbox(
-                        "Status", STATUS_TOPICO,
-                        index=STATUS_TOPICO.index(status) if status in STATUS_TOPICO else 0,
-                        key=f"ct_st_{cid}", label_visibility="collapsed")
-
-                _lbl_col3, _sel_col3 = st.columns([1, 2.2])
-                with _lbl_col3:
-                    st.markdown("<p style='font-size:11px;color:#555;font-weight:600;"
-                                "text-align:right;margin-top:32px'>Prior.</p>",
-                                unsafe_allow_html=True)
-                with _sel_col3:
-                    novo_pr_card = st.selectbox(
-                        "Prioridade", PRIOR,
-                        index=PRIOR.index(prioridade) if prioridade in PRIOR else 1,
-                        key=f"ct_pr_{cid}", label_visibility="collapsed")
-
-                # Salva qualquer mudança nas 3 listas de uma vez
                 _changed = (novo_tipo_card != tipo or
                             novo_st_card   != status or
                             novo_pr_card   != prioridade)
