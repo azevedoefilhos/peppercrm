@@ -208,48 +208,59 @@ def _lista_topicos():
         vencido = followup and followup < hoje and status not in ("Concluído","Cancelado")
 
         with st.container(border=True):
-            st.markdown("""<style>
-            div[data-baseweb="select"] > div:first-child {
-                min-height: 28px !important;
-                height: 28px !important;
-                padding-top: 0px !important;
-                padding-bottom: 0px !important;
-                font-size: 12px !important;
-            }
-            div[data-baseweb="select"] svg { margin-top: 0px !important; }
-            div[data-baseweb="select"] span { line-height: 28px !important; }
-            </style>""", unsafe_allow_html=True)
+            # [info-edit(3.0) | conteúdo(4.8) | meta(1.6) | ▼(0.35) | 🗑️(0.35)]
+            c1, c2, c3, c4, c5 = st.columns([3.0, 4.8, 1.6, 0.35, 0.35])
 
-            # [selects(2.2) | conteúdo(4.8) | info(1.8) | ▼(0.35) | 🗑️(0.35)]
-            c1, c2, c3, c4, c5 = st.columns([2.2, 4.8, 1.8, 0.35, 0.35])
+            _edit_key = f"ct_edit_{cid}"
+            _editando = st.session_state.get(_edit_key, False)
 
             with c1:
-                novo_tipo_card = st.selectbox(
-                    "Tipo", TIPO_TOPICO,
-                    index=TIPO_TOPICO.index(tipo) if tipo in TIPO_TOPICO else 0,
-                    key=f"ct_tipo_{cid}", label_visibility="collapsed")
-                novo_st_card = st.selectbox(
-                    "Status", STATUS_TOPICO,
-                    index=STATUS_TOPICO.index(status) if status in STATUS_TOPICO else 0,
-                    key=f"ct_st_{cid}", label_visibility="collapsed")
-                novo_pr_card = st.selectbox(
-                    "Prioridade", PRIOR,
-                    index=PRIOR.index(prioridade) if prioridade in PRIOR else 1,
-                    key=f"ct_pr_{cid}", label_visibility="collapsed")
-
-                _changed = (novo_tipo_card != tipo or
-                            novo_st_card   != status or
-                            novo_pr_card   != prioridade)
-                if _changed:
-                    conn = conectar()
-                    conn.execute("""UPDATE contato_registro
-                        SET tipo_topico=?, status=?, prioridade=?
-                        WHERE contato_id=?""",
-                        (novo_tipo_card, novo_st_card, novo_pr_card, cid))
-                    conn.commit(); conn.close()
-                    st.session_state["ct_msg"] = (
-                        f"✅ '{assunto[:30]}' → {novo_st_card} · {novo_pr_card}")
-                    st.rerun()
+                if not _editando:
+                    # Modo leitura: 1 linha compacta com ✏️
+                    tipo_ico  = "📞" if tipo == "Contato" else "🤝"
+                    st.markdown(
+                        f"<div style='font-size:13px;line-height:1.8;padding-top:4px'>"
+                        f"{tipo_ico} <b>{tipo}</b><br/>"
+                        f"<span style='font-size:12px;color:#555'>{STATUS_ICONE.get(status,'')} {status}</span><br/>"
+                        f"<span style='font-size:12px;color:#555'>"
+                        f"{'🔴' if prioridade=='Alta' else '🟡' if prioridade=='Média' else '🟢'} "
+                        f"{prioridade}</span></div>",
+                        unsafe_allow_html=True)
+                    if st.button("✏️", key=f"ct_edtbtn_{cid}",
+                                 help="Editar tipo / status / prioridade"):
+                        st.session_state[_edit_key] = True
+                        st.rerun()
+                else:
+                    # Modo edição: 3 selectboxes + Salvar/Cancelar
+                    novo_tipo_card = st.selectbox(
+                        "Tipo", TIPO_TOPICO,
+                        index=TIPO_TOPICO.index(tipo) if tipo in TIPO_TOPICO else 0,
+                        key=f"ct_tipo_{cid}", label_visibility="collapsed")
+                    novo_st_card = st.selectbox(
+                        "Status", STATUS_TOPICO,
+                        index=STATUS_TOPICO.index(status) if status in STATUS_TOPICO else 0,
+                        key=f"ct_st_{cid}", label_visibility="collapsed")
+                    novo_pr_card = st.selectbox(
+                        "Prioridade", PRIOR,
+                        index=PRIOR.index(prioridade) if prioridade in PRIOR else 1,
+                        key=f"ct_pr_{cid}", label_visibility="collapsed")
+                    col_sv, col_cx = st.columns(2)
+                    if col_sv.button("✅", key=f"ct_sv_{cid}",
+                                     use_container_width=True, help="Salvar"):
+                        conn = conectar()
+                        conn.execute("""UPDATE contato_registro
+                            SET tipo_topico=?, status=?, prioridade=?
+                            WHERE contato_id=?""",
+                            (novo_tipo_card, novo_st_card, novo_pr_card, cid))
+                        conn.commit(); conn.close()
+                        st.session_state.pop(_edit_key, None)
+                        st.session_state["ct_msg"] = (
+                            f"✅ '{assunto[:30]}' → {novo_st_card} · {novo_pr_card}")
+                        st.rerun()
+                    if col_cx.button("✖️", key=f"ct_cx_{cid}",
+                                     use_container_width=True, help="Cancelar"):
+                        st.session_state.pop(_edit_key, None)
+                        st.rerun()
 
             with c2:
                 st.markdown(f"**{'🔴 ' if vencido else ''}{assunto}**")
