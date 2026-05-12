@@ -304,8 +304,225 @@ def _lista_topicos():
 # ═══════════════════════════════════════════════════════
 # 2. PAINEL DO TÓPICO — linha do tempo + nova interação
 # ═══════════════════════════════════════════════════════
+def _gerar_pdf_topico(cid):
+    """
+    Gera PDF estruturado com o histórico completo de um tópico de contato.
+    Retorna bytes do PDF prontos para st.download_button.
+    """
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors
+    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
+                                    Table, TableStyle, HRFlowable)
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER
+    import io as _io
+
+    # ── Busca dados ───────────────────────────────────────
+    cr = query("""
+        SELECT cr.assunto, cr.tipo_topico, cr.status, cr.prioridade,
+               cr.data_contato, cr.data_followup, cr.observacao,
+               COALESCE(c.nome_fantasia, f.nome_fantasia, '—') AS entidade,
+               cr.tipo_entidade
+        FROM contato_registro cr
+        LEFT JOIN cliente    c ON cr.cliente_id    = c.cliente_id
+        LEFT JOIN fornecedor f ON cr.fornecedor_id = f.fornecedor_id
+        WHERE cr.contato_id=?""", (cid,))
+    if not cr:
+        return None
+    r = cr[0]
+    assunto, tipo, status, prioridade, data_c, followup, obs, entidade, tipo_ent = r
+
+    forns = query("""
+        SELECT fn.nome_fantasia FROM contato_x_fornecedor cxf
+        JOIN fornecedor fn ON cxf.fornecedor_id=fn.fornecedor_id
+        WHERE cxf.contato_id=?""", (cid,))
+    forns_str = " / ".join(f[0] for f in forns) if forns else "—"
+
+    ints = query("""
+        SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
+               ci.descricao, ci.resultado, ci.data_followup
+        FROM contato_interacao ci
+        WHERE ci.contato_id=? AND ci.ativo=1
+        ORDER BY ci.data_interacao ASC""", (cid,))
+
+    # ── Estilos ───────────────────────────────────────────
+    buf  = _io.BytesIO()
+    doc  = SimpleDocTemplate(buf, pagesize=A4,
+                             leftMargin=2*cm, rightMargin=2*cm,
+                             topMargin=2*cm, bottomMargin=2*cm)
+    estilos = getSampleStyleSheet()
+
+    VERDE   = colors.HexColor("#2E7D32")
+    VERDE_L = colors.HexColor("#E8F5E9")
+    CINZA   = colors.HexColor("#F5F5F5")
+    TEXTO   = colors.HexColor("#212121")
+
+    s_titulo = ParagraphStyle("titulo", parent=estilos["Title"],
+                               fontSize=16, textColor=VERDE,
+                               spaceAfter=4, leading=20)
+    s_sub    = ParagraphStyle("sub", parent=estilos["Normal"],
+                               fontSize=10, textColor=colors.HexColor("#555555"),
+                               spaceAfter=2)
+    s_label  = ParagraphStyle("label", parent=estilos["Normal"],
+                               fontSize=8, textColor=colors.HexColor("#777777"),
+                               spaceBefore=0, spaceAfter=1)
+    s_valor  = ParagraphStyle("valor", parent=estilos["Normal"],
+                               fontSize=10, textColor=TEXTO,
+                               spaceBefore=0, spaceAfter=6)
+    s_inter_titulo = ParagraphStyle("inter_t", parent=estilos["Normal"],
+                                    fontSize=10, textColor=VERDE,
+                                    fontName="Helvetica-Bold", spaceAfter=3)
+    s_inter_texto  = ParagraphStyle("inter_tx", parent=estilos["Normal"],
+                                    fontSize=9, textColor=TEXTO,
+                                    spaceAfter=3, leading=13)
+    s_rodape = ParagraphStyle("rodape", parent=estilos["Normal"],
+                               fontSize=7, textColor=colors.HexColor("#999999"),
+                               alignment=TA_CENTER)
+
+    VIA_LABEL = {"WhatsApp":"💬 WhatsApp","E-mail":"✉️ E-mail",
+                 "Telefone":"📞 Telefone","Visita presencial":"🚶 Visita",
+                 "Reunião":"🤝 Reunião","Videoconferência":"📹 Videoconferência",
+                 "Outro":"📌 Outro"}
+
+    from datetime import date as _date
+    hoje_str = _date.today().strftime("%d/%m/%Y")
+
+    elementos = []
+
+    # ── Cabeçalho ─────────────────────────────────────────
+    elementos.append(Paragraph("PepperCRM — Histórico de Contato", s_titulo))
+    elementos.append(Paragraph(
+        f"Gerado em {hoje_str}  |  Tópico #{cid}", s_sub))
+    elementos.append(HRFlowable(width="100%", thickness=1.5,
+                                color=VERDE, spaceAfter=10))
+
+    # ── Ficha do tópico ───────────────────────────────────
+    ico_ent = "👤 Cliente" if tipo_ent == "cliente" else "🏭 Fornecedor"
+    ficha = [
+        ["Assunto",    assunto or "—",
+         "Tipo",       tipo or "Contato"],
+        [ico_ent,      entidade,
+         "Status",     status or "—"],
+        ["Prioridade", prioridade or "—",
+         "Data início",data_c or "—"],
+        ["Próx. contato", followup or "—",
+         "Fornecedores tratados", forns_str],
+    ]
+    if obs:
+        ficha.append(["Observação", obs, "", ""])
+
+    t_ficha = Table(
+        [[Paragraph(f"<b>{cel}</b>" if i % 2 == 0 else cel,
+                    s_label if i % 2 == 0 else s_valor)
+          for i, cel in enumerate(linha)]
+         for linha in ficha],
+        colWidths=[3.2*cm, 7.5*cm, 3.2*cm, 3.5*cm])
+    t_ficha.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), CINZA),
+        ("ROWBACKGROUND", (0,0), (-1,-1), [CINZA, colors.white]),
+        ("BOX",      (0,0), (-1,-1), 0.5, colors.HexColor("#CCCCCC")),
+        ("INNERGRID",(0,0), (-1,-1), 0.3, colors.HexColor("#DDDDDD")),
+        ("VALIGN",   (0,0), (-1,-1), "TOP"),
+        ("TOPPADDING",   (0,0), (-1,-1), 5),
+        ("BOTTOMPADDING",(0,0), (-1,-1), 5),
+        ("LEFTPADDING",  (0,0), (-1,-1), 6),
+    ]))
+    elementos.append(t_ficha)
+    elementos.append(Spacer(1, 0.5*cm))
+
+    # ── Linha do tempo ────────────────────────────────────
+    elementos.append(HRFlowable(width="100%", thickness=1,
+                                color=VERDE_L, spaceAfter=6))
+    elementos.append(Paragraph(
+        f"<b>Linha do tempo — {len(ints)} interação(ões)</b>", s_inter_titulo))
+    elementos.append(Spacer(1, 0.2*cm))
+
+    if not ints:
+        elementos.append(Paragraph("Nenhuma interação registrada.", s_inter_texto))
+    else:
+        for idx, irow in enumerate(ints, 1):
+            data_i, via, pessoa, desc, result, fup_i = irow
+            via_lbl = VIA_LABEL.get(via, via or "—")
+            cabecalho = f"<b>#{idx} — {data_i}  |  {via_lbl}"
+            if pessoa:
+                cabecalho += f"  |  {pessoa}"
+            cabecalho += "</b>"
+
+            dados_int = [[
+                Paragraph(cabecalho, s_inter_titulo),
+            ]]
+            linhas_int = [dados_int[0]]
+
+            if desc:
+                linhas_int.append([
+                    Paragraph(f"<b>O que foi tratado:</b><br/>{desc}", s_inter_texto)
+                ])
+            if result:
+                linhas_int.append([
+                    Paragraph(f"<b>Resultado / próximo passo:</b><br/>{result}", s_inter_texto)
+                ])
+            if fup_i:
+                linhas_int.append([
+                    Paragraph(f"📅 Próximo contato agendado: <b>{fup_i}</b>", s_inter_texto)
+                ])
+
+            t_int = Table(linhas_int, colWidths=[17.1*cm])
+            bg = VERDE_L if idx % 2 == 0 else colors.white
+            t_int.setStyle(TableStyle([
+                ("BACKGROUND", (0,0), (-1,-1), bg),
+                ("BOX",      (0,0), (-1,-1), 0.5, colors.HexColor("#C8E6C9")),
+                ("TOPPADDING",   (0,0), (-1,-1), 6),
+                ("BOTTOMPADDING",(0,0), (-1,-1), 6),
+                ("LEFTPADDING",  (0,0), (-1,-1), 8),
+                ("RIGHTPADDING", (0,0), (-1,-1), 8),
+            ]))
+            elementos.append(t_int)
+            elementos.append(Spacer(1, 0.2*cm))
+
+    # ── Rodapé ────────────────────────────────────────────
+    elementos.append(Spacer(1, 0.5*cm))
+    elementos.append(HRFlowable(width="100%", thickness=0.5,
+                                color=colors.HexColor("#CCCCCC"), spaceAfter=4))
+    elementos.append(Paragraph(
+        f"PepperCRM — Azevedo e Filhos Representação Comercial  |  "
+        f"Documento gerado em {hoje_str}  |  Confidencial",
+        s_rodape))
+
+    doc.build(elementos)
+    buf.seek(0)
+    return buf.read()
+
+
 def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual):
     """Painel completo: histórico editável + nova interação + edição do tópico."""
+    st.divider()
+
+    # Mensagem de sucesso inline (complementa a do topo, visível sem scroll)
+    _msg_inline = st.session_state.pop(f"ct_msg_inline_{cid}", None)
+    if _msg_inline:
+        st.success(_msg_inline)
+
+    # ── Exportar PDF ──────────────────────────────────────────────────────
+    col_pdf, col_esp = st.columns([2, 5])
+    with col_pdf:
+        if st.button("📄 Exportar histórico PDF", key=f"pdf_btn_{cid}",
+                     use_container_width=True):
+            with st.spinner("Gerando PDF..."):
+                _pdf_bytes = _gerar_pdf_topico(cid)
+            if _pdf_bytes:
+                # Busca assunto para nome do arquivo
+                _ass = query("SELECT assunto FROM contato_registro WHERE contato_id=?", (cid,))
+                _nome = (_ass[0][0] or f"topico_{cid}") if _ass else f"topico_{cid}"
+                _nome = "".join(c for c in _nome if c.isalnum() or c in " _-")[:40].strip()
+                st.download_button(
+                    label="⬇️ Baixar PDF",
+                    data=_pdf_bytes,
+                    file_name=f"historico_{_nome}.pdf",
+                    mime="application/pdf",
+                    key=f"pdf_dl_{cid}")
+            else:
+                st.error("Erro ao gerar PDF.")
     st.divider()
 
     cr = query("""SELECT cr.*, c.nome_fantasia, f.nome_fantasia
@@ -389,6 +606,7 @@ def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual):
             conn.commit(); conn.close()
             st.session_state.pop(_kf, None); st.session_state.pop(_hash_key, None)
             st.session_state["ct_msg"] = "✅ Tópico atualizado."
+            st.session_state[f"ct_msg_inline_{cid}"] = "✅ Tópico atualizado."
             st.rerun()
 
         if col_d.button("🗑️ Encerrar / arquivar tópico", key=f"edel_{cid}",
@@ -469,6 +687,7 @@ def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual):
                          _efu.isoformat() if _efu else None, iid))
                     conn.commit(); conn.close()
                     st.session_state["ct_msg"] = "✅ Interação atualizada."
+                    st.session_state[f"ct_msg_inline_{cid}"] = "✅ Interação atualizada."
                     st.rerun()
 
                 if not st.session_state.get(f"conf_ei_del_{iid}"):
@@ -621,6 +840,9 @@ def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual):
             st.session_state.pop(k, None)
         st.session_state[_mk] = "sel"
         st.session_state.pop(f"exp_inter_{cid}", None)
+        # Fecha o painel do tópico para que a mensagem de sucesso
+        # no topo da lista fique visível sem precisar scrollar
+        st.session_state.pop("ct_topico_aberto", None)
         st.session_state["ct_msg"] = "✅ Interação registrada com sucesso!"
         st.rerun()
 
