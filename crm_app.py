@@ -151,11 +151,18 @@ def _dados_dashboard_cache():
             f"📋 **{sem_contato[0][0]} cliente(s) visitado(s)/ativo(s)** "
             f"sem nenhum contato registrado", "contatos", "sem_contato"))
 
+    from datetime import timedelta as _td
+    amanha      = (_date.today() + _td(days=1)).isoformat()
+    depois      = (_date.today() + _td(days=2)).isoformat()
+    tres_dias   = (_date.today() - _td(days=3)).isoformat()
+    trinta_dias = (_date.today() - _td(days=30)).isoformat()
+    sete_dias   = (_date.today() + _td(days=7)).isoformat()
+
     prox_fups = query("""
         SELECT COUNT(*) FROM contato_registro
         WHERE ativo=1
-          AND data_followup BETWEEN date(?, '+1 day') AND date(?, '+2 days')
-          AND status NOT IN ('Concluído','Cancelado')""", (hoje, hoje))
+          AND data_followup BETWEEN ? AND ?
+          AND status NOT IN ('Concluído','Cancelado')""", (amanha, depois))
     if prox_fups and prox_fups[0][0]:
         alertas.append(("info",
             f"📅 **{prox_fups[0][0]} follow-up(s)** agendado(s) para "
@@ -164,7 +171,7 @@ def _dados_dashboard_cache():
     pesq_rascu = query("""
         SELECT COUNT(*) FROM pesquisa_preco
         WHERE status='rascunho'
-          AND data_pesquisa <= date(?, '-3 days')""", (hoje,))
+          AND data_pesquisa <= ?""", (tres_dias,))
     if pesq_rascu and pesq_rascu[0][0]:
         alertas.append(("warn",
             f"🔍 **{pesq_rascu[0][0]} pesquisa(s)** em rascunho há mais de 3 dias",
@@ -175,14 +182,14 @@ def _dados_dashboard_cache():
         "qtd_mes":               qtd_mes,
         "total_mes":             total_mes,
         "comissao_mes":          float(r2[0][0]) if r2 and r2[0][0] else 0.0,
-        "qtd_entregas":          q1(f"SELECT COUNT(*) FROM pedido WHERE data_entrega BETWEEN date('{hoje}') AND date('{hoje}','+7 days') AND status_pedido NOT IN ('CANCELADO','RECUSADO','ENTREGUE','DEVOLVIDO')"),
-        "qtd_sem_pedido":        q1(f"SELECT COUNT(*) FROM cliente c WHERE c.ativo=1 AND NOT EXISTS (SELECT 1 FROM pedido p WHERE p.cliente_id=c.cliente_id AND p.data_pedido >= date('{hoje}','-30 days') AND p.status_pedido NOT IN ('CANCELADO','RECUSADO'))"),
-        "qtd_rupturas":          q1(f"SELECT COUNT(*) FROM pesquisa_preco_item pi JOIN pesquisa_preco pp ON pi.pesquisa_id=pp.pesquisa_id WHERE pi.ruptura=1 AND pp.data_pesquisa >= date('{hoje}','-30 days')"),
-        "qtd_contatos_mes":      q1(f"SELECT COUNT(*) FROM contato_registro cr WHERE ativo=1 AND cr.data_contato >= '{mes_ini}'"),
+        "qtd_entregas":          q1("SELECT COUNT(*) FROM pedido WHERE data_entrega BETWEEN ? AND ? AND status_pedido NOT IN ('CANCELADO','RECUSADO','ENTREGUE','DEVOLVIDO')", (hoje, sete_dias)),
+        "qtd_sem_pedido":        q1("SELECT COUNT(*) FROM cliente c WHERE c.ativo=1 AND NOT EXISTS (SELECT 1 FROM pedido p WHERE p.cliente_id=c.cliente_id AND p.data_pedido >= ? AND p.status_pedido NOT IN ('CANCELADO','RECUSADO'))", (trinta_dias,)),
+        "qtd_rupturas":          q1("SELECT COUNT(*) FROM pesquisa_preco_item pi JOIN pesquisa_preco pp ON pi.pesquisa_id=pp.pesquisa_id WHERE pi.ruptura=1 AND pp.data_pesquisa >= ?", (trinta_dias,)),
+        "qtd_contatos_mes":      q1("SELECT COUNT(*) FROM contato_registro cr WHERE ativo=1 AND cr.data_contato >= ?", (mes_ini,)),
         "qtd_negoc_abertas":     q1("SELECT COUNT(*) FROM contato_registro WHERE ativo=1 AND tipo_topico='Negociação' AND status NOT IN ('Concluído','Cancelado')"),
-        "qtd_clientes_contatados": q1(f"SELECT COUNT(DISTINCT cliente_id) FROM contato_registro WHERE ativo=1 AND data_contato >= date('{hoje}','-30 days') AND cliente_id IS NOT NULL"),
-        "qtd_pesquisas_mes":     q1(f"SELECT COUNT(*) FROM pesquisa_preco WHERE data_pesquisa >= '{mes_ini}'"),
-        "qtd_visitas_mes":       q1(f"SELECT COUNT(*) FROM visita_cliente WHERE data_visita >= '{mes_ini}'"),
+        "qtd_clientes_contatados": q1("SELECT COUNT(DISTINCT cliente_id) FROM contato_registro WHERE ativo=1 AND data_contato >= ? AND cliente_id IS NOT NULL", (trinta_dias,)),
+        "qtd_pesquisas_mes":     q1("SELECT COUNT(*) FROM pesquisa_preco WHERE data_pesquisa >= ?", (mes_ini,)),
+        "qtd_visitas_mes":       q1("SELECT COUNT(*) FROM visita_cliente WHERE data_visita >= ?", (mes_ini,)),
         "qtd_clientes_ativos":   q1("SELECT COUNT(*) FROM cliente WHERE status NOT IN ('Encerrado','Cancelado')"),
         "qtd_prospectos":        q1("SELECT COUNT(*) FROM cliente WHERE status='Prospecto'"),
         "fups_venc":             list(fups_v),
