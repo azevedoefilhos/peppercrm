@@ -53,10 +53,16 @@ def tela_novo_pedido():
     prazo     = forn_sel[6] or "—"
     frete     = forn_sel[7] or "—"
 
-    col1, col2, col3 = st.columns(3)
+    # Busca pedido mínimo do fornecedor
+    _pm_row = query("SELECT pedido_minimo FROM fornecedor WHERE fornecedor_id=?", (forn_id,))
+    pedido_minimo = float(_pm_row[0][0]) if _pm_row and _pm_row[0][0] else 0.0
+
+    col1, col2, col3, col4 = st.columns(4)
     col1.info(f"Tabela: **{tab_nome}**")
     col2.info(f"Prazo: **{prazo}**")
     col3.info(f"Frete: **{frete}**")
+    if pedido_minimo > 0:
+        col4.warning(f"Mín: **{_brl(pedido_minimo)}**")
 
     # PASSO 3: PDV
     pdvs = query("""SELECT pdv_id, numero_loja, nome_loja, cidade, estado, gerente, horario_recebimento
@@ -186,9 +192,22 @@ def tela_novo_pedido():
         st.info("Adicione quantidades para salvar o pedido.")
         return
 
+    # Verifica pedido mínimo
+    _abaixo_minimo = pedido_minimo > 0 and total_final < pedido_minimo
+    if _abaixo_minimo:
+        _falta = pedido_minimo - total_final
+        st.warning(
+            f"⚠️ **Pedido abaixo do mínimo exigido.**  \n"
+            f"Mínimo: **{_brl(pedido_minimo)}**  |  "
+            f"Atual: **{_brl(total_final)}**  |  "
+            f"Faltam: **{_brl(_falta)}**"
+        )
+
     col_s, col_l = st.columns(2)
     with col_s:
-        if st.button("💾 Salvar Pedido", type="primary", use_container_width=True):
+        if st.button("💾 Salvar Pedido", type="primary",
+                     use_container_width=True,
+                     disabled=_abaixo_minimo):
             pid = _salvar_pedido(cli_id, forn_id, pdv_id, tab_id, prazo, frete,
                                  nr_cliente, nr_fornecedor,
                                  str(data_entrega) if data_entrega else None,

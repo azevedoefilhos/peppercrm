@@ -400,8 +400,37 @@ def registrar_historico(conn, pedido_id, campo, valor_antes, valor_depois, obs=N
                        str(valor_depois) if valor_depois is not None else None, obs))
 
 
-def criar_tabelas(): pass
-def _migrar_todos(): pass
+def _migrar_pedido_minimo():
+    """Adiciona coluna pedido_minimo à tabela fornecedor, se ainda não existir."""
+    try:
+        conn = conectar()
+        if _check_supabase():
+            # PostgreSQL: verifica via information_schema
+            cur = conn._conn.cursor()
+            cur.execute("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name='fornecedor' AND column_name='pedido_minimo'
+            """)
+            existe = cur.fetchone()
+            if not existe:
+                cur.execute("ALTER TABLE fornecedor ADD COLUMN pedido_minimo NUMERIC")
+                conn.commit()
+        else:
+            # SQLite: verifica via PRAGMA
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(fornecedor)").fetchall()]
+            if "pedido_minimo" not in cols:
+                conn.execute("ALTER TABLE fornecedor ADD COLUMN pedido_minimo NUMERIC")
+                conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+def criar_tabelas():
+    _migrar_pedido_minimo()
+
+def _migrar_todos():
+    _migrar_pedido_minimo()
 
 
 def get_nome_empresa():
@@ -434,3 +463,11 @@ def _cache_categorias():
         def _fn(): return query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
         return _fn()
     except Exception: return query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
+
+
+# ── Auto-migration ao importar ───────────────────────────────────────────────
+# Roda silenciosamente na primeira importação do módulo.
+try:
+    _migrar_pedido_minimo()
+except Exception:
+    pass

@@ -1201,34 +1201,90 @@ def _campo_navegacao(pq_id, forn_id):
     }
     </style>""", unsafe_allow_html=True)
 
+    def _render_item_nav(tipo_tk, item_key, item_label, pesquisado, on_click_resultado, on_click_ean):
+        """
+        Renderiza botão de produto no modo rápido.
+        - Não pesquisado: botão full-width cinza
+        - Pesquisado: botão verde (4) + lixeira (1)
+          - Lixeira: primeiro clique pede confirmação inline; segundo exclui o item
+        """
+        _del_key = f"del_nav_{pq_id}_{tipo_tk}_{item_key}"
+        _confirmando = st.session_state.get(_del_key, False)
+
+        if _confirmando:
+            # Confirmação inline de exclusão
+            col_warn, col_sim, col_nao = st.columns([4, 1, 1])
+            col_warn.warning(f"Remover **{item_label}** da pesquisa?")
+            with col_sim:
+                if st.button("✅", key=f"conf_{_del_key}", use_container_width=True,
+                             help="Confirmar exclusão"):
+                    # Determina o item a excluir no banco
+                    if tipo_tk == "n":
+                        _row = query(
+                            "SELECT pesquisa_item_id FROM pesquisa_preco_item "
+                            "WHERE pesquisa_id=? AND produto_id=? AND produto_concorrente_id IS NULL LIMIT 1",
+                            (pq_id, item_key))
+                    else:
+                        _row = query(
+                            "SELECT pesquisa_item_id FROM pesquisa_preco_item "
+                            "WHERE pesquisa_id=? AND produto_concorrente_id=? LIMIT 1",
+                            (pq_id, item_key))
+                    if _row:
+                        _conn = conectar()
+                        _conn.execute(
+                            "DELETE FROM pesquisa_preco_item WHERE pesquisa_item_id=?",
+                            (_row[0][0],))
+                        _conn.commit(); _conn.close()
+                    st.session_state.pop(_del_key, None)
+                    st.rerun()
+            with col_nao:
+                if st.button("❌", key=f"canc_{_del_key}", use_container_width=True,
+                             help="Cancelar"):
+                    st.session_state.pop(_del_key, None)
+                    st.rerun()
+            return
+
+        if pesquisado:
+            # Produto já pesquisado: botão verde (largo) + lixeira
+            col_prod, col_del = st.columns([5, 1])
+            with col_prod:
+                if st.button(item_label, key=f"campo_nav_{tipo_tk}_{pq_id}_{item_key}",
+                             use_container_width=True, type="primary"):
+                    st.session_state[f"nav_produto_pendente_{pq_id}"] = {
+                        "resultado": on_click_resultado, "ean": on_click_ean}
+                    st.rerun()
+            with col_del:
+                if st.button("🗑️", key=f"del_btn_nav_{tipo_tk}_{pq_id}_{item_key}",
+                             use_container_width=True,
+                             help="Remover este item da pesquisa (produto volta disponível)"):
+                    st.session_state[_del_key] = True
+                    st.rerun()
+        else:
+            # Produto não pesquisado: botão full-width cinza
+            if st.button(item_label, key=f"campo_nav_{tipo_tk}_{pq_id}_{item_key}",
+                        use_container_width=True, type="secondary"):
+                st.session_state[f"nav_produto_pendente_{pq_id}"] = {
+                    "resultado": on_click_resultado, "ean": on_click_ean}
+                st.rerun()
+
     if nossos:
         st.markdown("**🟢 Nossos:**")
         for pid, desc, marca in nossos:
             _label = _lbl("n", pid, marca, desc)
             _pesquisado = _mp.get(("n", pid)) is not None
-            if st.button(_label, key=f"campo_nav_n_{pq_id}_{pid}",
-                        use_container_width=True,
-                        type="primary" if _pesquisado else "secondary"):
-                resultado = {"tipo":"nosso","produto_id":pid,
-                            "descricao":desc,"marca":marca,"ean":None,"pc_id":None}
-                st.session_state[f"nav_produto_pendente_{pq_id}"] = {
-                    "resultado": resultado, "ean": ""}
-                st.rerun()
+            _resultado = {"tipo":"nosso","produto_id":pid,
+                         "descricao":desc,"marca":marca,"ean":None,"pc_id":None}
+            _render_item_nav("n", pid, _label, _pesquisado, _resultado, "")
 
     if concs:
         st.markdown("**🔴 Concorrentes:**")
         for pc_id, desc, marca, ean in concs:
             _label = _lbl("c", pc_id, marca, desc)
             _pesquisado = _mp.get(("c", pc_id)) is not None
-            if st.button(_label, key=f"campo_nav_c_{pq_id}_{pc_id}",
-                        use_container_width=True,
-                        type="primary" if _pesquisado else "secondary"):
-                resultado = {"tipo":"conc","pc_id":pc_id,
-                            "descricao":desc,"marca":marca,
-                            "ean":ean,"auditavel":1}
-                st.session_state[f"nav_produto_pendente_{pq_id}"] = {
-                    "resultado": resultado, "ean": ean or ""}
-                st.rerun()
+            _resultado = {"tipo":"conc","pc_id":pc_id,
+                         "descricao":desc,"marca":marca,
+                         "ean":ean,"auditavel":1}
+            _render_item_nav("c", pc_id, _label, _pesquisado, _resultado, ean or "")
 
 def _coleta_modo_ean(pq_id, forn_id):
     """

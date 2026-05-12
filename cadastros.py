@@ -79,6 +79,10 @@ def _form_novo_fornecedor():
             bairro   = st.text_input("Bairro")
             cidade   = st.text_input("Cidade")
             estado   = st.selectbox("UF", _ufs())
+        pedido_minimo = st.number_input(
+            "💰 Pedido mínimo (R$)",
+            min_value=0.0, value=0.0, step=50.0, format="%.2f",
+            help="Valor mínimo por pedido. Deixe 0 para sem restrição.")
         obs    = st.text_area("Observação")
         salvar = st.form_submit_button("Salvar fornecedor")
 
@@ -89,9 +93,10 @@ def _form_novo_fornecedor():
         conn = conectar()
         conn.execute("""
             INSERT INTO fornecedor
-            (razao_social, nome_fantasia, cnpj, ie, endereco, bairro, cidade, estado, observacao, ativo)
-            VALUES (?,?,?,?,?,?,?,?,?,1)
-        """, (razao, fantasia, cnpj, ie, endereco, bairro, cidade, estado, obs))
+            (razao_social, nome_fantasia, cnpj, ie, endereco, bairro, cidade, estado, observacao, ativo, pedido_minimo)
+            VALUES (?,?,?,?,?,?,?,?,?,1,?)
+        """, (razao, fantasia, cnpj, ie, endereco, bairro, cidade, estado, obs,
+              pedido_minimo if pedido_minimo > 0 else None))
         conn.commit(); conn.close()
         _sucesso(f"Fornecedor '{fantasia}' cadastrado!")
 
@@ -116,6 +121,11 @@ def _form_editar_fornecedor(forn_id):
             ufs = _ufs()
             idx = ufs.index(f["estado"]) if f["estado"] in ufs else 0
             estado = st.selectbox("UF", ufs, index=idx)
+        _pm_atual = float(f["pedido_minimo"]) if f["pedido_minimo"] else 0.0
+        pedido_minimo = st.number_input(
+            "💰 Pedido mínimo (R$)",
+            min_value=0.0, value=_pm_atual, step=50.0, format="%.2f",
+            help="Valor mínimo por pedido. Deixe 0 para sem restrição.")
         obs   = st.text_area("Observação", f["observacao"] or "")
         ativo = st.checkbox("Ativo", value=bool(f["ativo"]))
         salvar = st.form_submit_button("Salvar alterações")
@@ -124,9 +134,11 @@ def _form_editar_fornecedor(forn_id):
         conn = conectar()
         conn.execute("""
             UPDATE fornecedor SET razao_social=?, nome_fantasia=?, cnpj=?, ie=?,
-            endereco=?, bairro=?, cidade=?, estado=?, observacao=?, ativo=?
+            endereco=?, bairro=?, cidade=?, estado=?, observacao=?, ativo=?,
+            pedido_minimo=?
             WHERE fornecedor_id=?
-        """, (razao, fantasia, cnpj, ie, endereco, bairro, cidade, estado, obs, int(ativo), forn_id))
+        """, (razao, fantasia, cnpj, ie, endereco, bairro, cidade, estado, obs, int(ativo),
+              pedido_minimo if pedido_minimo > 0 else None, forn_id))
         conn.commit(); conn.close()
         _sucesso("Fornecedor atualizado!")
 
