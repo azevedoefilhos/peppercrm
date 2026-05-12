@@ -208,8 +208,19 @@ def _lista_topicos():
         vencido = followup and followup < hoje and status not in ("Concluído","Cancelado")
 
         with st.container(border=True):
-            # 5 colunas: [selects(2.5) | conteúdo(4.0) | info(1.6) | ▼(0.4) | 🗑️(0.4)]
-            c1, c2, c3, c4, c5 = st.columns([2.5, 4.0, 1.6, 0.4, 0.4])
+            # CSS aplicado uma vez fora do loop seria ideal, mas Streamlit requer aqui
+            # Reduz padding interno dos selectboxes para compactar altura
+            st.markdown("""<style>
+            div[data-baseweb="select"] > div:first-child {
+                min-height: 32px !important;
+                padding-top: 2px !important;
+                padding-bottom: 2px !important;
+                font-size: 13px !important;
+            }
+            </style>""", unsafe_allow_html=True)
+
+            # [selects(2.2) | conteúdo(4.8) | info(1.8) | ▼(0.35) | 🗑️(0.35)]
+            c1, c2, c3, c4, c5 = st.columns([2.2, 4.8, 1.8, 0.35, 0.35])
 
             with c1:
                 novo_tipo_card = st.selectbox(
@@ -252,18 +263,16 @@ def _lista_topicos():
                     st.markdown(pills, unsafe_allow_html=True)
 
             with c3:
-                # Cor da prioridade como único alerta visual — sem repetir o texto
                 pr_cor = "#e53935" if prioridade=="Alta" else "#fb8c00" if prioridade=="Média" else "#43a047"
-                pr_ico = "●" * (1 if prioridade=="Alta" else 1)
                 _data_fmt = lambda d: (d[8:10]+"/"+d[5:7]+"/"+d[:4]) if d and len(d)>=10 else d or "—"
                 _fup_str  = _data_fmt(followup) if followup else "—"
                 _ult_str  = _data_fmt(ultima_int or data_c)
                 st.markdown(
-                    f"<div style='font-size:11px;line-height:1.7;color:#444'>"
-                    f"<span style='color:{pr_cor};font-size:14px;font-weight:900'>●</span> "
+                    f"<div style='font-size:13px;line-height:1.9;color:#444;padding-left:6px'>"
+                    f"<span style='color:{pr_cor};font-size:16px;font-weight:900'>●</span> "
                     f"{prioridade}<br/>"
-                    f"📅 {_fup_str}<br/>"
-                    f"💬 {n_int}x · {_ult_str}"
+                    f"<span style='font-size:12px'>📅 {_fup_str}<br/>"
+                    f"💬 {n_int}x · {_ult_str}</span>"
                     f"</div>",
                     unsafe_allow_html=True)
 
