@@ -4,7 +4,11 @@ import streamlit as st
 from database import query
 from configuracao import get_nome_empresa
 
-_nome = get_nome_empresa()
+@st.cache_data(ttl=300, show_spinner=False)
+def _nome_empresa():
+    return get_nome_empresa()
+
+_nome = _nome_empresa()
 
 st.set_page_config(page_title=_nome, layout="wide")
 
@@ -48,11 +52,73 @@ def _scroll_topo():
 
 
 @st.cache_data(ttl=120, show_spinner=False)
-def _coletar_alertas_oportunidade():
-    """Detecta proativamente situações que merecem atenção comercial."""
+def _dados_dashboard_cache():
+    """
+    Coleta TODOS os dados do dashboard em uma única função cacheada (TTL 120s).
+    Compatível com SQLite (local) e PostgreSQL (Railway/Supabase).
+    """
+    from datetime import date as _date
+    hoje = _date.today().isoformat()
+    mes_ini = _date.today().strftime("%Y-%m-01")
+
+    def q1(sql, p=()):
+        r = query(sql, p)
+        return r[0][0] if r else 0
+
+    # ── Pedidos do mês ────────────────────────────────────────────────────
+    r = query("""SELECT COUNT(*), ROUND(COALESCE(SUM(
+        (SELECT SUM(pi.quantidade*pi.preco_final*(1-COALESCE(p2.desconto_geral,0)/100.0))
+         FROM pedido_item pi WHERE pi.pedido_id=p2.pedido_id
+         AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO','CANCELADO'))),0),2)
+        FROM pedido p2 WHERE p2.status_pedido NOT IN ('CANCELADO','RECUSADO')
+          AND p2.data_pedido >= ?""", (mes_ini,))
+    qtd_mes   = r[0][0] if r else 0
+    total_mes = float(r[0][1]) if r and r[0][1] else 0.0
+
+    r2 = query("""SELECT ROUND(COALESCE(SUM(
+        (SELECT SUM(pi.quantidade*pi.preco_final*(1-COALESCE(p2.desconto_geral,0)/100.0))
+         FROM pedido_item pi WHERE pi.pedido_id=p2.pedido_id
+         AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO','CANCELADO'))
+        * COALESCE(p2.comissao_percentual,COALESCE(com.percentual,0))/100.0),0),2)
+        FROM pedido p2
+        LEFT JOIN comissao com ON p2.fornecedor_id=com.fornecedor_id AND com.ativo=1
+        WHERE p2.status_pedido='ENTREGUE'
+          AND p2.data_pedido >= ?""", (mes_ini,))
+
+    # ── Follow-ups vencidos e de hoje (sintaxe compatível SQLite+PG) ──────
+    fups_v = query("""
+        SELECT cr.contato_id, COALESCE(cli.nome_fantasia,'—'), cr.assunto,
+               cr.data_followup, cr.prioridade
+        FROM contato_registro cr
+        LEFT JOIN cliente cli ON cr.cliente_id=cli.cliente_id
+        WHERE cr.ativo=1 AND cr.data_followup IS NOT NULL
+          AND cr.status NOT IN ('Concluído','Cancelado','Proposta enviada')
+          AND cr.data_followup < ?
+        ORDER BY cr.data_followup""", (hoje,))
+
+    fups_h = query("""
+        SELECT cr.contato_id, COALESCE(cli.nome_fantasia,'—'),
+               cr.assunto, cr.data_followup
+        FROM contato_registro cr
+        LEFT JOIN cliente cli ON cr.cliente_id=cli.cliente_id
+        WHERE cr.ativo=1 AND cr.data_followup IS NOT NULL
+          AND cr.status NOT IN ('Concluído','Cancelado','Proposta enviada')
+          AND cr.data_followup = ?
+        ORDER BY cr.data_followup""", (hoje,))
+
+    # ── Pedidos em aberto (lista para exibição) ───────────────────────────
+    det_ped = query("""
+        SELECT p.pedido_id, p.data_pedido, c.nome_fantasia,
+               f.nome_fantasia, p.status_pedido
+        FROM pedido p
+        JOIN cliente c ON p.cliente_id=c.cliente_id
+        JOIN fornecedor f ON p.fornecedor_id=f.fornecedor_id
+        WHERE p.status_pedido IN ('ABERTO','ENVIADO')
+        ORDER BY p.data_pedido DESC LIMIT 10""")
+
+    # ── Alertas de oportunidade ────────────────────────────────────────────
     alertas = []
 
-    # 1. Negociação parada há mais de 15 dias sem nova interação
     neg_paradas = query("""
         SELECT COUNT(*), MIN(dias) FROM (
             SELECT cr.contato_id,
@@ -70,14 +136,10 @@ def _coletar_alertas_oportunidade():
         )""")
     if neg_paradas and neg_paradas[0][0]:
         qtd, min_dias = neg_paradas[0]
-        alertas.append((
-            "warn",
-            f"🤝 **{qtd} negociação(ões) parada(s)** há mais de 15 dias sem interação "
-            f"(a mais antiga há {min_dias} dias)",
-            "contatos", "neg_parada"
-        ))
+        alertas.append(("warn",
+            f"🤝 **{qtd} negociação(ões) parada(s)** há mais de 15 dias "
+            f"(a mais antiga há {min_dias} dias)", "contatos", "neg_parada"))
 
-    # 2. Clientes visitados mas nunca abordados sobre nenhum fornecedor
     sem_contato = query("""
         SELECT COUNT(*) FROM cliente c
         WHERE c.ativo=1 AND c.status IN ('Visitado','Ativo')
@@ -85,106 +147,63 @@ def _coletar_alertas_oportunidade():
               SELECT DISTINCT cliente_id FROM contato_registro
               WHERE ativo=1 AND cliente_id IS NOT NULL)""")
     if sem_contato and sem_contato[0][0]:
-        qtd = sem_contato[0][0]
-        alertas.append((
-            "info",
-            f"📋 **{qtd} cliente(s) visitado(s)/ativo(s)** sem nenhum contato registrado no app",
-            "contatos", "sem_contato"
-        ))
+        alertas.append(("info",
+            f"📋 **{sem_contato[0][0]} cliente(s) visitado(s)/ativo(s)** "
+            f"sem nenhum contato registrado", "contatos", "sem_contato"))
 
-    # 3. Contatos com follow-up agendado para os próximos 2 dias
     prox_fups = query("""
         SELECT COUNT(*) FROM contato_registro
         WHERE ativo=1
-          AND data_followup BETWEEN date('now','+1 day') AND date('now','+2 days')
-          AND status NOT IN ('Concluído','Cancelado')""")
+          AND data_followup BETWEEN date(?, '+1 day') AND date(?, '+2 days')
+          AND status NOT IN ('Concluído','Cancelado')""", (hoje, hoje))
     if prox_fups and prox_fups[0][0]:
-        qtd = prox_fups[0][0]
-        alertas.append((
-            "info",
-            f"📅 **{qtd} follow-up(s)** agendado(s) para amanhã ou depois de amanhã",
-            "contatos", "prox_fup"
-        ))
+        alertas.append(("info",
+            f"📅 **{prox_fups[0][0]} follow-up(s)** agendado(s) para "
+            f"amanhã ou depois de amanhã", "contatos", "prox_fup"))
 
-    # 4. Pesquisas de preço sem finalizar há mais de 3 dias
     pesq_rascu = query("""
         SELECT COUNT(*) FROM pesquisa_preco
         WHERE status='rascunho'
-          AND data_pesquisa <= date('now','-3 days')""")
+          AND data_pesquisa <= date(?, '-3 days')""", (hoje,))
     if pesq_rascu and pesq_rascu[0][0]:
-        qtd = pesq_rascu[0][0]
-        alertas.append((
-            "warn",
-            f"🔍 **{qtd} pesquisa(s) de preço** em rascunho há mais de 3 dias — finalizar ou descartar",
-            "pesquisa", "pesq_rascu"
-        ))
+        alertas.append(("warn",
+            f"🔍 **{pesq_rascu[0][0]} pesquisa(s)** em rascunho há mais de 3 dias",
+            "pesquisa", "pesq_rascu"))
 
-    return alertas
+    return {
+        "qtd_abertos":           q1("SELECT COUNT(*) FROM pedido WHERE status_pedido IN ('ABERTO','ENVIADO')"),
+        "qtd_mes":               qtd_mes,
+        "total_mes":             total_mes,
+        "comissao_mes":          float(r2[0][0]) if r2 and r2[0][0] else 0.0,
+        "qtd_entregas":          q1(f"SELECT COUNT(*) FROM pedido WHERE data_entrega BETWEEN date('{hoje}') AND date('{hoje}','+7 days') AND status_pedido NOT IN ('CANCELADO','RECUSADO','ENTREGUE','DEVOLVIDO')"),
+        "qtd_sem_pedido":        q1(f"SELECT COUNT(*) FROM cliente c WHERE c.ativo=1 AND NOT EXISTS (SELECT 1 FROM pedido p WHERE p.cliente_id=c.cliente_id AND p.data_pedido >= date('{hoje}','-30 days') AND p.status_pedido NOT IN ('CANCELADO','RECUSADO'))"),
+        "qtd_rupturas":          q1(f"SELECT COUNT(*) FROM pesquisa_preco_item pi JOIN pesquisa_preco pp ON pi.pesquisa_id=pp.pesquisa_id WHERE pi.ruptura=1 AND pp.data_pesquisa >= date('{hoje}','-30 days')"),
+        "qtd_contatos_mes":      q1(f"SELECT COUNT(*) FROM contato_registro cr WHERE ativo=1 AND cr.data_contato >= '{mes_ini}'"),
+        "qtd_negoc_abertas":     q1("SELECT COUNT(*) FROM contato_registro WHERE ativo=1 AND tipo_topico='Negociação' AND status NOT IN ('Concluído','Cancelado')"),
+        "qtd_clientes_contatados": q1(f"SELECT COUNT(DISTINCT cliente_id) FROM contato_registro WHERE ativo=1 AND data_contato >= date('{hoje}','-30 days') AND cliente_id IS NOT NULL"),
+        "qtd_pesquisas_mes":     q1(f"SELECT COUNT(*) FROM pesquisa_preco WHERE data_pesquisa >= '{mes_ini}'"),
+        "qtd_visitas_mes":       q1(f"SELECT COUNT(*) FROM visita_cliente WHERE data_visita >= '{mes_ini}'"),
+        "qtd_clientes_ativos":   q1("SELECT COUNT(*) FROM cliente WHERE status NOT IN ('Encerrado','Cancelado')"),
+        "qtd_prospectos":        q1("SELECT COUNT(*) FROM cliente WHERE status='Prospecto'"),
+        "fups_venc":             list(fups_v),
+        "fups_hoje":             list(fups_h),
+        "det_ped":               list(det_ped) if det_ped else [],
+        "alertas":               alertas,
+    }
 
 
 def _dashboard():
     import pandas as pd
-    from datetime import date as _date, timedelta
+    from datetime import date as _date
 
     def brl(v):
         return f"R$ {v:,.2f}".replace(",","X").replace(".",",").replace("X",".")
 
     hoje     = _date.today()
-    mes_ini  = hoje.strftime("%Y-%m-01")
     hoje_str = hoje.strftime("%d/%m/%Y")
 
-    # ⚡ Coleta todos os dados em UMA funcao cacheada (TTL 60s) ————————————
-    @st.cache_data(ttl=60, show_spinner=False)
-    def _dados_dashboard_cache():
-        def q1(sql, p=()):
-            r = query(sql, p); return r[0][0] if r else 0
-
-        r = query("""SELECT COUNT(*), ROUND(COALESCE(SUM(
-            (SELECT SUM(pi.quantidade*pi.preco_final*(1-COALESCE(p2.desconto_geral,0)/100.0))
-             FROM pedido_item pi WHERE pi.pedido_id=p2.pedido_id
-             AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO','CANCELADO'))),0),2)
-            FROM pedido p2 WHERE p2.status_pedido NOT IN ('CANCELADO','RECUSADO')
-              AND p2.data_pedido >= date('now','start of month')""")
-        qtd_mes = r[0][0] if r else 0
-        total_mes = float(r[0][1]) if r and r[0][1] else 0.0
-
-        r2 = query("""SELECT ROUND(COALESCE(SUM(
-            (SELECT SUM(pi.quantidade*pi.preco_final*(1-COALESCE(p2.desconto_geral,0)/100.0))
-             FROM pedido_item pi WHERE pi.pedido_id=p2.pedido_id
-             AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO','CANCELADO'))
-            * COALESCE(p2.comissao_percentual,COALESCE(com.percentual,0))/100.0),0),2)
-            FROM pedido p2
-            LEFT JOIN comissao com ON p2.fornecedor_id=com.fornecedor_id AND com.ativo=1
-            WHERE p2.status_pedido='ENTREGUE'
-              AND p2.data_pedido >= date('now','start of month')""")
-
-        fups_v = query("""SELECT cr.contato_id, cr.assunto, cli.nome_fantasia, cr.data_followup
-            FROM contato_registro cr LEFT JOIN cliente cli ON cr.cliente_id=cli.cliente_id
-            WHERE cr.ativo=1 AND cr.data_followup IS NOT NULL AND cr.status='Pendente'
-              AND cr.data_followup::DATE < CURRENT_DATE ORDER BY cr.data_followup""")
-        fups_h = query("""SELECT cr.contato_id, cr.assunto, cli.nome_fantasia, cr.data_followup
-            FROM contato_registro cr LEFT JOIN cliente cli ON cr.cliente_id=cli.cliente_id
-            WHERE cr.ativo=1 AND cr.data_followup IS NOT NULL AND cr.status='Pendente'
-              AND cr.data_followup::DATE = CURRENT_DATE ORDER BY cr.data_followup""")
-
-        return {
-            "qtd_abertos":  q1("SELECT COUNT(*) FROM pedido WHERE status_pedido IN ('ABERTO','ENVIADO')"),
-            "qtd_mes": qtd_mes, "total_mes": total_mes,
-            "comissao_mes": float(r2[0][0]) if r2 and r2[0][0] else 0.0,
-            "qtd_entregas": q1("SELECT COUNT(*) FROM pedido WHERE data_entrega BETWEEN date('now') AND date('now','+7 days') AND status_pedido NOT IN ('CANCELADO','RECUSADO','ENTREGUE','DEVOLVIDO')"),
-            "qtd_sem_pedido": q1("SELECT COUNT(*) FROM cliente c WHERE c.ativo=1 AND NOT EXISTS (SELECT 1 FROM pedido p WHERE p.cliente_id=c.cliente_id AND p.data_pedido >= date('now','-30 days') AND p.status_pedido NOT IN ('CANCELADO','RECUSADO'))"),
-            "qtd_rupturas": q1("SELECT COUNT(*) FROM pesquisa_preco_item pi JOIN pesquisa_preco pp ON pi.pesquisa_id=pp.pesquisa_id WHERE pi.ruptura=1 AND pp.data_pesquisa >= date('now','-30 days')"),
-            "qtd_contatos_mes": q1("SELECT COUNT(*) FROM contato_registro cr WHERE ativo=1 AND (cr.data_contato >= date('now','start of month') OR EXISTS (SELECT 1 FROM contato_interacao ci WHERE ci.contato_id=cr.contato_id AND ci.ativo=1 AND ci.data_interacao::date >= DATE_TRUNC('month', CURRENT_DATE)::date))"),
-            "qtd_negoc_abertas": q1("SELECT COUNT(*) FROM contato_registro WHERE ativo=1 AND tipo_topico='Negociação' AND status NOT IN ('Concluído','Cancelado')"),
-            "qtd_clientes_contatados": q1("SELECT COUNT(DISTINCT cliente_id) FROM contato_registro WHERE ativo=1 AND data_contato >= date('now','-30 days') AND cliente_id IS NOT NULL"),
-            "qtd_pesquisas_mes": q1("SELECT COUNT(*) FROM pesquisa_preco WHERE data_pesquisa >= date('now','start of month')"),
-            "qtd_visitas_mes": q1("SELECT COUNT(*) FROM visita_cliente WHERE data_visita >= date('now','start of month')"),
-            "qtd_clientes_ativos": q1("SELECT COUNT(*) FROM cliente WHERE status NOT IN ('Encerrado','Cancelado')"),
-            "qtd_prospectos": q1("SELECT COUNT(*) FROM cliente WHERE status='Prospecto'"),
-            "fups_venc": list(fups_v), "fups_hoje": list(fups_h),
-        }
-
-    _d = _dados_dashboard_cache()
+    # ⚡ Tudo vem do cache único — zero queries extras nesta função
+    _d                   = _dados_dashboard_cache()
     qtd_abertos          = _d["qtd_abertos"]
     qtd_mes              = _d["qtd_mes"]
     total_mes            = _d["total_mes"]
@@ -201,6 +220,8 @@ def _dashboard():
     qtd_prospectos       = _d["qtd_prospectos"]
     fups_venc            = _d["fups_venc"]
     fups_hoje            = _d["fups_hoje"]
+    det_ped              = _d["det_ped"]
+    alertas              = _d["alertas"]
     total_venc           = len(fups_venc)
     total_hoje           = len(fups_hoje)
 
@@ -343,7 +364,6 @@ def _dashboard():
     # ═════════════════════════════════════════════════════════════════════
     # BLOCO 5 — ALERTAS DE OPORTUNIDADE
     # ═════════════════════════════════════════════════════════════════════
-    alertas = _coletar_alertas_oportunidade()
     if alertas:
         st.divider()
         st.caption("💡 Oportunidades detectadas")
@@ -367,14 +387,6 @@ def _dashboard():
     if qtd_abertos > 0:
         st.divider()
         st.markdown("**Pedidos aguardando confirmacao**")
-        det_ped = query("""
-            SELECT p.pedido_id, p.data_pedido, c.nome_fantasia,
-                   f.nome_fantasia, p.status_pedido
-            FROM pedido p
-            JOIN cliente c ON p.cliente_id=c.cliente_id
-            JOIN fornecedor f ON p.fornecedor_id=f.fornecedor_id
-            WHERE p.status_pedido IN ('ABERTO','ENVIADO')
-            ORDER BY p.data_pedido DESC LIMIT 10""")
         if det_ped:
             st.dataframe(pd.DataFrame(det_ped,
                 columns=["#","Data","Cliente","Fornecedor","Status"]),
@@ -535,20 +547,20 @@ if pagina == "home":
         if st.button("🎯 Metas",                          use_container_width=True): ir("metas")
 
 
-elif pagina == "configuracao":  from configuracao import tela_configuracao; from configuracao import tela_configuracao; tela_configuracao()
-elif pagina == "fornecedores":  from cadastros import tela_fornecedores; from cadastros import tela_fornecedores; tela_fornecedores()
-elif pagina == "produtos":      from cadastros import tela_produtos; from cadastros import tela_produtos; tela_produtos()
-elif pagina == "tabelas_preco": from cadastros import tela_tabelas_preco; from cadastros import tela_tabelas_preco; tela_tabelas_preco()
-elif pagina == "clientes":      from cadastros import tela_clientes; from cadastros import tela_clientes; tela_clientes()
-elif pagina == "pedido":        from pedido import tela_novo_pedido; from pedido import tela_novo_pedido; tela_novo_pedido()
-elif pagina == "ver_pedidos":   from ver_pedidos import tela_ver_pedidos; from ver_pedidos import tela_ver_pedidos; tela_ver_pedidos()
-elif pagina == "relatorios":    from relatorios import tela_relatorios; from relatorios import tela_relatorios; tela_relatorios()
-elif pagina == "comissoes":     from comissoes import tela_comissoes; from comissoes import tela_comissoes; tela_comissoes()
-elif pagina == "visitas":       from visitas import tela_visitas; from visitas import tela_visitas; tela_visitas()
-elif pagina == "mix_analise":   from mix_analise import tela_mix_analise; from mix_analise import tela_mix_analise; tela_mix_analise()
+elif pagina == "configuracao":  from configuracao import tela_configuracao; tela_configuracao()
+elif pagina == "fornecedores":  from cadastros import tela_fornecedores; tela_fornecedores()
+elif pagina == "produtos":      from cadastros import tela_produtos; tela_produtos()
+elif pagina == "tabelas_preco": from cadastros import tela_tabelas_preco; tela_tabelas_preco()
+elif pagina == "clientes":      from cadastros import tela_clientes; tela_clientes()
+elif pagina == "pedido":        from pedido import tela_novo_pedido; tela_novo_pedido()
+elif pagina == "ver_pedidos":   from ver_pedidos import tela_ver_pedidos; tela_ver_pedidos()
+elif pagina == "relatorios":    from relatorios import tela_relatorios; tela_relatorios()
+elif pagina == "comissoes":     from comissoes import tela_comissoes; tela_comissoes()
+elif pagina == "visitas":       from visitas import tela_visitas; tela_visitas()
+elif pagina == "mix_analise":   from mix_analise import tela_mix_analise; tela_mix_analise()
 elif pagina == "pesquisa":      from pesquisa import tela_pesquisa; tela_pesquisa()
-elif pagina == "concorrentes":        from concorrentes import tela_concorrentes; from concorrentes import tela_concorrentes; tela_concorrentes()
-elif pagina == "analise_competitiva": from analise_competitiva import tela_analise_competitiva; from analise_competitiva import tela_analise_competitiva; tela_analise_competitiva()
-elif pagina == "contatos":            from contatos import tela_contatos; from contatos import tela_contatos; tela_contatos()
-elif pagina == "metas":               from metas import tela_metas; from metas import tela_metas; tela_metas()
+elif pagina == "concorrentes":        from concorrentes import tela_concorrentes; tela_concorrentes()
+elif pagina == "analise_competitiva": from analise_competitiva import tela_analise_competitiva; tela_analise_competitiva()
+elif pagina == "contatos":            from contatos import tela_contatos; tela_contatos()
+elif pagina == "metas":               from metas import tela_metas; tela_metas()
 elif pagina == "busca_global":        _tela_busca_global()
