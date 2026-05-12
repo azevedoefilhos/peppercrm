@@ -199,6 +199,64 @@ def _lista_topicos():
     hoje = date.today().isoformat()
     st.caption(f"**{len(topicos)}** registro(s)")
 
+    # ── Exportação PDF consolidado ────────────────────────────────────────
+    with st.expander("📄 Exportar relatório PDF consolidado", expanded=False):
+        col_modo, col_per2 = st.columns([2, 2])
+        with col_modo:
+            modo_int = st.radio(
+                "Interações a incluir",
+                ["Historico completo de cada topico",
+                 "Apenas interacoes do periodo filtrado"],
+                key="pdf_con_modo",
+                help="Completo: todo o histórico do tópico. "
+                     "Período: só as interações que caem no filtro de data.")
+        with col_per2:
+            # Datas do período para filtrar interações (só relevante no modo período)
+            _usar_datas = "periodo" in modo_int.lower() or "periodo" in modo_int
+            data_ini_pdf = st.date_input(
+                "De", value=date.today() - timedelta(days=30),
+                key="pdf_con_ini",
+                disabled=("completo" in modo_int.lower()))
+            data_fim_pdf = st.date_input(
+                "Ate", value=date.today(),
+                key="pdf_con_fim",
+                disabled=("completo" in modo_int.lower()))
+
+        # Monta descrição dos filtros aplicados para capa do PDF
+        _filtros_desc = {
+            "Periodo (topicos)": fil_periodo if fil_periodo != "Todos" else "Todos",
+            "Fornecedor":        fil_forn[1] if fil_forn[0] else "Todos",
+            "Tipo":              fil_tipo if fil_tipo != "Todos" else "Todos",
+            "Status":            fil_status if fil_status != "Todos" else "Todos",
+            "Prioridade":        fil_prior if fil_prior != "Todas" else "Todas",
+            "Busca":             busca.strip() if busca.strip() else "—",
+            "Historico":         ("Completo" if "completo" in modo_int.lower()
+                                  else f"Periodo: {data_ini_pdf} a {data_fim_pdf}"),
+            "Total de topicos":  str(len(topicos)),
+        }
+        _modo_key = ("completo" if "completo" in modo_int.lower() else "periodo")
+        _ids = [row[0] for row in topicos]
+        _pdf_con_key = f"pdf_con_cache_{hash(str(_ids)+_modo_key)}"
+
+        if _pdf_con_key not in st.session_state:
+            with st.spinner("Preparando PDF..."):
+                _pdf_bytes = _gerar_pdf_consolidado(
+                    _ids, _filtros_desc, _modo_key,
+                    data_ini=data_ini_pdf.isoformat() if _modo_key=="periodo" else None,
+                    data_fim=data_fim_pdf.isoformat() if _modo_key=="periodo" else None)
+            st.session_state[_pdf_con_key] = _pdf_bytes
+
+        _hoje_fn = date.today().strftime("%Y%m%d")
+        _forn_fn = (fil_forn[1].replace(" ","_")[:15] if fil_forn[0] else "geral")
+        st.download_button(
+            label="⬇️ Baixar PDF",
+            data=st.session_state[_pdf_con_key],
+            file_name=f"contatos_{_forn_fn}_{_hoje_fn}.pdf",
+            mime="application/pdf",
+            key="pdf_con_dl",
+            use_container_width=True,
+            type="primary")
+
     for row in topicos:
         (cid, tipo, assunto, entidade, tipo_ent,
          status, prioridade, data_c, followup,
@@ -532,7 +590,297 @@ def _gerar_pdf_topico(cid):
     return buf.read()
 
 
-def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual):
+def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
+                           data_ini=None, data_fim=None):
+    """
+    Gera PDF consolidado com múltiplos tópicos.
+    modo_interacoes: 'periodo' = só interações do período
+                     'completo' = histórico completo de cada tópico
+    """
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors
+    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
+                                    Table, TableStyle, HRFlowable, PageBreak)
+    from reportlab.lib.enums import TA_CENTER
+    import io as _io
+    from datetime import date as _date
+
+    buf = _io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=2*cm, rightMargin=2*cm,
+                            topMargin=2*cm, bottomMargin=2*cm)
+
+    VERDE   = colors.HexColor("#2E7D32")
+    VERDE_L = colors.HexColor("#E8F5E9")
+    CINZA   = colors.HexColor("#F5F5F5")
+    TEXTO   = colors.HexColor("#212121")
+    LARANJA = colors.HexColor("#E65100")
+
+    estilos = getSampleStyleSheet()
+    s_capa_titulo = ParagraphStyle("ct", parent=estilos["Title"],
+                                   fontSize=20, textColor=VERDE,
+                                   spaceAfter=6, leading=24)
+    s_capa_sub  = ParagraphStyle("cs", parent=estilos["Normal"],
+                                 fontSize=11, textColor=colors.HexColor("#555"),
+                                 spaceAfter=4)
+    s_topico_h  = ParagraphStyle("th", parent=estilos["Normal"],
+                                 fontSize=12, textColor=VERDE,
+                                 fontName="Helvetica-Bold", spaceAfter=4,
+                                 spaceBefore=6)
+    s_label     = ParagraphStyle("lb", parent=estilos["Normal"],
+                                 fontSize=8, textColor=colors.HexColor("#777"),
+                                 spaceAfter=1)
+    s_valor     = ParagraphStyle("vl", parent=estilos["Normal"],
+                                 fontSize=10, textColor=TEXTO,
+                                 spaceAfter=4)
+    s_inter_t   = ParagraphStyle("it", parent=estilos["Normal"],
+                                 fontSize=10, textColor=VERDE,
+                                 fontName="Helvetica-Bold", spaceAfter=3)
+    s_inter_tx  = ParagraphStyle("itx", parent=estilos["Normal"],
+                                 fontSize=9, textColor=TEXTO,
+                                 spaceAfter=3, leading=13)
+    s_total_h   = ParagraphStyle("toh", parent=estilos["Normal"],
+                                 fontSize=11, textColor=LARANJA,
+                                 fontName="Helvetica-Bold", spaceAfter=4,
+                                 spaceBefore=8)
+    s_rodape    = ParagraphStyle("rp", parent=estilos["Normal"],
+                                 fontSize=7, textColor=colors.HexColor("#999"),
+                                 alignment=TA_CENTER)
+
+    VIA_LABEL = {"WhatsApp":"WhatsApp","E-mail":"E-mail","Telefone":"Telefone",
+                 "Visita presencial":"Visita presencial","Reuniao":"Reuniao",
+                 "Reunião":"Reuniao","Videoconferencia":"Videoconferencia",
+                 "Videoconferência":"Videoconferencia","Outro":"Outro"}
+
+    def _fd(d):
+        if not d: return "—"
+        try: return f"{str(d)[8:10]}/{str(d)[5:7]}/{str(d)[:4]}"
+        except: return str(d)
+
+    hoje_str = _date.today().strftime("%d/%m/%Y")
+    elementos = []
+
+    # ── CAPA ─────────────────────────────────────────────
+    elementos.append(Spacer(1, 1*cm))
+    elementos.append(Paragraph("PepperCRM", s_capa_titulo))
+    elementos.append(Paragraph("Relatorio de Contatos e Negociacoes", s_capa_sub))
+    elementos.append(HRFlowable(width="100%", thickness=2, color=VERDE, spaceAfter=12))
+
+    # Filtros aplicados
+    filtros_rows = [[Paragraph(f"<b>{k}</b>", s_label),
+                     Paragraph(v, s_valor)]
+                    for k, v in filtros_desc.items()]
+    t_filtros = Table(filtros_rows, colWidths=[4*cm, 13.1*cm])
+    t_filtros.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), CINZA),
+        ("BOX", (0,0), (-1,-1), 0.5, colors.HexColor("#CCC")),
+        ("INNERGRID", (0,0), (-1,-1), 0.3, colors.HexColor("#DDD")),
+        ("TOPPADDING", (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+        ("LEFTPADDING", (0,0), (-1,-1), 6),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+    ]))
+    elementos.append(t_filtros)
+    elementos.append(Spacer(1, 0.5*cm))
+
+    # Totais gerais (calculados depois — placeholder, preenchido abaixo)
+    total_topicos   = len(topicos_ids)
+    total_interacoes = 0
+    contagem_via    = {}
+    contagem_forn   = {}
+
+    # ── TÓPICOS ───────────────────────────────────────────
+    elementos.append(PageBreak())
+
+    for idx_t, cid in enumerate(topicos_ids, 1):
+        cr = query("""
+            SELECT cr.assunto, cr.tipo_topico, cr.status, cr.prioridade,
+                   cr.data_contato, cr.data_followup, cr.observacao,
+                   COALESCE(c.nome_fantasia, f.nome_fantasia, '—') AS entidade,
+                   cr.tipo_entidade
+            FROM contato_registro cr
+            LEFT JOIN cliente    c ON cr.cliente_id    = c.cliente_id
+            LEFT JOIN fornecedor f ON cr.fornecedor_id = f.fornecedor_id
+            WHERE cr.contato_id=?""", (cid,))
+        if not cr: continue
+        assunto, tipo, status, prioridade, data_c, followup, obs, entidade, tipo_ent = cr[0]
+
+        forns = query("""SELECT fn.nome_fantasia FROM contato_x_fornecedor cxf
+            JOIN fornecedor fn ON cxf.fornecedor_id=fn.fornecedor_id
+            WHERE cxf.contato_id=?""", (cid,))
+        forns_str = " / ".join(f[0] for f in forns) if forns else "—"
+        for f in forns:
+            contagem_forn[f[0]] = contagem_forn.get(f[0], 0) + 1
+
+        # Busca interações conforme modo
+        if modo_interacoes == "periodo" and data_ini and data_fim:
+            ints = query("""
+                SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
+                       ci.descricao, ci.resultado, ci.data_followup
+                FROM contato_interacao ci
+                WHERE ci.contato_id=? AND ci.ativo=1
+                  AND ci.data_interacao >= ? AND ci.data_interacao <= ?
+                ORDER BY ci.data_interacao ASC""", (cid, data_ini, data_fim))
+        else:
+            ints = query("""
+                SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
+                       ci.descricao, ci.resultado, ci.data_followup
+                FROM contato_interacao ci
+                WHERE ci.contato_id=? AND ci.ativo=1
+                ORDER BY ci.data_interacao ASC""", (cid,))
+
+        total_interacoes += len(ints)
+        for irow in ints:
+            via = irow[1] or "Outro"
+            contagem_via[via] = contagem_via.get(via, 0) + 1
+
+        # Cabeçalho do tópico
+        elementos.append(HRFlowable(width="100%", thickness=1,
+                                    color=VERDE_L, spaceAfter=4))
+        elementos.append(Paragraph(
+            f"#{idx_t}  {assunto or '—'}", s_topico_h))
+
+        # Ficha resumida
+        ico_ent = "Cliente" if tipo_ent == "cliente" else "Fornecedor"
+        ficha = [
+            ["Tipo", tipo or "Contato", "Status", status or "—"],
+            [ico_ent, entidade, "Prioridade", prioridade or "—"],
+            ["Data inicio", _fd(data_c), "Prox. contato", _fd(followup)],
+            ["Fornecedores", forns_str, "Interacoes", str(len(ints))],
+        ]
+        if obs:
+            ficha.append(["Observacao", obs, "", ""])
+        t_f = Table(
+            [[Paragraph(f"<b>{c}</b>" if i%2==0 else c,
+                        s_label if i%2==0 else s_valor)
+              for i,c in enumerate(linha)]
+             for linha in ficha],
+            colWidths=[3*cm, 6.5*cm, 3*cm, 4.6*cm])
+        t_f.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), CINZA),
+            ("BOX", (0,0), (-1,-1), 0.5, colors.HexColor("#CCC")),
+            ("INNERGRID", (0,0), (-1,-1), 0.3, colors.HexColor("#DDD")),
+            ("TOPPADDING", (0,0), (-1,-1), 4),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+            ("LEFTPADDING", (0,0), (-1,-1), 6),
+            ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ]))
+        elementos.append(t_f)
+        elementos.append(Spacer(1, 0.3*cm))
+
+        # Interações
+        modo_lbl = "do periodo" if modo_interacoes == "periodo" else "completo"
+        elementos.append(Paragraph(
+            f"<b>Historico {modo_lbl} — {len(ints)} interacao(oes)</b>", s_inter_t))
+
+        if not ints:
+            elementos.append(Paragraph(
+                "Nenhuma interacao no periodo selecionado.", s_inter_tx))
+        else:
+            for idx_i, irow in enumerate(ints, 1):
+                data_i, via, pessoa, desc, result, fup_i = irow
+                via_lbl = VIA_LABEL.get(via, via or "—")
+                cab = f"<b>#{idx_i} — {_fd(data_i)}  |  {via_lbl}"
+                if pessoa: cab += f"  |  {pessoa}"
+                cab += "</b>"
+                linhas = [[Paragraph(cab, s_inter_t)]]
+                if desc:
+                    linhas.append([Paragraph(
+                        f"<b>O que foi tratado:</b><br/>{desc}", s_inter_tx)])
+                if result:
+                    linhas.append([Paragraph(
+                        f"<b>Resultado / proximo passo:</b><br/>{result}", s_inter_tx)])
+                if fup_i:
+                    linhas.append([Paragraph(
+                        f"Proximo contato: <b>{_fd(fup_i)}</b>", s_inter_tx)])
+                t_i = Table(linhas, colWidths=[17.1*cm])
+                bg = VERDE_L if idx_i % 2 == 0 else colors.white
+                t_i.setStyle(TableStyle([
+                    ("BACKGROUND", (0,0), (-1,-1), bg),
+                    ("BOX", (0,0), (-1,-1), 0.5, colors.HexColor("#C8E6C9")),
+                    ("TOPPADDING", (0,0), (-1,-1), 5),
+                    ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+                    ("LEFTPADDING", (0,0), (-1,-1), 8),
+                    ("RIGHTPADDING", (0,0), (-1,-1), 8),
+                ]))
+                elementos.append(t_i)
+                elementos.append(Spacer(1, 0.15*cm))
+
+        elementos.append(Spacer(1, 0.4*cm))
+
+    # ── TOTALIZADOR ───────────────────────────────────────
+    elementos.append(PageBreak())
+    elementos.append(Paragraph("Resumo Geral", s_total_h))
+    elementos.append(HRFlowable(width="100%", thickness=1.5,
+                                color=LARANJA, spaceAfter=8))
+
+    resumo = [
+        ["Topicos incluidos", str(total_topicos)],
+        ["Total de interacoes", str(total_interacoes)],
+    ]
+    t_res = Table(resumo, colWidths=[8*cm, 9.1*cm])
+    t_res.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), CINZA),
+        ("BOX", (0,0), (-1,-1), 0.5, colors.HexColor("#CCC")),
+        ("INNERGRID", (0,0), (-1,-1), 0.3, colors.HexColor("#DDD")),
+        ("FONTNAME", (0,0), (0,-1), "Helvetica-Bold"),
+        ("FONTSIZE", (0,0), (-1,-1), 10),
+        ("TOPPADDING", (0,0), (-1,-1), 5),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+        ("LEFTPADDING", (0,0), (-1,-1), 8),
+    ]))
+    elementos.append(t_res)
+    elementos.append(Spacer(1, 0.4*cm))
+
+    if contagem_via:
+        elementos.append(Paragraph("<b>Interacoes por via:</b>", s_inter_t))
+        rows_via = [[Paragraph(f"<b>{via}</b>", s_label),
+                     Paragraph(str(qtd), s_valor)]
+                    for via, qtd in sorted(contagem_via.items(),
+                                          key=lambda x: -x[1])]
+        t_via = Table(rows_via, colWidths=[8*cm, 9.1*cm])
+        t_via.setStyle(TableStyle([
+            ("BOX", (0,0), (-1,-1), 0.5, colors.HexColor("#CCC")),
+            ("INNERGRID", (0,0), (-1,-1), 0.3, colors.HexColor("#DDD")),
+            ("TOPPADDING", (0,0), (-1,-1), 4),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+            ("LEFTPADDING", (0,0), (-1,-1), 8),
+        ]))
+        elementos.append(t_via)
+        elementos.append(Spacer(1, 0.4*cm))
+
+    if contagem_forn:
+        elementos.append(Paragraph("<b>Topicos por fornecedor:</b>", s_inter_t))
+        rows_forn = [[Paragraph(f"<b>{fn}</b>", s_label),
+                      Paragraph(str(qtd), s_valor)]
+                     for fn, qtd in sorted(contagem_forn.items(),
+                                           key=lambda x: -x[1])]
+        t_forn = Table(rows_forn, colWidths=[8*cm, 9.1*cm])
+        t_forn.setStyle(TableStyle([
+            ("BOX", (0,0), (-1,-1), 0.5, colors.HexColor("#CCC")),
+            ("INNERGRID", (0,0), (-1,-1), 0.3, colors.HexColor("#DDD")),
+            ("TOPPADDING", (0,0), (-1,-1), 4),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+            ("LEFTPADDING", (0,0), (-1,-1), 8),
+        ]))
+        elementos.append(t_forn)
+
+    # ── Rodapé ────────────────────────────────────────────
+    elementos.append(Spacer(1, 0.8*cm))
+    elementos.append(HRFlowable(width="100%", thickness=0.5,
+                                color=colors.HexColor("#CCC"), spaceAfter=4))
+    elementos.append(Paragraph(
+        f"PepperCRM — Azevedo e Filhos Representacao Comercial  |  "
+        f"Gerado em {hoje_str}  |  Confidencial", s_rodape))
+
+    doc.build(elementos)
+    buf.seek(0)
+    return buf.read()
+
+
+
     """Painel completo: histórico editável + nova interação + edição do tópico."""
     st.divider()
 
