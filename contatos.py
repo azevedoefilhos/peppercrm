@@ -208,23 +208,51 @@ def _lista_topicos():
         vencido = followup and followup < hoje and status not in ("Concluído","Cancelado")
 
         with st.container(border=True):
-            # Layout: [controles (2.2) | conteúdo (3.5) | info (1.8) | ▼ (0.5) | 🗑️ (0.5)]
-            c1, c2, c3, c4, c5 = st.columns([2.2, 3.5, 1.8, 0.5, 0.5])
+            # Layout: [controles (3.2) | conteúdo (4.0) | info (1.5) | ▼ (0.4) | 🗑️ (0.4)]
+            c1, c2, c3, c4, c5 = st.columns([3.2, 4.0, 1.6, 0.4, 0.4])
 
             with c1:
-                # As 3 listas empilhadas verticalmente com labels visíveis
-                novo_tipo_card = st.selectbox(
-                    "Tipo", TIPO_TOPICO,
-                    index=TIPO_TOPICO.index(tipo) if tipo in TIPO_TOPICO else 0,
-                    key=f"ct_tipo_{cid}")
-                novo_st_card = st.selectbox(
-                    "Status", STATUS_TOPICO,
-                    index=STATUS_TOPICO.index(status) if status in STATUS_TOPICO else 0,
-                    key=f"ct_st_{cid}")
-                novo_pr_card = st.selectbox(
-                    "Prioridade", PRIOR,
-                    index=PRIOR.index(prioridade) if prioridade in PRIOR else 1,
-                    key=f"ct_pr_{cid}")
+                # Label inline via markdown + selectbox com label oculto,
+                # usando CSS para alinhar verticalmente em 3 linhas compactas
+                st.markdown("""<style>
+                .sel-row {display:flex;align-items:center;gap:6px;margin-bottom:-18px}
+                .sel-lbl {font-size:11px;color:#555;min-width:62px;text-align:right;
+                           font-weight:600;white-space:nowrap}
+                </style>""", unsafe_allow_html=True)
+
+                _lbl_col, _sel_col = st.columns([1, 2.2])
+                with _lbl_col:
+                    st.markdown("<p style='font-size:11px;color:#555;font-weight:600;"
+                                "text-align:right;margin-top:32px'>Tipo</p>",
+                                unsafe_allow_html=True)
+                with _sel_col:
+                    novo_tipo_card = st.selectbox(
+                        "Tipo", TIPO_TOPICO,
+                        index=TIPO_TOPICO.index(tipo) if tipo in TIPO_TOPICO else 0,
+                        key=f"ct_tipo_{cid}", label_visibility="collapsed")
+
+                _lbl_col2, _sel_col2 = st.columns([1, 2.2])
+                with _lbl_col2:
+                    st.markdown("<p style='font-size:11px;color:#555;font-weight:600;"
+                                "text-align:right;margin-top:32px'>Status</p>",
+                                unsafe_allow_html=True)
+                with _sel_col2:
+                    novo_st_card = st.selectbox(
+                        "Status", STATUS_TOPICO,
+                        index=STATUS_TOPICO.index(status) if status in STATUS_TOPICO else 0,
+                        key=f"ct_st_{cid}", label_visibility="collapsed")
+
+                _lbl_col3, _sel_col3 = st.columns([1, 2.2])
+                with _lbl_col3:
+                    st.markdown("<p style='font-size:11px;color:#555;font-weight:600;"
+                                "text-align:right;margin-top:32px'>Prior.</p>",
+                                unsafe_allow_html=True)
+                with _sel_col3:
+                    novo_pr_card = st.selectbox(
+                        "Prioridade", PRIOR,
+                        index=PRIOR.index(prioridade) if prioridade in PRIOR else 1,
+                        key=f"ct_pr_{cid}", label_visibility="collapsed")
+
                 # Salva qualquer mudança nas 3 listas de uma vez
                 _changed = (novo_tipo_card != tipo or
                             novo_st_card   != status or
@@ -253,11 +281,20 @@ def _lista_topicos():
                     st.markdown(pills, unsafe_allow_html=True)
 
             with c3:
-                pr_ico = "🔴" if prioridade=="Alta" else "🟡" if prioridade=="Média" else "🟢"
-                st.caption(f"{pr_ico} {prioridade}")
+                # Cor da prioridade como único alerta visual — sem repetir o texto
+                pr_cor = "#e53935" if prioridade=="Alta" else "#fb8c00" if prioridade=="Média" else "#43a047"
+                pr_ico = "●" * (1 if prioridade=="Alta" else 1)
                 _data_fmt = lambda d: (d[8:10]+"/"+d[5:7]+"/"+d[:4]) if d and len(d)>=10 else d or "—"
-                st.caption(f"📅 {_data_fmt(followup or data_c)}")
-                st.caption(f"💬 {n_int} int.  |  {_data_fmt(ultima_int or data_c)}")
+                _fup_str  = _data_fmt(followup) if followup else "—"
+                _ult_str  = _data_fmt(ultima_int or data_c)
+                st.markdown(
+                    f"<div style='font-size:11px;line-height:1.7;color:#444'>"
+                    f"<span style='color:{pr_cor};font-size:14px;font-weight:900'>●</span> "
+                    f"{prioridade}<br/>"
+                    f"📅 {_fup_str}<br/>"
+                    f"💬 {n_int}x · {_ult_str}"
+                    f"</div>",
+                    unsafe_allow_html=True)
 
             with c4:
                 label = "▲" if aberto else "▼"
