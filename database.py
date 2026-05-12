@@ -401,27 +401,29 @@ def registrar_historico(conn, pedido_id, campo, valor_antes, valor_depois, obs=N
 
 
 def _migrar_pedido_minimo():
-    """Adiciona coluna pedido_minimo à tabela fornecedor, se ainda não existir."""
+    """
+    Adiciona coluna pedido_minimo à tabela fornecedor, se ainda não existir.
+    - SQLite local: acessa o .db diretamente (sem rede, instantâneo).
+    - Supabase/PostgreSQL: usa ADD COLUMN IF NOT EXISTS (idempotente).
+    """
     try:
-        conn = conectar()
         if _check_supabase():
-            # PostgreSQL: verifica via information_schema
-            cur = conn._conn.cursor()
-            cur.execute("""
-                SELECT column_name FROM information_schema.columns
-                WHERE table_name='fornecedor' AND column_name='pedido_minimo'
-            """)
-            existe = cur.fetchone()
-            if not existe:
-                cur.execute("ALTER TABLE fornecedor ADD COLUMN pedido_minimo NUMERIC")
-                conn.commit()
+            # PostgreSQL — ADD COLUMN IF NOT EXISTS não falha se já existir
+            execute_write(
+                "ALTER TABLE fornecedor ADD COLUMN IF NOT EXISTS pedido_minimo NUMERIC"
+            )
         else:
-            # SQLite: verifica via PRAGMA
-            cols = [r[1] for r in conn.execute("PRAGMA table_info(fornecedor)").fetchall()]
-            if "pedido_minimo" not in cols:
-                conn.execute("ALTER TABLE fornecedor ADD COLUMN pedido_minimo NUMERIC")
-                conn.commit()
-        conn.close()
+            # SQLite direto — não passa pelo conectar() para evitar travamento
+            import sqlite3 as _sq
+            _db = os.path.join(os.path.dirname(__file__), "peppercrm.db")
+            if not os.path.exists(_db):
+                return
+            _conn = _sq.connect(_db)
+            _cols = [r[1] for r in _conn.execute("PRAGMA table_info(fornecedor)").fetchall()]
+            if "pedido_minimo" not in _cols:
+                _conn.execute("ALTER TABLE fornecedor ADD COLUMN pedido_minimo NUMERIC")
+                _conn.commit()
+            _conn.close()
     except Exception:
         pass
 
@@ -431,6 +433,14 @@ def criar_tabelas():
 
 def _migrar_todos():
     _migrar_pedido_minimo()
+
+
+# ── Auto-migration ao importar ───────────────────────────────────────────────
+# SQLite: instantâneo, sem rede. Supabase: IF NOT EXISTS é idempotente.
+try:
+    _migrar_pedido_minimo()
+except Exception:
+    pass
 
 
 def get_nome_empresa():
@@ -463,11 +473,3 @@ def _cache_categorias():
         def _fn(): return query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
         return _fn()
     except Exception: return query("SELECT categoria_id, nome_categoria FROM categoria WHERE ativo=1 ORDER BY nome_categoria")
-
-
-# ── Auto-migration ao importar ───────────────────────────────────────────────
-# Roda silenciosamente na primeira importação do módulo.
-try:
-    _migrar_pedido_minimo()
-except Exception:
-    pass
