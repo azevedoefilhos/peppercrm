@@ -49,6 +49,12 @@ def tela_contatos():
     st.header("📞 Contatos & Negociações")
     if st.button("⬅ Voltar"): _ir("home")
 
+    # Scroll para o topo quando sinalizado (ex: após salvar interação)
+    if st.session_state.pop("_scroll_topo", False):
+        st.components.v1.html(
+            "<script>window.parent.document.querySelector('section.main').scrollTo(0,0);</script>",
+            height=0)
+
     ABAS = {
         "lista":   "📋 Registros",
         "novo":    "➕ Novo",
@@ -202,26 +208,36 @@ def _lista_topicos():
         vencido = followup and followup < hoje and status not in ("Concluído","Cancelado")
 
         with st.container(border=True):
-            c1, c2, c3, c4, c5, c6 = st.columns([0.7, 3.0, 1.8, 1.2, 0.6, 0.5])
+            # Layout: [controles (2.2) | conteúdo (3.5) | info (1.8) | ▼ (0.5) | 🗑️ (0.5)]
+            c1, c2, c3, c4, c5 = st.columns([2.2, 3.5, 1.8, 0.5, 0.5])
 
             with c1:
+                # As 3 listas empilhadas verticalmente com labels visíveis
                 novo_tipo_card = st.selectbox(
                     "Tipo", TIPO_TOPICO,
                     index=TIPO_TOPICO.index(tipo) if tipo in TIPO_TOPICO else 0,
-                    key=f"ct_tipo_{cid}",
-                    label_visibility="collapsed")
+                    key=f"ct_tipo_{cid}")
                 novo_st_card = st.selectbox(
                     "Status", STATUS_TOPICO,
                     index=STATUS_TOPICO.index(status) if status in STATUS_TOPICO else 0,
-                    key=f"ct_st_{cid}",
-                    label_visibility="collapsed")
-                if novo_tipo_card != tipo or novo_st_card != status:
+                    key=f"ct_st_{cid}")
+                novo_pr_card = st.selectbox(
+                    "Prioridade", PRIOR,
+                    index=PRIOR.index(prioridade) if prioridade in PRIOR else 1,
+                    key=f"ct_pr_{cid}")
+                # Salva qualquer mudança nas 3 listas de uma vez
+                _changed = (novo_tipo_card != tipo or
+                            novo_st_card   != status or
+                            novo_pr_card   != prioridade)
+                if _changed:
                     conn = conectar()
-                    conn.execute("""UPDATE contato_registro SET tipo_topico=?, status=?
-                        WHERE contato_id=?""", (novo_tipo_card, novo_st_card, cid))
+                    conn.execute("""UPDATE contato_registro
+                        SET tipo_topico=?, status=?, prioridade=?
+                        WHERE contato_id=?""",
+                        (novo_tipo_card, novo_st_card, novo_pr_card, cid))
                     conn.commit(); conn.close()
                     st.session_state["ct_msg"] = (
-                        f"✅ '{assunto[:35]}' → {novo_tipo_card} · {novo_st_card}")
+                        f"✅ '{assunto[:30]}' → {novo_st_card} · {novo_pr_card}")
                     st.rerun()
 
             with c2:
@@ -239,24 +255,11 @@ def _lista_topicos():
             with c3:
                 pr_ico = "🔴" if prioridade=="Alta" else "🟡" if prioridade=="Média" else "🟢"
                 st.caption(f"{pr_ico} {prioridade}")
-                st.caption(f"📅 {followup or data_c}")
-                st.caption(f"💬 {n_int} int.  |  {ultima_int or data_c}")
+                _data_fmt = lambda d: (d[8:10]+"/"+d[5:7]+"/"+d[:4]) if d and len(d)>=10 else d or "—"
+                st.caption(f"📅 {_data_fmt(followup or data_c)}")
+                st.caption(f"💬 {n_int} int.  |  {_data_fmt(ultima_int or data_c)}")
 
             with c4:
-                novo_pr_card = st.selectbox(
-                    "Prior.", PRIOR,
-                    index=PRIOR.index(prioridade) if prioridade in PRIOR else 1,
-                    key=f"ct_pr_{cid}",
-                    label_visibility="collapsed")
-                if novo_pr_card != prioridade:
-                    conn = conectar()
-                    conn.execute("UPDATE contato_registro SET prioridade=? WHERE contato_id=?",
-                                 (novo_pr_card, cid))
-                    conn.commit(); conn.close()
-                    st.session_state["ct_msg"] = "✅ Prioridade atualizada."
-                    st.rerun()
-
-            with c5:
                 label = "▲" if aberto else "▼"
                 if st.button(label, key=f"tog_{cid}", use_container_width=True,
                              help="Ver histórico e interações"):
@@ -266,7 +269,7 @@ def _lista_topicos():
                         st.session_state["ct_topico_aberto"] = cid
                     st.rerun()
 
-            with c6:
+            with c5:
                 # Exclusão com confirmação inline
                 if st.session_state.get(f"ct_del_confirm_{cid}"):
                     if st.button("✅", key=f"ct_del_ok_{cid}",
@@ -380,10 +383,16 @@ def _gerar_pdf_topico(cid):
                                fontSize=7, textColor=colors.HexColor("#999999"),
                                alignment=TA_CENTER)
 
-    VIA_LABEL = {"WhatsApp":"💬 WhatsApp","E-mail":"✉️ E-mail",
-                 "Telefone":"📞 Telefone","Visita presencial":"🚶 Visita",
-                 "Reunião":"🤝 Reunião","Videoconferência":"📹 Videoconferência",
-                 "Outro":"📌 Outro"}
+    VIA_LABEL = {"WhatsApp":"WhatsApp","E-mail":"E-mail",
+                 "Telefone":"Telefone","Visita presencial":"Visita presencial",
+                 "Reuniao":"Reuniao","Videoconferencia":"Videoconferencia",
+                 "Outro":"Outro"}
+
+    def _fmt_data(d):
+        """Converte AAAA-MM-DD para DD/MM/AAAA."""
+        if not d: return "—"
+        try: return f"{str(d)[8:10]}/{str(d)[5:7]}/{str(d)[:4]}"
+        except: return str(d)
 
     from datetime import date as _date
     hoje_str = _date.today().strftime("%d/%m/%Y")
@@ -398,19 +407,19 @@ def _gerar_pdf_topico(cid):
                                 color=VERDE, spaceAfter=10))
 
     # ── Ficha do tópico ───────────────────────────────────
-    ico_ent = "👤 Cliente" if tipo_ent == "cliente" else "🏭 Fornecedor"
+    ico_ent = "Cliente" if tipo_ent == "cliente" else "Fornecedor"
     ficha = [
         ["Assunto",    assunto or "—",
          "Tipo",       tipo or "Contato"],
         [ico_ent,      entidade,
          "Status",     status or "—"],
         ["Prioridade", prioridade or "—",
-         "Data início",data_c or "—"],
-        ["Próx. contato", followup or "—",
+         "Data inicio", _fmt_data(data_c)],
+        ["Prox. contato", _fmt_data(followup),
          "Fornecedores tratados", forns_str],
     ]
     if obs:
-        ficha.append(["Observação", obs, "", ""])
+        ficha.append(["Observacao", obs, "", ""])
 
     t_ficha = Table(
         [[Paragraph(f"<b>{cel}</b>" if i % 2 == 0 else cel,
@@ -444,7 +453,7 @@ def _gerar_pdf_topico(cid):
         for idx, irow in enumerate(ints, 1):
             data_i, via, pessoa, desc, result, fup_i = irow
             via_lbl = VIA_LABEL.get(via, via or "—")
-            cabecalho = f"<b>#{idx} — {data_i}  |  {via_lbl}"
+            cabecalho = f"<b>#{idx} — {_fmt_data(data_i)}  |  {via_lbl}"
             if pessoa:
                 cabecalho += f"  |  {pessoa}"
             cabecalho += "</b>"
@@ -460,11 +469,11 @@ def _gerar_pdf_topico(cid):
                 ])
             if result:
                 linhas_int.append([
-                    Paragraph(f"<b>Resultado / próximo passo:</b><br/>{result}", s_inter_texto)
+                    Paragraph(f"<b>Resultado / proximo passo:</b><br/>{result}", s_inter_texto)
                 ])
             if fup_i:
                 linhas_int.append([
-                    Paragraph(f"📅 Próximo contato agendado: <b>{fup_i}</b>", s_inter_texto)
+                    Paragraph(f"Proximo contato agendado: <b>{_fmt_data(fup_i)}</b>", s_inter_texto)
                 ])
 
             t_int = Table(linhas_int, colWidths=[17.1*cm])
@@ -503,26 +512,30 @@ def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual):
     if _msg_inline:
         st.success(_msg_inline)
 
-    # ── Exportar PDF ──────────────────────────────────────────────────────
-    col_pdf, col_esp = st.columns([2, 5])
-    with col_pdf:
-        if st.button("📄 Exportar histórico PDF", key=f"pdf_btn_{cid}",
-                     use_container_width=True):
-            with st.spinner("Gerando PDF..."):
-                _pdf_bytes = _gerar_pdf_topico(cid)
-            if _pdf_bytes:
-                # Busca assunto para nome do arquivo
-                _ass = query("SELECT assunto FROM contato_registro WHERE contato_id=?", (cid,))
-                _nome = (_ass[0][0] or f"topico_{cid}") if _ass else f"topico_{cid}"
-                _nome = "".join(c for c in _nome if c.isalnum() or c in " _-")[:40].strip()
-                st.download_button(
-                    label="⬇️ Baixar PDF",
-                    data=_pdf_bytes,
-                    file_name=f"historico_{_nome}.pdf",
-                    mime="application/pdf",
-                    key=f"pdf_dl_{cid}")
-            else:
-                st.error("Erro ao gerar PDF.")
+    # ── Exportar PDF (1 clique) ───────────────────────────────────────────
+    # PDF é gerado e cacheado no session_state; download_button aparece direto.
+    _pdf_key = f"pdf_cache_{cid}"
+    _pdf_nome_key = f"pdf_nome_{cid}"
+    if _pdf_key not in st.session_state:
+        with st.spinner("Preparando PDF..."):
+            _pdf_bytes = _gerar_pdf_topico(cid)
+        if _pdf_bytes:
+            _ass = query("SELECT assunto FROM contato_registro WHERE contato_id=?", (cid,))
+            _nome = (_ass[0][0] or f"topico_{cid}") if _ass else f"topico_{cid}"
+            _nome = "".join(c for c in _nome if c.isalnum() or c in " _-")[:40].strip()
+            st.session_state[_pdf_key]      = _pdf_bytes
+            st.session_state[_pdf_nome_key] = _nome
+
+    if _pdf_key in st.session_state:
+        col_pdf, col_esp = st.columns([2, 5])
+        with col_pdf:
+            st.download_button(
+                label="📄 Exportar histórico PDF",
+                data=st.session_state[_pdf_key],
+                file_name=f"historico_{st.session_state[_pdf_nome_key]}.pdf",
+                mime="application/pdf",
+                key=f"pdf_dl_{cid}",
+                use_container_width=True)
     st.divider()
 
     cr = query("""SELECT cr.*, c.nome_fantasia, f.nome_fantasia
@@ -840,10 +853,13 @@ def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual):
             st.session_state.pop(k, None)
         st.session_state[_mk] = "sel"
         st.session_state.pop(f"exp_inter_{cid}", None)
-        # Fecha o painel do tópico para que a mensagem de sucesso
-        # no topo da lista fique visível sem precisar scrollar
+        # Invalida cache do PDF (nova interação deve refletir no próximo download)
+        st.session_state.pop(f"pdf_cache_{cid}", None)
+        st.session_state.pop(f"pdf_nome_{cid}", None)
+        # Fecha o painel e sinaliza scroll para o topo
         st.session_state.pop("ct_topico_aberto", None)
         st.session_state["ct_msg"] = "✅ Interação registrada com sucesso!"
+        st.session_state["_scroll_topo"] = True
         st.rerun()
 
 
