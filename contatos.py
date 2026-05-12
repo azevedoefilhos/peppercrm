@@ -736,10 +736,13 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
             via = irow[1] or "Outro"
             contagem_via[via] = contagem_via.get(via, 0) + 1
 
-        # Cabeçalho do tópico
-        elementos.append(HRFlowable(width="100%", thickness=1,
-                                    color=VERDE_L, spaceAfter=4))
-        elementos.append(Paragraph(
+        # Cabeçalho do tópico + ficha resumida agrupados para nunca ficarem órfãos
+        from reportlab.platypus import KeepTogether as _KT
+
+        _bloco_cabecalho = []
+        _bloco_cabecalho.append(HRFlowable(width="100%", thickness=1,
+                                           color=VERDE_L, spaceAfter=4))
+        _bloco_cabecalho.append(Paragraph(
             f"#{idx_t}  {assunto or '—'}", s_topico_h))
 
         # Ficha resumida
@@ -767,13 +770,15 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
             ("LEFTPADDING", (0,0), (-1,-1), 6),
             ("VALIGN", (0,0), (-1,-1), "TOP"),
         ]))
-        elementos.append(t_f)
-        elementos.append(Spacer(1, 0.3*cm))
+        _bloco_cabecalho.append(t_f)
+        _bloco_cabecalho.append(Spacer(1, 0.3*cm))
 
-        # Interações
+        # Label "Histórico" fica junto ao cabeçalho para não ficar solto
         modo_lbl = "do periodo" if modo_interacoes == "periodo" else "completo"
-        elementos.append(Paragraph(
+        _bloco_cabecalho.append(Paragraph(
             f"<b>Historico {modo_lbl} — {len(ints)} interacao(oes)</b>", s_inter_t))
+
+        elementos.append(_KT(_bloco_cabecalho))
 
         if not ints:
             elementos.append(Paragraph(
