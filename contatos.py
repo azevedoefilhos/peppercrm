@@ -208,15 +208,16 @@ def _lista_topicos():
         vencido = followup and followup < hoje and status not in ("Concluído","Cancelado")
 
         with st.container(border=True):
-            # CSS aplicado uma vez fora do loop seria ideal, mas Streamlit requer aqui
-            # Reduz padding interno dos selectboxes para compactar altura
             st.markdown("""<style>
             div[data-baseweb="select"] > div:first-child {
-                min-height: 32px !important;
-                padding-top: 2px !important;
-                padding-bottom: 2px !important;
-                font-size: 13px !important;
+                min-height: 28px !important;
+                height: 28px !important;
+                padding-top: 0px !important;
+                padding-bottom: 0px !important;
+                font-size: 12px !important;
             }
+            div[data-baseweb="select"] svg { margin-top: 0px !important; }
+            div[data-baseweb="select"] span { line-height: 28px !important; }
             </style>""", unsafe_allow_html=True)
 
             # [selects(2.2) | conteúdo(4.8) | info(1.8) | ▼(0.35) | 🗑️(0.35)]
