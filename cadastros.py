@@ -327,31 +327,6 @@ def _lista_produtos():
                 df["Codigo"].str.contains(b, case=False, na=False))
         df = df[mask]
 
-    # ── EXPORTAÇÃO — gera e cacheia, download direto ─────────────────────
-    trigger = st.session_state.pop("exp_prod_trigger", None)
-    _pdf_key  = f"exp_prod_pdf_{sel_forn}_{sel_cat}"
-    _xlsx_key = f"exp_prod_xlsx_{sel_forn}_{sel_cat}"
-
-    if trigger == "excel" and _xlsx_key not in st.session_state:
-        buf = io.BytesIO()
-        df.to_excel(buf, index=False, sheet_name="Produtos")
-        buf.seek(0)
-        st.session_state[_xlsx_key] = buf.read()
-    if trigger == "pdf" and _pdf_key not in st.session_state:
-        st.session_state[_pdf_key] = _exportar_produtos_pdf(df, sel_forn)
-
-    if _xlsx_key in st.session_state:
-        nome_arq = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}.xlsx"
-        st.download_button("📥 Baixar Excel", data=st.session_state[_xlsx_key],
-                           file_name=nome_arq,
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
-    if _pdf_key in st.session_state:
-        nome_arq = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}.pdf"
-        st.download_button("📥 Baixar PDF", data=st.session_state[_pdf_key],
-                           file_name=nome_arq, mime="application/pdf",
-                           use_container_width=True)
-
     # ── CONTADOR CONTEXTUAL ───────────────────────────────────────────────
     filtros_ativos = []
     if sel_forn != "Todos":    filtros_ativos.append(sel_forn)
@@ -361,77 +336,85 @@ def _lista_produtos():
     if busca.strip():          filtros_ativos.append(f'"{busca.strip()}"')
     contexto = f" — {' | '.join(filtros_ativos)}" if filtros_ativos else ""
     st.caption(f"**{len(df)}** produto(s){contexto}  |  Total no banco: {len(df_full)}")
+
+    # ── EXPORTAÇÃO — gera e cacheia, download direto ──────────────────────
+    trigger = st.session_state.pop("exp_prod_trigger", None)
+    _cache_key = f"exp_prod_{sel_forn}_{sel_cat}_{sel_cat}_{busca}"
+    if trigger == "excel":
+        buf = io.BytesIO()
+        df.to_excel(buf, index=False, sheet_name="Produtos")
+        buf.seek(0)
+        st.session_state[_cache_key + "_xlsx"] = buf.read()
+    if trigger == "pdf":
+        st.session_state[_cache_key + "_pdf"] = _exportar_produtos_pdf(df, sel_forn)
+
+    if _cache_key + "_xlsx" in st.session_state:
+        nome_arq = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}.xlsx"
+        st.download_button("📥 Baixar Excel", data=st.session_state[_cache_key+"_xlsx"],
+                           file_name=nome_arq,
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           use_container_width=True)
+    if _cache_key + "_pdf" in st.session_state:
+        nome_arq = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}.pdf"
+        st.download_button("📥 Baixar PDF", data=st.session_state[_cache_key+"_pdf"],
+                           file_name=nome_arq, mime="application/pdf",
+                           use_container_width=True)
+
     st.divider()
 
-    # ── LISTA DE PRODUTOS — cards mobile-friendly ─────────────────────────
-    for _, row in df.iterrows():
-        pid    = row["ID"]
-        forn_n = row["Fornecedor"] or "—"
-        marca_n= row["Marca"] or "—"
-        codigo = row["Codigo"] or "—"
-        desc_l = row["Descricao"] or "—"
-        desc_c = row["Descricao curta"] or desc_l
-        un_cx  = row["Un/Cx"] or "—"
-        um     = row["UM"] or "—"
-        peso_u = row["Peso un."] or "—"
-        peso_c = row["Peso cx."] or "—"
-        ean    = row["EAN"] or "—"
-        categ  = row["Categoria"] or "—"
-        linha  = row["Linha"] or "—"
-        ativo  = row["Ativo"]
-        ativo_ico = "✅" if str(ativo) in ("1","True","Ativo","ativo") else "❌"
+    # ── LISTA LEVE — dataframe com seleção para editar ────────────────────
+    df_view = df[["ID","Fornecedor","Marca","Codigo","Descricao curta",
+                  "Un/Cx","UM","Ativo"]].copy()
+    df_view.columns = ["ID","Fornecedor","Marca","Código","Descrição","Un/Cx","UM","Ativo"]
 
-        with st.container(border=True):
-            # Linha 1: descrição + botões
-            ca, cb = st.columns([5, 1])
-            with ca:
-                st.markdown(
-                    f"**{desc_c}**  "
-                    f"<span style='font-size:11px;color:#555'>{forn_n} · {marca_n}</span>",
-                    unsafe_allow_html=True)
-            with cb:
-                col_e, col_d = st.columns(2)
-                with col_e:
-                    if st.button("✏️", key=f"ed_prod_{pid}",
-                                 help="Editar", use_container_width=True):
-                        if st.session_state.get("prod_editar_id") == pid:
-                            st.session_state.pop("prod_editar_id", None)
-                        else:
-                            st.session_state["prod_editar_id"] = pid
-                            st.session_state.pop("prod_excluir_id", None)
-                        st.rerun()
-                with col_d:
-                    if st.button("🗑️", key=f"del_prod_{pid}",
-                                 help="Excluir", use_container_width=True):
-                        st.session_state["prod_excluir_id"] = pid
-                        st.session_state.pop("prod_editar_id", None)
-                        st.rerun()
+    st.dataframe(df_view, use_container_width=True, hide_index=True,
+                 column_config={
+                     "ID":        st.column_config.NumberColumn(width="small"),
+                     "Fornecedor":st.column_config.TextColumn(width="medium"),
+                     "Marca":     st.column_config.TextColumn(width="small"),
+                     "Código":    st.column_config.TextColumn(width="small"),
+                     "Descrição": st.column_config.TextColumn(width="large"),
+                     "Un/Cx":     st.column_config.TextColumn(width="small"),
+                     "UM":        st.column_config.TextColumn(width="small"),
+                     "Ativo":     st.column_config.TextColumn(width="small"),
+                 })
 
-            # Linha 2: dados compactos
-            st.markdown(
-                f"<div style='font-size:12px;color:#444;line-height:1.8'>"
-                f"🏷️ <b>{codigo}</b> &nbsp;|&nbsp; "
-                f"📦 {un_cx} un/cx &nbsp;|&nbsp; "
-                f"⚖️ {peso_u} / {peso_c} &nbsp;|&nbsp; "
-                f"📐 {um} &nbsp;|&nbsp; "
-                f"🗂️ {categ}"
-                f"{' · ' + linha if linha != '—' else ''}"
-                f"&nbsp;|&nbsp; {ativo_ico}"
-                f"</div>",
-                unsafe_allow_html=True)
-            if ean != "—":
-                st.caption(f"EAN: {ean}")
+    # ── EDITAR / EXCLUIR — seleção por ID ────────────────────────────────
+    st.divider()
+    ids_disp = df["ID"].tolist()
+    col_sel, col_ed, col_del = st.columns([3, 1, 1])
+    with col_sel:
+        pid_sel = st.selectbox("Selecionar produto pelo ID",
+                               [None] + ids_disp,
+                               format_func=lambda x: "— selecione —" if x is None else
+                                   f"#{x} — {df[df['ID']==x]['Descricao curta'].values[0]}",
+                               key="prod_sel_id")
+    with col_ed:
+        st.write("")
+        if st.button("✏️ Editar", key="btn_ed_prod",
+                     use_container_width=True, disabled=pid_sel is None):
+            st.session_state["prod_editar_id"] = pid_sel
+            st.session_state.pop("prod_excluir_id", None)
+            st.rerun()
+    with col_del:
+        st.write("")
+        if st.button("🗑️ Excluir", key="btn_del_prod",
+                     use_container_width=True, disabled=pid_sel is None):
+            st.session_state["prod_excluir_id"] = pid_sel
+            st.session_state.pop("prod_editar_id", None)
+            st.rerun()
 
-            # Form editar/excluir inline com scroll automático
-            if st.session_state.get("prod_editar_id") == pid:
-                st.components.v1.html(
-                    "<script>window.parent.document.querySelector("
-                    "'section.main').scrollTo(0, document.body.scrollHeight);</script>",
-                    height=0)
-                _form_editar_produto(pid)
-
-            if st.session_state.get("prod_excluir_id") == pid:
-                _confirmacao_excluir_produto(pid, str(desc_c), str(codigo))
+    # Form editar/excluir renderizado abaixo da lista
+    _eid = st.session_state.get("prod_editar_id")
+    _did = st.session_state.get("prod_excluir_id")
+    if _eid and _eid in ids_disp:
+        row = df[df["ID"] == _eid].iloc[0]
+        st.info(f"Editando: **{row['Descricao curta']}** (#{_eid})")
+        _form_editar_produto(_eid)
+    if _did and _did in ids_disp:
+        row = df[df["ID"] == _did].iloc[0]
+        _confirmacao_excluir_produto(_did,
+            str(row["Descricao curta"]), str(row["Codigo"]))
 
 
 
