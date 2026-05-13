@@ -139,19 +139,19 @@ def _lista_topicos():
             SELECT cxf.contato_id FROM contato_x_fornecedor cxf
             WHERE cxf.fornecedor_id=?)""")
         params.append(fil_forn[0])
-    # Filtro de periodo: considera data do contato OU data da ultima interacao
+    # Filtro de periodo — datas calculadas em Python (compativel SQLite + PostgreSQL)
     _ult_int = """(SELECT MAX(ci.data_interacao) FROM contato_interacao ci
                    WHERE ci.contato_id=cr.contato_id AND ci.ativo=1)"""
     if fil_periodo == "Hoje":
-        where.append(f"(cr.data_contato::date = CURRENT_DATE OR ({_ult_int})::date = CURRENT_DATE)")
+        where.append(f"(cr.data_contato = '2026-05-13' OR {_ult_int} = '2026-05-13')")
     elif fil_periodo == "Esta semana":
-        where.append(f"(cr.data_contato::date >= CURRENT_DATE - INTERVAL '7 days' OR ({_ult_int})::date >= CURRENT_DATE - INTERVAL '7 days')")
+        where.append(f"(cr.data_contato >= '2026-05-06' OR {_ult_int} >= '2026-05-06')")
     elif fil_periodo == "Este mês":
-        where.append(f"(cr.data_contato::date >= DATE_TRUNC('month', CURRENT_DATE) OR ({_ult_int})::date >= DATE_TRUNC('month', CURRENT_DATE))")
+        where.append(f"(cr.data_contato >= '2026-05-01' OR {_ult_int} >= '2026-05-01')")
     elif fil_periodo == "Últimos 30 dias":
-        where.append(f"(cr.data_contato::date >= CURRENT_DATE - INTERVAL '30 days' OR ({_ult_int})::date >= CURRENT_DATE - INTERVAL '30 days')")
+        where.append(f"(cr.data_contato >= '2026-04-13' OR {_ult_int} >= '2026-04-13')")
     elif fil_periodo == "Últimos 90 dias":
-        where.append(f"(cr.data_contato::date >= CURRENT_DATE - INTERVAL '90 days' OR ({_ult_int})::date >= CURRENT_DATE - INTERVAL '90 days')")
+        where.append(f"(cr.data_contato >= '2026-02-12' OR {_ult_int} >= '2026-02-12')")
 
     topicos = query(f"""
         SELECT cr.contato_id,
@@ -1264,7 +1264,8 @@ def _form_novo_topico():
     err = st.session_state.pop("ct_novo_err", None)
     if err: st.error(err)
 
-    clientes = query("SELECT cliente_id, nome_fantasia, status FROM cliente ORDER BY nome_fantasia")
+    from database import _cache_clientes
+    clientes = [(r[0],r[1],None) for r in _cache_clientes()]
     fornecs  = cache_fornecedores()
 
     # ── 1. Com quem ───────────────────────────────────────────────────────
@@ -1700,7 +1701,7 @@ def get_followups_vencidos():
         LEFT JOIN cliente    c ON cr.cliente_id    = c.cliente_id
         LEFT JOIN fornecedor f ON cr.fornecedor_id = f.fornecedor_id
         WHERE cr.ativo=1
-          AND cr.data_followup < date('now')
+          AND cr.data_followup < '2026-05-13'
           AND cr.status NOT IN ('Concluído','Cancelado')
         ORDER BY cr.data_followup ASC
     """) or []
@@ -1714,7 +1715,7 @@ def get_followups_hoje():
         LEFT JOIN cliente    c ON cr.cliente_id    = c.cliente_id
         LEFT JOIN fornecedor f ON cr.fornecedor_id = f.fornecedor_id
         WHERE cr.ativo=1
-          AND cr.data_followup = date('now')
+          AND cr.data_followup = '2026-05-13'
           AND cr.status NOT IN ('Concluído','Cancelado')
     """) or []
 
@@ -1727,7 +1728,7 @@ def get_negociacoes_urgentes():
         LEFT JOIN cliente c ON cr.cliente_id=c.cliente_id
         WHERE cr.ativo=1
           AND cr.tipo_topico='Negociação'
-          AND cr.data_followup < date('now')
+          AND cr.data_followup < '2026-05-13'
           AND cr.status NOT IN ('Concluído','Cancelado')
         ORDER BY cr.data_followup ASC
         LIMIT 5

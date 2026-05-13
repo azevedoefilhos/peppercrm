@@ -68,6 +68,9 @@ def tela_visitas():
 # ==============================================================
 
 def _lista_visitas():
+    from database import _cache_clientes
+    from datetime import date as _date, timedelta as _td
+
     col1, col2, col3, col4 = st.columns([2,1,1,1])
     with col2:
         if st.button("Nova visita", type="primary", use_container_width=True):
@@ -84,12 +87,9 @@ def _lista_visitas():
 
     st.divider()
 
-    # Filtros
     col1, col2, col3 = st.columns(3)
     with col1:
-        clientes = [(None,"Todos os clientes")] + [
-            (r[0],r[1]) for r in query(
-                "SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo=1 ORDER BY nome_fantasia")]
+        clientes = [(None,"Todos os clientes")] + [(r[0],r[1]) for r in _cache_clientes()]
         fil_cli = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="vis_fil_cli")
     with col2:
         fil_per = st.selectbox("Periodo", ["30 dias","60 dias","90 dias","Ano atual","Todos"],
@@ -111,6 +111,8 @@ def _lista_visitas():
         fil_com_pesq = st.selectbox("Com pesquisa", ["Todos","Com pesquisa","Sem pesquisa"],
                                     key="vis_fil_pesq")
 
+    hoje    = _date.today()
+    ano_ini = hoje.strftime("%Y-01-01")
     where, params = ["1=1"], []
     if fil_cli[0]:
         where.append("v.cliente_id=?"); params.append(fil_cli[0])
@@ -124,13 +126,12 @@ def _lista_visitas():
         where.append("v.pesquisa_preco_id IS NOT NULL")
     elif fil_com_pesq == "Sem pesquisa":
         where.append("v.pesquisa_preco_id IS NULL")
-    for op, sql in {
-        "30 dias":  "v.data_visita >= date('now','-30 days')",
-        "60 dias":  "v.data_visita >= date('now','-60 days')",
-        "90 dias":  "v.data_visita >= date('now','-90 days')",
-        "Ano atual":"v.data_visita >= date('now','start of year')",
-    }.items():
-        if fil_per == op: where.append(sql)
+    dias_map = {"30 dias":30,"60 dias":60,"90 dias":90}
+    if fil_per in dias_map:
+        where.append("v.data_visita >= ?")
+        params.append((hoje - _td(days=dias_map[fil_per])).isoformat())
+    elif fil_per == "Ano atual":
+        where.append("v.data_visita >= ?"); params.append(ano_ini)
 
     visitas = query(f"""
         SELECT v.visita_id, v.data_visita,

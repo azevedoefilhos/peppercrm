@@ -86,12 +86,13 @@ def tela_ver_pedidos():
 
 
 def _lista_pedidos():
+    from database import _cache_clientes, _cache_fornecedores
+    from datetime import date as _date, timedelta as _td
+
     col1, col2, col3, col4 = st.columns(4)
 
-    clientes = [(None,"Todos")] + query(
-        "SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo=1 ORDER BY nome_fantasia")
-    fornecs  = [(None,"Todos")] + query(
-        "SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    clientes = [(None,"Todos")] + [(r[0],r[1]) for r in _cache_clientes()]
+    fornecs  = [(None,"Todos")] + [(r[0],r[1]) for r in _cache_fornecedores()]
 
     with col1:
         cli_f  = st.selectbox("Cliente",    clientes, format_func=lambda x: x[1], key="f_cli")
@@ -102,6 +103,7 @@ def _lista_pedidos():
     with col4:
         periodo = st.selectbox("Período", ["Todos","Hoje","7 dias","30 dias","90 dias"], key="f_per")
 
+    hoje = _date.today().isoformat()
     where, params = ["1=1"], []
     if cli_f and cli_f[0]:
         where.append("p.cliente_id=?"); params.append(cli_f[0])
@@ -111,7 +113,8 @@ def _lista_pedidos():
         where.append("p.status_pedido=?"); params.append(stat_f)
     dias_map = {"Hoje":0,"7 dias":7,"30 dias":30,"90 dias":90}
     if periodo in dias_map:
-        where.append(f"p.data_pedido >= date('now','-{dias_map[periodo]} days')")
+        d_ini = (_date.today() - _td(days=dias_map[periodo])).isoformat()
+        where.append("p.data_pedido >= ?"); params.append(d_ini)
 
     dados = query(f"""
         SELECT p.pedido_id, p.data_pedido,
