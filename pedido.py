@@ -28,8 +28,10 @@ def tela_novo_pedido():
         _ir("home")
 
     # PASSO 1: Cliente
-    clientes = query("""SELECT cliente_id, nome_fantasia, cidade, estado
-        FROM cliente WHERE ativo=1 ORDER BY nome_fantasia""")
+    from database import _cache_clientes
+    clientes = [(r[0], r[1], None, None) if len(r)==2 else r
+                for r in query("""SELECT cliente_id, nome_fantasia, cidade, estado
+        FROM cliente WHERE ativo=1 ORDER BY nome_fantasia""")]
     if not clientes:
         st.warning("Nenhum cliente cadastrado.")
         return
@@ -371,16 +373,18 @@ def _salvar_pedido(cli_id, forn_id, pdv_id, tab_id, prazo, frete,
     try:
         conn = conectar()
         cur  = conn.cursor()
+        from datetime import date as _date
+        _hoje = _date.today().isoformat()
         cur.execute("""INSERT INTO pedido
             (cliente_id, pdv_id, fornecedor_id, tabela_preco_id,
              prazo_pagamento, frete, nr_pedido_cliente, nr_pedido_fornecedor,
              data_pedido, data_entrega, desconto_geral, observacao, status_pedido)
-            VALUES (?,?,?,?,?,?,?,?,date('now'),?,?,?,?)""",
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (cli_id, pdv_id, forn_id, tab_id,
              prazo if prazo != "—" else None,
              frete if frete != "—" else None,
              nr_cliente or None, nr_fornecedor or None,
-             data_entrega, desc_geral, observacao or None, status_ini))
+             _hoje, data_entrega, desc_geral, observacao or None, status_ini))
         pedido_id = cur.lastrowid
 
         for prod_id, item in itens:
