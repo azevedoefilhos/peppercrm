@@ -436,11 +436,14 @@ def _migrar_todos():
 
 
 # ── Auto-migration ao importar ───────────────────────────────────────────────
-# SQLite: instantâneo, sem rede. Supabase: IF NOT EXISTS é idempotente.
-try:
-    _migrar_pedido_minimo()
-except Exception:
-    pass
+# Só roda automaticamente no Railway (variável RAILWAY_ENVIRONMENT presente).
+# Localmente: use python -c "from database import _migrar_pedido_minimo; _migrar_pedido_minimo()"
+import os as _os
+if _os.environ.get("RAILWAY_ENVIRONMENT") or _os.environ.get("RAILWAY_PROJECT_ID"):
+    try:
+        _migrar_pedido_minimo()
+    except Exception:
+        pass
 
 
 def get_nome_empresa():
