@@ -2,15 +2,13 @@
 
 import streamlit as st
 from database import query
-from configuracao import get_nome_empresa
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _nome_empresa():
+    from configuracao import get_nome_empresa
     return get_nome_empresa()
 
-_nome = _nome_empresa()
-
-st.set_page_config(page_title=_nome, layout="wide")
+st.set_page_config(page_title="PepperCRM", layout="wide")
 
 # Scroll para topo a cada rerun
 st.components.v1.html("<script>window.parent.document.querySelector('section.main').scrollTo(0,0);</script>", height=0)
@@ -522,7 +520,7 @@ def _tela_busca_global():
 
 if pagina == "home":
     col_t, col_b, col_c = st.columns([5, 1, 1])
-    with col_t: st.title(f"{_nome}")
+    with col_t: st.title(f"{_nome_empresa()}")
     with col_b:
         st.write("")
         if st.button("🔍 Busca", use_container_width=True): ir("busca_global")
