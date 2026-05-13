@@ -214,25 +214,28 @@ def _pg_connect():
         user="postgres.yunzqndswpwttejlgeaa",
         password=os.environ.get("SUPABASE_DB_PASSWORD", ""),
         sslmode="require",
-        connect_timeout=15,
+        connect_timeout=8,
+        keepalives=1,
+        keepalives_idle=30,
+        keepalives_interval=10,
+        keepalives_count=3,
     )
 
 
 def _get_session_conn():
-    """Conexao persistente por sessao Streamlit."""
+    """
+    Conexao persistente por sessao Streamlit.
+    Evita SELECT 1 a cada chamada — so reconecta se a conexao estiver
+    marcada como fechada pelo psycopg2 (closed != 0).
+    """
     try:
         import streamlit as st
-        if "db_conn" not in st.session_state or st.session_state["db_conn"].closed:
-            st.session_state["db_conn"] = _pg_connect()
-        conn = st.session_state["db_conn"]
-        try:
-            conn.cursor().execute("SELECT 1")
-            return conn
-        except Exception:
-            try: conn.close()
-            except: pass
+        conn = st.session_state.get("db_conn")
+        # Reconecta só se não existe ou se psycopg2 marcou como fechada
+        if conn is None or getattr(conn, 'closed', 1) != 0:
             st.session_state["db_conn"] = _pg_connect()
             return st.session_state["db_conn"]
+        return conn
     except Exception:
         return _pg_connect()
 
@@ -291,13 +294,28 @@ def query(sql, params=()):
             cur.execute(sql_pg, params)
             return _make_dict_rows(cur)
         except Exception:
+            # Conexão morta — limpa e reconecta uma vez
+            try:
+                import streamlit as st
+                old = st.session_state.pop("db_conn", None)
+                if old:
+                    try: old.close()
+                    except: pass
+            except: pass
             conn2 = _pg_connect()
             try:
                 cur = conn2.cursor()
                 cur.execute(sql_pg, params)
-                return _make_dict_rows(cur)
-            finally:
+                result = _make_dict_rows(cur)
+                # Guarda a nova conexão para reutilização
+                try:
+                    import streamlit as st
+                    st.session_state["db_conn"] = conn2
+                except: pass
+                return result
+            except Exception:
                 conn2.close()
+                return []
     else:
         conn = _sqlite_connect()
         try:
