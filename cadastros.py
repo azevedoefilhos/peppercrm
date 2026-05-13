@@ -337,28 +337,24 @@ def _lista_produtos():
     contexto = f" — {' | '.join(filtros_ativos)}" if filtros_ativos else ""
     st.caption(f"**{len(df)}** produto(s){contexto}  |  Total no banco: {len(df_full)}")
 
-    # ── EXPORTAÇÃO — gera e cacheia, download direto ──────────────────────
+    # ── EXPORTAÇÃO — 1 clique, download direto ───────────────────────────
     trigger = st.session_state.pop("exp_prod_trigger", None)
-    _cache_key = f"exp_prod_{sel_forn}_{sel_cat}_{sel_cat}_{busca}"
     if trigger == "excel":
         buf = io.BytesIO()
         df.to_excel(buf, index=False, sheet_name="Produtos")
         buf.seek(0)
-        st.session_state[_cache_key + "_xlsx"] = buf.read()
-    if trigger == "pdf":
-        st.session_state[_cache_key + "_pdf"] = _exportar_produtos_pdf(df, sel_forn)
-
-    if _cache_key + "_xlsx" in st.session_state:
         nome_arq = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}.xlsx"
-        st.download_button("📥 Baixar Excel", data=st.session_state[_cache_key+"_xlsx"],
+        st.download_button("📥 Baixar Excel", data=buf.read(),
                            file_name=nome_arq,
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
-    if _cache_key + "_pdf" in st.session_state:
+                           use_container_width=True, key="dl_xlsx_prod")
+    elif trigger == "pdf":
+        with st.spinner("Gerando PDF..."):
+            pdf_bytes = _exportar_produtos_pdf(df, sel_forn)
         nome_arq = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}.pdf"
-        st.download_button("📥 Baixar PDF", data=st.session_state[_cache_key+"_pdf"],
+        st.download_button("📥 Baixar PDF", data=pdf_bytes,
                            file_name=nome_arq, mime="application/pdf",
-                           use_container_width=True)
+                           use_container_width=True, key="dl_pdf_prod")
 
     st.divider()
 
@@ -4336,21 +4332,24 @@ def _exportar_produtos_pdf(df, filtro_forn="Todos"):
     from reportlab.lib.units import cm
     from reportlab.lib import colors
     from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
-                                    Paragraph, Spacer, HRFlowable)
+                                    Paragraph, Spacer, HRFlowable, KeepTogether)
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.enums import TA_CENTER
     from datetime import datetime as _dt
     import io as _io
 
     VERDE  = colors.HexColor("#2d6a4f")
+    VERDE_L= colors.HexColor("#e8f5e9")
     CINZA  = colors.HexColor("#555555")
     CINZA_C= colors.HexColor("#f8f9fa")
 
     styles = getSampleStyleSheet()
     s_tit  = ParagraphStyle("t", parent=styles["Normal"], fontSize=14,
                             fontName="Helvetica-Bold", textColor=VERDE)
-    s_sub  = ParagraphStyle("s", parent=styles["Normal"], fontSize=8,
-                            textColor=CINZA)
+    s_sub  = ParagraphStyle("s", parent=styles["Normal"], fontSize=8, textColor=CINZA)
+    s_cat  = ParagraphStyle("cat", parent=styles["Normal"], fontSize=9,
+                            fontName="Helvetica-Bold", textColor=VERDE,
+                            spaceBefore=8, spaceAfter=3)
     s_hdr  = ParagraphStyle("h", parent=styles["Normal"], fontSize=7,
                             fontName="Helvetica-Bold", textColor=colors.white)
     s_cel  = ParagraphStyle("c", parent=styles["Normal"], fontSize=7)
@@ -4361,7 +4360,7 @@ def _exportar_produtos_pdf(df, filtro_forn="Todos"):
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
                             leftMargin=1.2*cm, rightMargin=1.2*cm,
                             topMargin=1.2*cm, bottomMargin=1.2*cm)
-    el  = []
+    el = []
 
     rep = query("SELECT nome_fantasia FROM representante WHERE ativo=1 LIMIT 1")
     rep_nome = rep[0][0] if rep else "PepperCRM"
@@ -4372,28 +4371,21 @@ def _exportar_produtos_pdf(df, filtro_forn="Todos"):
                         f"Gerado em {_dt.now().strftime('%d/%m/%Y %H:%M')}", s_sub))
     el.append(HRFlowable(width="100%", thickness=2, color=VERDE, spaceAfter=6))
 
+    # Colunas sem Shelf Life
     colunas = ["Fornecedor","Marca","Codigo","Descricao","UM","Un/Cx",
-               "Peso un.","Peso cx.","Sub-cat.","Grupo","Validade","Shelf R.","Shelf C."]
-    cw = [2.8*cm,2.5*cm,1.8*cm,5.0*cm,1.0*cm,1.0*cm,
-          1.5*cm,1.5*cm,1.8*cm,1.8*cm,1.5*cm,1.5*cm,1.5*cm]
-
+               "Peso un.","Peso cx.","Sub-cat.","Grupo","Validade (d)"]
+    cw      = [2.8*cm, 2.5*cm, 1.8*cm, 5.5*cm, 1.0*cm, 1.0*cm,
+               1.5*cm, 1.5*cm, 2.0*cm, 2.0*cm, 1.8*cm]
     col_map = {
         "Fornecedor":"Fornecedor","Marca":"Marca","Codigo":"Codigo",
         "Descricao":"Descricao curta","UM":"UM","Un/Cx":"Un/Cx",
         "Peso un.":"Peso un.","Peso cx.":"Peso cx.",
-        "Sub-cat.":"Sub-categoria","Grupo":"Grupo",
-        "Validade":"Validade (d)","Shelf R.":"Shelf refr. (d)","Shelf C.":"Shelf cong. (d)"
+        "Sub-cat.":"Sub-categoria","Grupo":"Grupo","Validade (d)":"Validade (d)"
     }
 
     header = [Paragraph(c, s_hdr) for c in colunas]
-    rows = [header]
-    for _, row in df.iterrows():
-        linha = [Paragraph(str(row.get(col_map[c],"—") or "—")[:60], s_cel)
-                 for c in colunas]
-        rows.append(linha)
 
-    t = Table(rows, colWidths=cw, repeatRows=1)
-    t.setStyle(TableStyle([
+    t_style = TableStyle([
         ("BACKGROUND",    (0,0), (-1,0),  VERDE),
         ("TEXTCOLOR",     (0,0), (-1,0),  colors.white),
         ("FONTSIZE",      (0,0), (-1,-1), 7),
@@ -4403,14 +4395,41 @@ def _exportar_produtos_pdf(df, filtro_forn="Todos"):
         ("GRID",          (0,0), (-1,-1), 0.3, colors.HexColor("#cccccc")),
         ("ROWBACKGROUNDS",(0,1), (-1,-1), [colors.white, CINZA_C]),
         ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-    ]))
-    el.append(t)
-    el.append(Spacer(1, 0.3*cm))
-    el.append(Paragraph("PepperCRM", s_rod))
+    ])
+
+    # Agrupa por Categoria
+    df_sorted = df.sort_values(["Categoria","Fornecedor","Descricao curta"])
+    categorias = df_sorted["Categoria"].fillna("—").unique()
+
+    for cat in categorias:
+        df_cat = df_sorted[df_sorted["Categoria"].fillna("—") == cat]
+        rows = [header]
+        for _, row in df_cat.iterrows():
+            linha = [Paragraph(str(row.get(col_map[c], "—") or "—")[:60], s_cel)
+                     for c in colunas]
+            rows.append(linha)
+
+        t = Table(rows, colWidths=cw, repeatRows=1)
+        t.setStyle(t_style)
+
+        bloco = [
+            Paragraph(f"▸ {cat}  ({len(df_cat)} produto(s))", s_cat),
+            t,
+            Spacer(1, 0.3*cm)
+        ]
+        el.append(KeepTogether(bloco) if len(df_cat) <= 15 else bloco[0])
+        if len(df_cat) > 15:
+            el.append(t)
+            el.append(Spacer(1, 0.3*cm))
+
+    el.append(HRFlowable(width="100%", thickness=0.5,
+                         color=colors.HexColor("#cccccc"), spaceAfter=3))
+    el.append(Paragraph(f"PepperCRM — {rep_nome}  |  Gerado em "
+                        f"{_dt.now().strftime('%d/%m/%Y %H:%M')}", s_rod))
 
     doc.build(el)
     buf.seek(0)
-    return buf
+    return buf.read()  # retorna bytes, não BytesIO
 
 
 def _exportar_tabela_pdf(df_itens, filtro_forn="Todos"):
