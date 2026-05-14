@@ -256,7 +256,7 @@ as coordenadas aparecem na URL apos o simbolo @
     # Dados da visita
     col1, col2 = st.columns(2)
     with col1:
-        clientes = query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo=1 ORDER BY nome_fantasia")
+        clientes = query("SELECT cliente_id, nome_fantasia FROM cliente ORDER BY nome_fantasia")
         if not clientes:
             st.warning("Nenhum cliente cadastrado."); return
         cli_sel  = st.selectbox("Cliente *", clientes, format_func=lambda x: x[1], key="vis_cli")
