@@ -2666,11 +2666,6 @@ def _form_novo_pdv(cli_id):
                                    index=0,
                                    key="pdv_status_novo",
                                    help="Prospecto = cliente em prospecção, ainda não compra")
-        status_pdv = st.selectbox("Status do PDV *",
-                                   ["Prospecto", "Ativo", "Inativo", "Bloqueado"],
-                                   index=0,
-                                   key="pdv_status_novo",
-                                   help="Prospecto = cliente em prospecção, ainda não compra")
         obs    = st.text_area("Observacao")
         salvar = st.form_submit_button("Salvar PDV", type="primary")
 
