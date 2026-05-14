@@ -1071,24 +1071,32 @@ def _lista_tabelas():
 
     df = pd.DataFrame(dados, columns=["ID","Forn.ID","Fornecedor","Tabela","Tipo","Prazo",
                                        "Frete","Inicio","Fim","Ativo","Itens"])
-    df["Ativo"] = df["Ativo"].map({1: "✅", 0: "❌"})
-    df["Fim"]   = df["Fim"].fillna("— sem prazo")
+    df["Fim"] = df["Fim"].fillna("— sem prazo")
 
     # ── FILTROS ──────────────────────────────────────────────────────────
-    col_f1, col_f2 = st.columns([2, 2])
+    col_f1, col_f2, col_f3 = st.columns([2, 2, 1.5])
     with col_f1:
         forns_t = ["Todos"] + sorted(df["Fornecedor"].dropna().unique().tolist())
         sel_t   = st.selectbox("Fornecedor", forns_t, key="lt_forn_filtro")
-
-    # Aplica filtro de fornecedor primeiro para sincronizar tipos
-    df_forn = df if sel_t == "Todos" else df[df["Fornecedor"] == sel_t]
-
     with col_f2:
+        df_forn = df if sel_t == "Todos" else df[df["Fornecedor"] == sel_t]
         tipos_t = ["Todos"] + sorted(df_forn["Tipo"].dropna().unique().tolist())
         sel_tipo = st.selectbox("Tipo de tabela", tipos_t, key="lt_tipo_filtro")
+    with col_f3:
+        sel_status = st.selectbox("Status", ["Ativas", "Inativas", "Todas"],
+                                  key="lt_status_filtro",
+                                  help="Padrão: só tabelas ativas")
 
-    # Aplica filtro de tipo sobre o já filtrado por fornecedor
+    # Aplica filtros
     df_vis = df_forn if sel_tipo == "Todos" else df_forn[df_forn["Tipo"] == sel_tipo]
+    if sel_status == "Ativas":
+        df_vis = df_vis[df_vis["Ativo"] == 1]
+    elif sel_status == "Inativas":
+        df_vis = df_vis[df_vis["Ativo"] == 0]
+    # "Todas" — sem filtro adicional
+
+    df_vis = df_vis.copy()
+    df_vis["Ativo"] = df_vis["Ativo"].map({1: "✅ Ativa", 0: "❌ Inativa"})
 
     col_exp_tx, col_exp_tp = st.columns(2)
     with col_exp_tx:
