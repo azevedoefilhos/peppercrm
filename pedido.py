@@ -27,19 +27,32 @@ def tela_novo_pedido():
     if st.button("⬅ Voltar"):
         _ir("home")
 
-    # PASSO 1: Cliente
-    from database import _cache_todos_clientes
-    clientes = [(r[0], r[1], None, None) if len(r)==2 else r
-                for r in query("""SELECT cliente_id, nome_fantasia, cidade, estado
-        FROM cliente WHERE ativo=1 ORDER BY nome_fantasia""")]
-    if not clientes:
-        st.warning("Nenhum cliente cadastrado.")
-        return
-
-    cli_sel = st.selectbox("Cliente", clientes,
-                           format_func=lambda x: f"{x[1]}  ({x[2]}/{x[3]})",
-                           key="ped_cli")
-    cli_id = cli_sel[0]
+    # PASSO 1: Cliente — filtro por status com padrão Ativos
+    col_cli, col_fil = st.columns([4, 1.5])
+    with col_fil:
+        fil_cli_status = st.selectbox("Status cliente",
+                                      ["Ativos", "Outros", "Todos"],
+                                      key="ped_fil_cli_status",
+                                      help="Ativos = clientes com pedidos regulares\n"
+                                           "Outros = prospectos, visitados, inativos")
+    with col_cli:
+        if fil_cli_status == "Ativos":
+            _cli_where = "WHERE status='Ativo'"
+        elif fil_cli_status == "Outros":
+            _cli_where = "WHERE status != 'Ativo'"
+        else:
+            _cli_where = ""
+        clientes = query(f"""SELECT cliente_id, nome_fantasia, cidade, estado, status
+            FROM cliente {_cli_where} ORDER BY nome_fantasia""")
+        if not clientes:
+            st.warning("Nenhum cliente encontrado para este filtro.")
+            return
+        cli_sel = st.selectbox("Cliente", clientes,
+                               format_func=lambda x: f"{x[1]}  ({x[2]}/{x[3]})"
+                                           + (f" — {x[4]}" if x[4] and x[4] != "Ativo" else ""),
+                               key="ped_cli")
+    cli_id     = cli_sel[0]
+    cli_status = cli_sel[4] if len(cli_sel) > 4 else "Ativo"
 
     # PASSO 2: Fornecedor
     fornecedores = get_fornecedores_do_cliente(cli_id)
@@ -66,9 +79,10 @@ def tela_novo_pedido():
     if pedido_minimo > 0:
         col4.warning(f"Mín: **{_brl(pedido_minimo)}**")
 
-    # PASSO 3: PDV
-    pdvs = query("""SELECT pdv_id, numero_loja, nome_loja, cidade, estado, gerente, horario_recebimento
-        FROM pdv WHERE cliente_id=? AND ativo=1 ORDER BY numero_loja, nome_loja""", (cli_id,))
+    # PASSO 3: PDV — mostra todos se cliente ainda não é ativo
+    _pdv_status_filtro = "AND ativo=1" if cli_status == "Ativo" else ""
+    pdvs = query(f"""SELECT pdv_id, numero_loja, nome_loja, cidade, estado, gerente, horario_recebimento
+        FROM pdv WHERE cliente_id=? {_pdv_status_filtro} ORDER BY numero_loja, nome_loja""", (cli_id,))
 
     pdv_id = None
     if pdvs:
@@ -396,6 +410,22 @@ def _salvar_pedido(cli_id, forn_id, pdv_id, tab_id, prazo, frete,
                  round(preco_final, 4), item["qtd"]))
 
         conn.commit(); conn.close()
+
+        # Auto-ativa cliente e PDV se ainda não eram ativos
+        _cli_atual = query("SELECT status, ativo FROM cliente WHERE cliente_id=?", (cli_id,))
+        if _cli_atual:
+            _status_at, _ativo_at = _cli_atual[0][0], _cli_atual[0][1]
+            if _status_at != "Ativo" or not _ativo_at:
+                conn2 = conectar()
+                conn2.execute(
+                    "UPDATE cliente SET status='Ativo', ativo=1 WHERE cliente_id=?",
+                    (cli_id,))
+                if pdv_id:
+                    conn2.execute(
+                        "UPDATE pdv SET ativo=1 WHERE pdv_id=?",
+                        (pdv_id,))
+                conn2.commit(); conn2.close()
+
         return pedido_id
     except Exception as e:
         st.error(f"Erro ao salvar pedido: {e}")
