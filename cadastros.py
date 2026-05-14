@@ -1821,19 +1821,32 @@ def _importar_tabela_excel():
                 if not prod:
                     erros_imp.append(f"Linha {idx+2}: Produto '{codigo}' não encontrado."); continue
 
-                conn.execute("""
-                    INSERT INTO tabela_preco_item
-                        (tabela_preco_id, produto_id, preco_caixa, desconto_maximo,
-                         preco_kg, observacao)
-                    VALUES (?,?,?,?,?,?)
-                    ON CONFLICT(tabela_preco_id, produto_id)
-                    DO UPDATE SET preco_caixa=excluded.preco_caixa,
-                                  desconto_maximo=excluded.desconto_maximo,
-                                  preco_kg=COALESCE(excluded.preco_kg, tabela_preco_item.preco_kg),
-                                  observacao=COALESCE(excluded.observacao, tabela_preco_item.observacao)
-                """, (tab_id, prod[0], preco, desc_max, preco_kg_t, obs_tab_t))
+                # Upsert compatível SQLite + PostgreSQL
+                existe = conn.execute("""
+                    SELECT tabela_item_id FROM tabela_preco_item
+                    WHERE tabela_preco_id=? AND produto_id=?
+                """, (tab_id, prod[0])).fetchone()
+
+                if existe:
+                    conn.execute("""
+                        UPDATE tabela_preco_item
+                        SET preco_caixa=?,
+                            desconto_maximo=?,
+                            preco_kg=COALESCE(?, preco_kg),
+                            observacao=COALESCE(?, observacao)
+                        WHERE tabela_preco_id=? AND produto_id=?
+                    """, (preco, desc_max, preco_kg_t, obs_tab_t, tab_id, prod[0]))
+                else:
+                    conn.execute("""
+                        INSERT INTO tabela_preco_item
+                            (tabela_preco_id, produto_id, preco_caixa, desconto_maximo,
+                             preco_kg, observacao)
+                        VALUES (?,?,?,?,?,?)
+                    """, (tab_id, prod[0], preco, desc_max, preco_kg_t, obs_tab_t))
 
                 # Registra no histórico de preços
+                from datetime import date as _date
+                _hoje_str = _date.today().isoformat()
                 preco_ant = conn.execute("""
                     SELECT preco_caixa FROM historico_preco
                     WHERE produto_id=? AND fornecedor_id=?
@@ -1845,9 +1858,9 @@ def _importar_tabela_excel():
                         INSERT INTO historico_preco
                         (produto_id, fornecedor_id, tabela_id, nome_tabela,
                          data_vigencia, preco_caixa, preco_kg, data_registro)
-                        VALUES (?,?,?,?,?,?,?,date('now'))
+                        VALUES (?,?,?,?,?,?,?,?)
                     """, (prod[0], forn_id, tab_id, nome_tab,
-                          data_ini or str(date.today()), preco, preco_kg_t))
+                          data_ini or _hoje_str, preco, preco_kg_t, _hoje_str))
                 importados += 1
 
             except Exception as e:
