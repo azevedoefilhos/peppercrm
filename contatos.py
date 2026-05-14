@@ -1269,8 +1269,8 @@ def _form_novo_topico():
     err = st.session_state.pop("ct_novo_err", None)
     if err: st.error(err)
 
-    from database import _cache_clientes
-    clientes = [(r[0],r[1],None) for r in _cache_clientes()]
+    from database import _cache_todos_clientes
+    clientes = [(r[0],r[1],None) for r in _cache_todos_clientes()]
     fornecs  = cache_fornecedores()
 
     # ── 1. Com quem ───────────────────────────────────────────────────────

@@ -68,7 +68,7 @@ def tela_visitas():
 # ==============================================================
 
 def _lista_visitas():
-    from database import _cache_clientes
+    from database import _cache_todos_clientes
     from datetime import date as _date, timedelta as _td
 
     col1, col2, col3, col4 = st.columns([2,1,1,1])
@@ -89,7 +89,7 @@ def _lista_visitas():
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        clientes = [(None,"Todos os clientes")] + [(r[0],r[1]) for r in _cache_clientes()]
+        clientes = [(None,"Todos os clientes")] + [(r[0],r[1]) for r in _cache_todos_clientes()]
         fil_cli = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="vis_fil_cli")
     with col2:
         fil_per = st.selectbox("Periodo", ["30 dias","60 dias","90 dias","Ano atual","Todos"],

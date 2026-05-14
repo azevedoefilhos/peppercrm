@@ -28,7 +28,7 @@ def tela_novo_pedido():
         _ir("home")
 
     # PASSO 1: Cliente
-    from database import _cache_clientes
+    from database import _cache_todos_clientes
     clientes = [(r[0], r[1], None, None) if len(r)==2 else r
                 for r in query("""SELECT cliente_id, nome_fantasia, cidade, estado
         FROM cliente WHERE ativo=1 ORDER BY nome_fantasia""")]

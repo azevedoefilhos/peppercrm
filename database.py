@@ -399,6 +399,10 @@ def get_mix_com_preco(cliente_id, fornecedor_id, pdv_id=None):
 def get_clientes_ativos():
     return query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo=1 ORDER BY nome_fantasia")
 
+def get_todos_clientes():
+    """Retorna TODOS os clientes — sem filtro de ativo. Usado em contatos, visitas, pedido."""
+    return query("SELECT cliente_id, nome_fantasia FROM cliente ORDER BY nome_fantasia")
+
 
 def get_produtos_por_fornecedor(fornecedor_id):
     return query("""
@@ -476,6 +480,16 @@ def _cache_clientes():
         def _fn(): return get_clientes_ativos()
         return _fn()
     except Exception: return get_clientes_ativos()
+
+
+def _cache_todos_clientes():
+    """Cache de TODOS os clientes sem filtro — para contatos, visitas, pedido."""
+    try:
+        import streamlit as st
+        @st.cache_data(ttl=300, show_spinner=False)
+        def _fn(): return get_todos_clientes()
+        return _fn()
+    except Exception: return get_todos_clientes()
 
 
 def _cache_fornecedores():
