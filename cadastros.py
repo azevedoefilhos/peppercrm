@@ -1823,7 +1823,7 @@ def _importar_tabela_excel():
 
                 # Upsert compatível SQLite + PostgreSQL
                 existe = conn.execute("""
-                    SELECT tabela_item_id FROM tabela_preco_item
+                    SELECT 1 FROM tabela_preco_item
                     WHERE tabela_preco_id=? AND produto_id=?
                 """, (tab_id, prod[0])).fetchone()
 
