@@ -197,15 +197,15 @@ def _load_produtos():
     """Cache de produtos - nivel de modulo para persistir entre navegacoes."""
     return query("""
         SELECT p.produto_id, f.nome_fantasia, m.nome_marca,
-               COALESCE(cat.nome_categoria,'—'), COALESCE(l.nome_linha,'—'),
+               COALESCE(cat.nome_categoria,''), COALESCE(l.nome_linha,''),
                p.codigo_produto, p.descricao, p.descricao_curta,
                p.unidade_medida, p.unidades_caixa,
                COALESCE(p.peso,0), COALESCE(p.peso_caixa,0),
-               COALESCE(p.sub_categoria,'—'), COALESCE(p.grupo,'—'),
+               COALESCE(p.sub_categoria,''), COALESCE(p.grupo,''),
                COALESCE(p.validade_dias,0),
-               COALESCE(p.ean,'—'), COALESCE(p.dun,'—'),
-               COALESCE(p.ncm,'—'), COALESCE(p.cest,'—'),
-               COALESCE(p.observacao,'—'),
+               COALESCE(p.ean,''), COALESCE(p.dun,''),
+               COALESCE(p.ncm,''), COALESCE(p.cest,''),
+               COALESCE(p.observacao,''),
                p.ativo
         FROM produto p
         LEFT JOIN fornecedor f   ON p.fornecedor_id = f.fornecedor_id
@@ -247,8 +247,10 @@ def _lista_produtos():
     # Banners de feedback
     msg_del  = st.session_state.pop("prod_excluir_ok", None)
     msg_edit = st.session_state.pop("prod_edit_ok", None)
+    msg_novo = st.session_state.pop("prod_sucesso_msg", None)
     if msg_del:  st.success(msg_del)
     if msg_edit: st.success(msg_edit)
+    if msg_novo: st.success(msg_novo)
 
     dados = _load_produtos()
     if not dados:
@@ -341,20 +343,26 @@ def _lista_produtos():
     trigger = st.session_state.pop("exp_prod_trigger", None)
     if trigger == "excel":
         buf = io.BytesIO()
-        df.to_excel(buf, index=False, sheet_name="Produtos")
+        df_exp = df.copy()
+        # Remove "—" substituindo por vazio
+        df_exp = df_exp.replace("—", "")
+        df_exp.to_excel(buf, index=False, sheet_name="Produtos")
         buf.seek(0)
         nome_arq = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}.xlsx"
-        st.download_button("📥 Baixar Excel", data=buf.read(),
-                           file_name=nome_arq,
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True, key="dl_xlsx_prod")
+        st.download_button(
+            "📥 Clique aqui para baixar o Excel",
+            data=buf.read(), file_name=nome_arq,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True, key="dl_xlsx_prod_now")
     elif trigger == "pdf":
         with st.spinner("Gerando PDF..."):
             pdf_bytes = _exportar_produtos_pdf(df, sel_forn)
         nome_arq = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}.pdf"
-        st.download_button("📥 Baixar PDF", data=pdf_bytes,
-                           file_name=nome_arq, mime="application/pdf",
-                           use_container_width=True, key="dl_pdf_prod")
+        st.download_button(
+            "📥 Clique aqui para baixar o PDF",
+            data=pdf_bytes, file_name=nome_arq,
+            mime="application/pdf",
+            use_container_width=True, key="dl_pdf_prod_now")
 
     st.divider()
 
@@ -802,11 +810,15 @@ def _form_novo_produto():
               sub_cat or None, grupo or None, obs_prod or None))
         conn.commit(); conn.close()
 
-        # Limpa campos de texto após salvar com sucesso
+        # Limpa campos e volta para aba lista
         for k in ["np_codigo","np_desc","np_desc_c","np_subcat","np_grupo",
-                  "np_ean","np_dun","np_ncm","np_cest","np_obs"]:
+                  "np_ean","np_dun","np_ncm","np_cest","np_obs",
+                  "np_marca","np_cat","np_linha","np_unidade",
+                  "np_peso","np_peso_cx","np_uncx","np_validade",
+                  "prod_aba"]:
             st.session_state.pop(k, None)
-        st.session_state["np_sucesso_msg"] = f"✅ Produto '{descricao_curta.strip()}' cadastrado com sucesso!"
+        st.session_state["prod_sucesso_msg"] = f"✅ Produto '{descricao_curta.strip()}' cadastrado!"
+        st.session_state["prod_aba"] = "lista"  # volta para a aba lista
         st.rerun()
 
 
@@ -2635,13 +2647,13 @@ def _form_novo_pdv(cli_id):
         col1, col2 = st.columns(2)
         with col1:
             nome_loja = st.text_input("Nome da loja *")
-            tipo_pdv  = st.selectbox("Tipo de PDV", TIPOS_PDV, key="pdv_tipo")
+            tipo_pdv  = st.selectbox("Tipo de PDV", TIPOS_PDV, key=f"pdv_tipo_{cli_id}")
             numero    = st.text_input("Numero da loja (opcional)",
                                       placeholder="Ex: Loja 05, Filial Centro")
             endereco  = st.text_input("Endereco")
             bairro    = st.text_input("Bairro")
             cidade    = st.text_input("Cidade")
-            estado    = st.selectbox("UF", _ufs(), key="pdv_uf")
+            estado    = st.selectbox("UF", _ufs(), key=f"pdv_uf_{cli_id}")
             cnpj      = st.text_input("CNPJ (opcional)")
         with col2:
             gerente          = st.text_input("Gerente")
@@ -2655,19 +2667,19 @@ def _form_novo_pdv(cli_id):
                                             help="Setor geografico — facilita planejamento de roteiro e alocacao de promotores")
             cluster          = st.selectbox("Cluster (poder aquisitivo)",
                                             ["A/B","B/C","C/D","A","B","C","D","—"],
-                                            key="pdv_cluster",
+                                            key=f"pdv_cluster_{cli_id}",
                                             help="A/B = premium, B/C = medio, C/D = popular")
             tamanho_pdv      = st.selectbox("Tamanho do PDV",
                                             ["GG","G","M","P","PP","—"],
-                                            key="pdv_tamanho",
+                                            key=f"pdv_tamanho_{cli_id}",
                                             help="GG=hipermercado, G=grande, M=medio, P=pequeno, PP=micro")
         status_pdv = st.selectbox("Status do PDV *",
                                    ["Prospecto", "Ativo", "Inativo", "Bloqueado"],
                                    index=0,
-                                   key="pdv_status_novo",
+                                   key=f"pdv_status_novo_{cli_id}",
                                    help="Prospecto = cliente em prospecção, ainda não compra")
         obs    = st.text_area("Observacao")
-        salvar = st.form_submit_button("Salvar PDV", type="primary")
+        salvar = st.form_submit_button("💾 Salvar PDV", type="primary")
 
     if salvar:
         if not nome_loja.strip():
