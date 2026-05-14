@@ -1697,7 +1697,8 @@ def _importar_tabela_excel():
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     st.caption(
         "Colunas obrigatorias: fornecedor_nome, nome_tabela, codigo_produto, preco_caixa.  "
-        "preco_kg = Valor PCT/kg (R$)  |  desconto_maximo = % maximo de desconto"
+        "Opcionais: tipo_tabela, prazo_pagamento, frete, data_inicio, data_fim, preco_kg, desconto_maximo, observacao.  "
+        "preco_kg = Valor por kg/PCT (R$)  |  desconto_maximo = % maximo de desconto"
     )
     st.divider()
 
