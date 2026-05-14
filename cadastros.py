@@ -1829,7 +1829,7 @@ def _importar_tabela_excel():
                     ON CONFLICT(tabela_preco_id, produto_id)
                     DO UPDATE SET preco_caixa=excluded.preco_caixa,
                                   desconto_maximo=excluded.desconto_maximo,
-                                  preco_kg=COALESCE(excluded.preco_kg, preco_kg),
+                                  preco_kg=COALESCE(excluded.preco_kg, tabela_preco_item.preco_kg),
                                   observacao=COALESCE(excluded.observacao, observacao)
                 """, (tab_id, prod[0], preco, desc_max, preco_kg_t, obs_tab_t))
 
