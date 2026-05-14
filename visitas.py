@@ -263,7 +263,7 @@ as coordenadas aparecem na URL apos o simbolo @
         cli_id   = cli_sel[0]
 
         pdvs = query("""SELECT pdv_id, nome_loja, cidade FROM pdv
-            WHERE cliente_id=? AND ativo=1 ORDER BY nome_loja""", (cli_id,))
+            WHERE cliente_id=? ORDER BY nome_loja""", (cli_id,))
         pdv_opts = [(None,"— Visita na matriz/sem PDV")] + [(p[0],f"{p[1]} ({p[2] or ''})") for p in pdvs]
         pdv_sel  = st.selectbox("PDV", pdv_opts, format_func=lambda x: x[1], key="vis_pdv")
         pdv_id   = pdv_sel[0]
