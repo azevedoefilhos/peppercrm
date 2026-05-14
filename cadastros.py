@@ -1158,19 +1158,61 @@ def _lista_tabelas():
                                    file_name=nome_tp, mime="application/pdf",
                                    use_container_width=True)
 
+    # ── Auto-inativação de tabelas com data_fim expirada ─────────────────
+    from datetime import date as _date
+    _hoje = _date.today().isoformat()
+    _expiradas = query("""
+        SELECT tabela_preco_id FROM tabela_preco
+        WHERE ativo=1 AND data_fim IS NOT NULL AND data_fim < ?
+    """, (_hoje,))
+    if _expiradas:
+        conn = conectar()
+        for _exp in _expiradas:
+            conn.execute("UPDATE tabela_preco SET ativo=0 WHERE tabela_preco_id=?",
+                         (_exp[0],))
+        conn.commit(); conn.close()
+        # Recarrega dados após auto-inativação
+        dados = query("""
+            SELECT tp.tabela_preco_id, f.fornecedor_id, f.nome_fantasia, tp.nome_tabela,
+                   tp.tipo_tabela, tp.prazo_pagamento, tp.frete,
+                   tp.data_inicio, tp.data_fim, tp.ativo,
+                   COUNT(tpi.tabela_preco_item_id) AS qtd_itens
+            FROM tabela_preco tp
+            LEFT JOIN fornecedor f ON tp.fornecedor_id = f.fornecedor_id
+            LEFT JOIN tabela_preco_item tpi ON tp.tabela_preco_id = tpi.tabela_preco_id
+            GROUP BY tp.tabela_preco_id, f.fornecedor_id, f.nome_fantasia, tp.nome_tabela,
+                     tp.tipo_tabela, tp.prazo_pagamento, tp.frete, tp.data_inicio, tp.data_fim, tp.ativo
+            ORDER BY f.nome_fantasia, tp.data_inicio DESC
+        """)
+        df = pd.DataFrame(dados, columns=["ID","Forn.ID","Fornecedor","Tabela","Tipo","Prazo",
+                                           "Frete","Inicio","Fim","Ativo","Itens"])
+        df["Fim"] = df["Fim"].fillna("— sem prazo")
+        df_forn = df if sel_t == "Todos" else df[df["Fornecedor"] == sel_t]
+        df_vis = df_forn if sel_tipo == "Todos" else df_forn[df_forn["Tipo"] == sel_tipo]
+        if sel_status == "Ativas":
+            df_vis = df_vis[df_vis["Ativo"] == 1]
+        elif sel_status == "Inativas":
+            df_vis = df_vis[df_vis["Ativo"] == 0]
+        df_vis = df_vis.copy()
+
+    df_vis["Ativo"] = df_vis["Ativo"].map({1: "✅ Ativa", 0: "❌ Inativa"})
+
     st.dataframe(df_vis[["ID","Fornecedor","Tabela","Tipo","Prazo","Frete","Inicio","Fim","Ativo","Itens"]],
                  use_container_width=True, hide_index=True)
 
     st.divider()
 
-    # ── Seleção da tabela para editar ─────────────────
-    # Usa session_state para fixar a tabela selecionada após salvar (evita pular para próxima)
-    ids     = [(r[0], f"{r[2]} · {r[3]}") for r in dados]
-    ids_map = {r[0]: i for i, r in enumerate(ids)}   # tab_id → índice na lista
+    # ── Seleção da tabela para editar — apenas ativas ─────────────────────
+    dados_ativas = [r for r in dados if r[9] == 1]  # ativo=1
+    if not dados_ativas:
+        st.info("Nenhuma tabela ativa para editar. Use o filtro 'Inativas' para reativar tabelas.")
+        return
 
-    # Recupera tab_id fixado (salvo após edição) e calcula índice correspondente
+    ids     = [(r[0], f"{r[2]} · {r[3]}") for r in dados_ativas]
+    ids_map = {r[0]: i for i, r in enumerate(ids)}
+
     tab_id_fixo = st.session_state.get("tab_editando_id")
-    idx_sel = ids_map.get(tab_id_fixo, 0) if tab_id_fixo else 0
+    idx_sel = ids_map.get(tab_id_fixo, 0) if tab_id_fixo and tab_id_fixo in ids_map else 0
 
     sel = st.selectbox("Selecione a tabela para editar", ids,
                        index=idx_sel,
@@ -1180,10 +1222,9 @@ def _lista_tabelas():
         return
 
     tab_id = sel[0]
-    # Sempre sincroniza a seleção manual do usuário com o session_state
     st.session_state["tab_editando_id"] = tab_id
 
-    tab_row = next(r for r in dados if r[0] == tab_id)
+    tab_row = next(r for r in dados_ativas if r[0] == tab_id)
     (_, forn_id_at, forn_nome_at, nome_at, tipo_at, prazo_at,
      frete_at, ini_at, fim_at, ativo_at, _) = tab_row
 
