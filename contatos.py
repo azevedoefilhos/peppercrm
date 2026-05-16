@@ -265,8 +265,27 @@ def _lista_topicos():
         aberto = st.session_state.get("ct_topico_aberto") == cid
         vencido = followup and followup < hoje and status not in ("Concluído","Cancelado")
 
+        # Busca fornecedores do tópico com status individual
+        _forns_topico = query("""
+            SELECT cft.cft_id, cft.fornecedor_id, f.nome_fantasia,
+                   cft.status, cft.tipo_topico, cft.prioridade, cft.data_followup
+            FROM contato_fornecedor_topico cft
+            JOIN fornecedor f ON f.fornecedor_id=cft.fornecedor_id
+            WHERE cft.contato_id=? AND cft.ativo=1
+            ORDER BY f.nome_fantasia
+        """, (cid,))
+
+        # Fallback: se ainda não migrou, usa contato_x_fornecedor
+        if not _forns_topico:
+            _forns_topico_raw = query("""
+                SELECT cxf.fornecedor_id, f.nome_fantasia
+                FROM contato_x_fornecedor cxf
+                JOIN fornecedor f ON f.fornecedor_id=cxf.fornecedor_id
+                WHERE cxf.contato_id=?""", (cid,))
+            _forns_topico = [(None, r[0], r[1], status, tipo, prioridade, followup)
+                             for r in _forns_topico_raw]
+
         with st.container(border=True):
-            # [info-edit(3.0) | conteúdo(4.8) | meta(1.6) | ▼(0.35) | 🗑️(0.35)]
             c1, c2, c3, c4, c5 = st.columns([3.0, 4.8, 1.6, 0.35, 0.35])
 
             _edit_key = f"ct_edit_{cid}"
@@ -274,49 +293,64 @@ def _lista_topicos():
 
             with c1:
                 if not _editando:
-                    # Modo leitura: 1 linha compacta com ✏️
-                    tipo_ico  = "📞" if tipo == "Contato" else "🤝"
-                    st.markdown(
-                        f"<div style='font-size:13px;line-height:1.8;padding-top:4px'>"
-                        f"{tipo_ico} <b>{tipo}</b><br/>"
-                        f"<span style='font-size:12px;color:#555'>{STATUS_ICONE.get(status,'')} {status}</span><br/>"
-                        f"<span style='font-size:12px;color:#555'>"
-                        f"{'🔴' if prioridade=='Alta' else '🟡' if prioridade=='Média' else '🟢'} "
-                        f"{prioridade}</span></div>",
-                        unsafe_allow_html=True)
+                    # Mostra status/tipo por fornecedor
+                    for _ft in _forns_topico:
+                        _cft_id, _fid, _fnome, _fst, _ftp, _fpr, _ffup = _ft
+                        _tipo_ico = "📞" if _ftp == "Contato" else "🤝"
+                        _pr_cor = "#e53935" if _fpr=="Alta" else "#fb8c00" if _fpr=="Média" else "#43a047"
+                        st.markdown(
+                            f"<div style='font-size:12px;line-height:1.7;padding:2px 0;"
+                            f"border-left:3px solid {_pr_cor};padding-left:6px;margin-bottom:4px'>"
+                            f"<b>{_fnome}</b><br/>"
+                            f"{_tipo_ico} {_ftp or 'Contato'} · "
+                            f"{STATUS_ICONE.get(_fst,'')} {_fst or 'A contatar'}"
+                            f"</div>",
+                            unsafe_allow_html=True)
                     if st.button("✏️", key=f"ct_edtbtn_{cid}",
-                                 help="Editar tipo / status / prioridade"):
+                                 help="Editar fornecedores / status / prioridade"):
                         st.session_state[_edit_key] = True
                         st.rerun()
                 else:
-                    # Modo edição: 3 selectboxes + Salvar/Cancelar
-                    novo_tipo_card = st.selectbox(
-                        "Tipo", TIPO_TOPICO,
-                        index=TIPO_TOPICO.index(tipo) if tipo in TIPO_TOPICO else 0,
-                        key=f"ct_tipo_{cid}", label_visibility="collapsed")
-                    novo_st_card = st.selectbox(
-                        "Status", STATUS_TOPICO,
-                        index=STATUS_TOPICO.index(status) if status in STATUS_TOPICO else 0,
-                        key=f"ct_st_{cid}", label_visibility="collapsed")
-                    novo_pr_card = st.selectbox(
-                        "Prioridade", PRIOR,
-                        index=PRIOR.index(prioridade) if prioridade in PRIOR else 1,
-                        key=f"ct_pr_{cid}", label_visibility="collapsed")
+                    # Modo edição por fornecedor
+                    for _ft in _forns_topico:
+                        _cft_id, _fid, _fnome, _fst, _ftp, _fpr, _ffup = _ft
+                        st.caption(f"**{_fnome}**")
+                        _novo_tp = st.selectbox(f"Tipo", TIPO_TOPICO,
+                            index=TIPO_TOPICO.index(_ftp) if _ftp in TIPO_TOPICO else 0,
+                            key=f"ct_tipo_{cid}_{_fid}", label_visibility="collapsed")
+                        _novo_st = st.selectbox(f"Status", STATUS_TOPICO,
+                            index=STATUS_TOPICO.index(_fst) if _fst in STATUS_TOPICO else 0,
+                            key=f"ct_st_{cid}_{_fid}", label_visibility="collapsed")
+                        _novo_pr = st.selectbox(f"Prior.", PRIOR,
+                            index=PRIOR.index(_fpr) if _fpr in PRIOR else 1,
+                            key=f"ct_pr_{cid}_{_fid}", label_visibility="collapsed")
+                        # Salva mudanças imediatamente ao detectar alteração
+                        if _novo_tp != _ftp or _novo_st != _fst or _novo_pr != _fpr:
+                            conn = conectar()
+                            if _cft_id:
+                                conn.execute("""UPDATE contato_fornecedor_topico
+                                    SET tipo_topico=?, status=?, prioridade=?
+                                    WHERE cft_id=?""",
+                                    (_novo_tp, _novo_st, _novo_pr, _cft_id))
+                            conn.commit(); conn.close()
+
                     col_sv, col_cx = st.columns(2)
-                    if col_sv.button("✅", key=f"ct_sv_{cid}",
-                                     use_container_width=True, help="Salvar"):
+                    if col_sv.button("✅ Salvar", key=f"ct_sv_{cid}",
+                                     use_container_width=True):
+                        # Atualiza status global do tópico com o pior status entre fornecedores
+                        _status_ord = {s: i for i, s in enumerate(STATUS_TOPICO)}
+                        _pior_status = min(
+                            [_ft[3] or "A contatar" for _ft in _forns_topico],
+                            key=lambda s: _status_ord.get(s, 99))
                         conn = conectar()
-                        conn.execute("""UPDATE contato_registro
-                            SET tipo_topico=?, status=?, prioridade=?
-                            WHERE contato_id=?""",
-                            (novo_tipo_card, novo_st_card, novo_pr_card, cid))
+                        conn.execute("UPDATE contato_registro SET status=? WHERE contato_id=?",
+                                     (_pior_status, cid))
                         conn.commit(); conn.close()
                         st.session_state.pop(_edit_key, None)
-                        st.session_state["ct_msg"] = (
-                            f"✅ '{assunto[:30]}' → {novo_st_card} · {novo_pr_card}")
+                        st.session_state["ct_msg"] = f"✅ '{assunto[:30]}' atualizado."
                         st.rerun()
                     if col_cx.button("✖️", key=f"ct_cx_{cid}",
-                                     use_container_width=True, help="Cancelar"):
+                                     use_container_width=True):
                         st.session_state.pop(_edit_key, None)
                         st.rerun()
 
@@ -399,9 +433,10 @@ def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual):
     _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual)
 
 
-def _gerar_pdf_topico(cid):
+def _gerar_pdf_topico(cid, fornecedor_id=None):
     """
-    Gera PDF estruturado com o histórico completo de um tópico de contato.
+    Gera PDF estruturado com o histórico de um tópico de contato.
+    fornecedor_id: se informado, filtra interações daquele fornecedor.
     Retorna bytes do PDF prontos para st.download_button.
     """
     from reportlab.lib.pagesizes import A4
@@ -434,12 +469,22 @@ def _gerar_pdf_topico(cid):
         WHERE cxf.contato_id=?""", (cid,))
     forns_str = " / ".join(f[0] for f in forns) if forns else "—"
 
-    ints = query("""
-        SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
-               ci.descricao, ci.resultado, ci.data_followup
-        FROM contato_interacao ci
-        WHERE ci.contato_id=? AND ci.ativo=1
-        ORDER BY ci.data_interacao ASC""", (cid,))
+    # Busca interações filtradas por fornecedor se informado
+    if fornecedor_id:
+        ints = query("""
+            SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
+                   ci.descricao, ci.resultado, ci.data_followup
+            FROM contato_interacao ci
+            WHERE ci.contato_id=? AND ci.ativo=1
+              AND (ci.fornecedor_id=? OR ci.fornecedor_id IS NULL)
+            ORDER BY ci.data_interacao ASC""", (cid, fornecedor_id))
+    else:
+        ints = query("""
+            SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
+                   ci.descricao, ci.resultado, ci.data_followup
+            FROM contato_interacao ci
+            WHERE ci.contato_id=? AND ci.ativo=1
+            ORDER BY ci.data_interacao ASC""", (cid,))
 
     # ── Estilos ───────────────────────────────────────────
     buf  = _io.BytesIO()
@@ -891,37 +936,69 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
 
 
 def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
-    """Painel completo: histórico editável + nova interação + edição do tópico."""
+    """Painel completo com separação por fornecedor."""
     st.divider()
 
-    # Mensagem de sucesso inline (complementa a do topo, visível sem scroll)
     _msg_inline = st.session_state.pop(f"ct_msg_inline_{cid}", None)
     if _msg_inline:
         st.success(_msg_inline)
 
-    # ── Exportar PDF (1 clique) ───────────────────────────────────────────
-    # PDF é gerado e cacheado no session_state; download_button aparece direto.
-    _pdf_key = f"pdf_cache_{cid}"
-    _pdf_nome_key = f"pdf_nome_{cid}"
+    # ── Fornecedores do tópico ────────────────────────────────────────────
+    _forns_pan = query("""
+        SELECT cft.cft_id, cft.fornecedor_id, f.nome_fantasia,
+               cft.status, cft.tipo_topico, cft.prioridade, cft.data_followup
+        FROM contato_fornecedor_topico cft
+        JOIN fornecedor f ON f.fornecedor_id=cft.fornecedor_id
+        WHERE cft.contato_id=? AND cft.ativo=1
+        ORDER BY f.nome_fantasia
+    """, (cid,))
+
+    # Fallback se migração não rodou ainda
+    if not _forns_pan:
+        _raw = query("""SELECT cxf.fornecedor_id, f.nome_fantasia
+            FROM contato_x_fornecedor cxf
+            JOIN fornecedor fn ON cxf.fornecedor_id=fn.fornecedor_id
+            JOIN fornecedor f ON f.fornecedor_id=cxf.fornecedor_id
+            WHERE cxf.contato_id=?""", (cid,))
+        _forns_pan = [(None, r[0], r[1], status_atual,
+                       tipo_atual, prioridade_atual, None) for r in _raw]
+
+    _forn_opts = [(ft[1], ft[2]) for ft in _forns_pan]
+
+    # Seletor de fornecedor + botão PDF
+    col_fsel, col_pdf = st.columns([3, 2])
+    with col_fsel:
+        if len(_forn_opts) > 1:
+            _fsel_idx = st.selectbox(
+                "📋 Ver interações de:",
+                range(len(_forn_opts)),
+                format_func=lambda i: _forn_opts[i][1],
+                key=f"forn_sel_painel_{cid}")
+        else:
+            _fsel_idx = 0
+        _forn_id_ativo   = _forn_opts[_fsel_idx][0] if _forn_opts else None
+        _forn_nome_ativo = _forn_opts[_fsel_idx][1] if _forn_opts else "—"
+
+    # PDF por fornecedor
+    _pdf_key      = f"pdf_cache_{cid}_{_forn_id_ativo}"
+    _pdf_nome_key = f"pdf_nome_{cid}_{_forn_id_ativo}"
     if _pdf_key not in st.session_state:
         with st.spinner("Preparando PDF..."):
-            _pdf_bytes = _gerar_pdf_topico(cid)
+            _pdf_bytes = _gerar_pdf_topico(cid, _forn_id_ativo)
         if _pdf_bytes:
-            _ass = query("SELECT assunto FROM contato_registro WHERE contato_id=?", (cid,))
+            _ass  = query("SELECT assunto FROM contato_registro WHERE contato_id=?", (cid,))
             _nome = (_ass[0][0] or f"topico_{cid}") if _ass else f"topico_{cid}"
             _nome = "".join(c for c in _nome if c.isalnum() or c in " _-")[:40].strip()
             st.session_state[_pdf_key]      = _pdf_bytes
             st.session_state[_pdf_nome_key] = _nome
-
-    if _pdf_key in st.session_state:
-        col_pdf, col_esp = st.columns([2, 5])
-        with col_pdf:
+    with col_pdf:
+        if _pdf_key in st.session_state:
             st.download_button(
-                label="📄 Exportar histórico PDF",
+                label=f"📄 PDF — {_forn_nome_ativo}",
                 data=st.session_state[_pdf_key],
-                file_name=f"historico_{st.session_state[_pdf_nome_key]}.pdf",
+                file_name=f"historico_{st.session_state.get(_pdf_nome_key,cid)}_{_forn_nome_ativo[:10]}.pdf",
                 mime="application/pdf",
-                key=f"pdf_dl_{cid}",
+                key=f"pdf_dl_{cid}_{_forn_id_ativo}",
                 use_container_width=True)
     st.divider()
 
@@ -1022,15 +1099,17 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
     # SEÇÃO B — HISTÓRICO DE INTERAÇÕES com edição inline
     # ════════════════════════════════════════════════════
     ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
-               ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup
+               ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
+               ci.fornecedor_id
         FROM contato_interacao ci
         WHERE ci.contato_id=? AND ci.ativo=1
-        ORDER BY ci.data_interacao DESC""", (cid,))
+          AND (ci.fornecedor_id=? OR ci.fornecedor_id IS NULL)
+        ORDER BY ci.data_interacao DESC""", (cid, _forn_id_ativo))
 
     if ints:
-        st.markdown(f"**📅 Linha do tempo — {len(ints)} interação(ões)**")
+        st.markdown(f"**📅 {_forn_nome_ativo} — {len(ints)} interação(ões)**")
         for irow in ints:
-            iid, data_i, via, pessoa, desc, result, fup = irow
+            iid, data_i, via, pessoa, desc, result, fup, _fi = irow
             lbl = (f"{VIA_ICONE.get(via,'')} {data_i}"
                    + (f"  —  {pessoa}" if pessoa else "")
                    + (f"  |  {desc[:40]}…" if desc and len(desc)>3 else
@@ -1216,23 +1295,36 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
         _re  = st.session_state.get(f"ni_res_{cid}", result_i).strip()
         _nst = st.session_state.get(f"ni_st_{cid}", novo_st)
         _ntp = st.session_state.get(f"ni_tp_{cid}", novo_tp)
+        _fup_val = _fup.isoformat() if _fup and hasattr(_fup,'isoformat') else None
 
         conn = conectar()
+        # Grava interação com fornecedor_id do fornecedor selecionado no painel
         conn.execute("""INSERT INTO contato_interacao
-            (contato_id, data_interacao, via_comunicacao,
+            (contato_id, fornecedor_id, data_interacao, via_comunicacao,
              contato_pessoa, contato_cliente_id,
              descricao, resultado, data_followup, ativo)
-            VALUES (?,?,?,?,?,?,?,?,1)""",
-            (cid, _dt.isoformat() if hasattr(_dt,'isoformat') else str(_dt),
+            VALUES (?,?,?,?,?,?,?,?,?,1)""",
+            (cid, _forn_id_ativo,
+             _dt.isoformat() if hasattr(_dt,'isoformat') else str(_dt),
              _via, pessoa_nome or None, novo_ct_id or ct_cli_id,
-             _dc or None, _re or None,
-             _fup.isoformat() if _fup and hasattr(_fup,'isoformat') else None))
-        _fup_val = _fup.isoformat() if _fup and hasattr(_fup,'isoformat') else None
+             _dc or None, _re or None, _fup_val))
+
+        # Atualiza status/tipo/followup no contato_fornecedor_topico deste fornecedor
+        _cft_row = query("""SELECT cft_id FROM contato_fornecedor_topico
+            WHERE contato_id=? AND fornecedor_id=?""", (cid, _forn_id_ativo))
+        if _cft_row:
+            conn.execute("""UPDATE contato_fornecedor_topico
+                SET status=?, tipo_topico=?, data_followup=?
+                WHERE cft_id=?""",
+                (_nst, _ntp, _fup_val, _cft_row[0][0]))
+        # Atualiza status global do tópico (pior status entre fornecedores)
         if _fup_val:
-            conn.execute("UPDATE contato_registro SET status=?, tipo_topico=?, data_followup=? WHERE contato_id=?",
+            conn.execute("""UPDATE contato_registro
+                SET status=?, tipo_topico=?, data_followup=? WHERE contato_id=?""",
                 (_nst, _ntp, _fup_val, cid))
         else:
-            conn.execute("UPDATE contato_registro SET status=?, tipo_topico=? WHERE contato_id=?",
+            conn.execute("""UPDATE contato_registro
+                SET status=?, tipo_topico=? WHERE contato_id=?""",
                 (_nst, _ntp, cid))
         conn.commit(); conn.close()
 
@@ -1240,10 +1332,9 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
             st.session_state.pop(k, None)
         st.session_state[_mk] = "sel"
         st.session_state.pop(f"exp_inter_{cid}", None)
-        # Invalida cache do PDF (nova interação deve refletir no próximo download)
-        st.session_state.pop(f"pdf_cache_{cid}", None)
-        st.session_state.pop(f"pdf_nome_{cid}", None)
-        # Fecha o painel e sinaliza scroll para o topo
+        # Invalida cache do PDF deste fornecedor
+        st.session_state.pop(f"pdf_cache_{cid}_{_forn_id_ativo}", None)
+        st.session_state.pop(f"pdf_nome_{cid}_{_forn_id_ativo}", None)
         st.session_state.pop("ct_topico_aberto", None)
         st.session_state["ct_msg"] = "✅ Interação registrada com sucesso!"
         st.session_state["_scroll_topo"] = True

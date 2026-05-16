@@ -422,6 +422,125 @@ def registrar_historico(conn, pedido_id, campo, valor_antes, valor_depois, obs=N
                        str(valor_depois) if valor_depois is not None else None, obs))
 
 
+def _migrar_contato_por_fornecedor():
+    """
+    Reestrutura o módulo de contatos para separação por fornecedor.
+    Mudanças:
+    1. Cria tabela contato_fornecedor_topico (status/tipo/followup por fornecedor)
+    2. Adiciona coluna fornecedor_id em contato_interacao
+    3. Migra dados existentes:
+       - Para cada contato_x_fornecedor, cria registro em contato_fornecedor_topico
+       - Vincula todas as interações existentes a todos os fornecedores do tópico
+    """
+    try:
+        if _check_supabase():
+            conn = conectar()
+            cur = conn._conn.cursor()
+
+            # 1. Cria tabela contato_fornecedor_topico
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS contato_fornecedor_topico (
+                    cft_id SERIAL PRIMARY KEY,
+                    contato_id INTEGER NOT NULL REFERENCES contato_registro(contato_id),
+                    fornecedor_id INTEGER NOT NULL REFERENCES fornecedor(fornecedor_id),
+                    status VARCHAR(50) DEFAULT 'A contatar',
+                    tipo_topico VARCHAR(30) DEFAULT 'Contato',
+                    data_followup DATE,
+                    prioridade VARCHAR(20) DEFAULT 'Média',
+                    observacao TEXT,
+                    ativo INTEGER DEFAULT 1,
+                    UNIQUE(contato_id, fornecedor_id)
+                )
+            """)
+
+            # 2. Adiciona fornecedor_id em contato_interacao
+            cur.execute("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name='contato_interacao' AND column_name='fornecedor_id'
+            """)
+            if not cur.fetchone():
+                cur.execute("""
+                    ALTER TABLE contato_interacao ADD COLUMN fornecedor_id INTEGER
+                    REFERENCES fornecedor(fornecedor_id)
+                """)
+
+            # 3. Migra contato_x_fornecedor → contato_fornecedor_topico
+            cur.execute("""
+                INSERT INTO contato_fornecedor_topico
+                    (contato_id, fornecedor_id, status, tipo_topico, prioridade,
+                     data_followup, ativo)
+                SELECT cxf.contato_id, cxf.fornecedor_id,
+                       COALESCE(cr.status, 'A contatar'),
+                       COALESCE(cr.tipo_topico, 'Contato'),
+                       COALESCE(cr.prioridade, 'Média'),
+                       cr.data_followup, 1
+                FROM contato_x_fornecedor cxf
+                JOIN contato_registro cr ON cr.contato_id=cxf.contato_id
+                ON CONFLICT(contato_id, fornecedor_id) DO NOTHING
+            """)
+
+            # 4. Vincula interações existentes a todos os fornecedores do tópico
+            # Para cada interação sem fornecedor_id, associa a todos os fornecedores do tópico
+            cur.execute("""
+                UPDATE contato_interacao ci
+                SET fornecedor_id = (
+                    SELECT MIN(fornecedor_id) FROM contato_x_fornecedor
+                    WHERE contato_id = ci.contato_id
+                )
+                WHERE ci.fornecedor_id IS NULL
+            """)
+
+            conn._conn.commit()
+            conn.close()
+        else:
+            import sqlite3 as _sq
+            _db = os.path.join(os.path.dirname(__file__), "peppercrm.db")
+            if not os.path.exists(_db): return
+            _conn = _sq.connect(_db)
+
+            _conn.execute("""CREATE TABLE IF NOT EXISTS contato_fornecedor_topico (
+                cft_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                contato_id INTEGER NOT NULL,
+                fornecedor_id INTEGER NOT NULL,
+                status TEXT DEFAULT 'A contatar',
+                tipo_topico TEXT DEFAULT 'Contato',
+                data_followup TEXT,
+                prioridade TEXT DEFAULT 'Média',
+                observacao TEXT,
+                ativo INTEGER DEFAULT 1,
+                UNIQUE(contato_id, fornecedor_id)
+            )""")
+
+            cols = [r[1] for r in _conn.execute(
+                "PRAGMA table_info(contato_interacao)").fetchall()]
+            if "fornecedor_id" not in cols:
+                _conn.execute(
+                    "ALTER TABLE contato_interacao ADD COLUMN fornecedor_id INTEGER")
+
+            _conn.execute("""
+                INSERT OR IGNORE INTO contato_fornecedor_topico
+                    (contato_id, fornecedor_id, status, tipo_topico, prioridade,
+                     data_followup, ativo)
+                SELECT cxf.contato_id, cxf.fornecedor_id,
+                       COALESCE(cr.status,'A contatar'),
+                       COALESCE(cr.tipo_topico,'Contato'),
+                       COALESCE(cr.prioridade,'Média'),
+                       cr.data_followup, 1
+                FROM contato_x_fornecedor cxf
+                JOIN contato_registro cr ON cr.contato_id=cxf.contato_id
+            """)
+
+            _conn.execute("""
+                UPDATE contato_interacao SET fornecedor_id=(
+                    SELECT MIN(fornecedor_id) FROM contato_x_fornecedor
+                    WHERE contato_id=contato_interacao.contato_id
+                ) WHERE fornecedor_id IS NULL
+            """)
+            _conn.commit(); _conn.close()
+    except Exception as e:
+        import traceback; traceback.print_exc()
+
+
 def _migrar_pedido_minimo():
     """
     Adiciona coluna pedido_minimo à tabela fornecedor, se ainda não existir.
@@ -451,18 +570,20 @@ def _migrar_pedido_minimo():
 
 
 def criar_tabelas():
+    _migrar_contato_por_fornecedor()
     _migrar_pedido_minimo()
 
 def _migrar_todos():
+    _migrar_contato_por_fornecedor()
     _migrar_pedido_minimo()
 
 
 # ── Auto-migration ao importar ───────────────────────────────────────────────
 # Só roda automaticamente no Railway (variável RAILWAY_ENVIRONMENT presente).
-# Localmente: use python -c "from database import _migrar_pedido_minimo; _migrar_pedido_minimo()"
 import os as _os
 if _os.environ.get("RAILWAY_ENVIRONMENT") or _os.environ.get("RAILWAY_PROJECT_ID"):
     try:
+        _migrar_contato_por_fornecedor()
         _migrar_pedido_minimo()
     except Exception:
         pass
