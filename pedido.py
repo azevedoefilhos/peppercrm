@@ -389,9 +389,17 @@ def _renderizar_grade(grade: dict, ordem: str = "Descricao (A-Z)") -> dict:
 def _bloco_busca_produto(cli_id, forn_id, pdv_id, tab_id, grade_key):
     with st.expander("🔍 Buscar e adicionar produto fora do mix"):
         _bkey = f"busca_{cli_id}_{forn_id}_{pdv_id}"
-        busca = st.text_input("Digite codigo ou parte da descricao", key=_bkey)
+        col_b, col_btn = st.columns([5, 1])
+        with col_b:
+            busca = st.text_input("Digite codigo ou parte da descricao",
+                                  key=_bkey, placeholder="Ex: vinagre, 10.01...")
+        with col_btn:
+            st.write("")
+            _buscar = st.button("🔍", key=f"btn_buscar_{cli_id}_{forn_id}",
+                                use_container_width=True, help="Buscar produto")
 
-        if busca and len(busca) >= 2:
+        _termo = st.session_state.get(_bkey, "")
+        if (_buscar or _termo) and len(_termo) >= 2:
             resultados = query("""
                 SELECT p.produto_id, p.codigo_produto, p.descricao_curta,
                        p.unidades_caixa, p.unidade_medida,
@@ -402,7 +410,7 @@ def _bloco_busca_produto(cli_id, forn_id, pdv_id, tab_id, grade_key):
                 WHERE p.fornecedor_id=? AND p.ativo=1
                   AND (p.codigo_produto LIKE ? OR p.descricao LIKE ? OR p.descricao_curta LIKE ?)
                 ORDER BY p.descricao_curta LIMIT 20
-            """, (tab_id, forn_id, f"%{busca}%", f"%{busca}%", f"%{busca}%"))
+            """, (tab_id, forn_id, f"%{_termo}%", f"%{_termo}%", f"%{_termo}%"))
 
             if resultados:
                 prod_add = st.selectbox("Selecione o produto", resultados,
@@ -446,38 +454,67 @@ def _salvar_pedido(cli_id, forn_id, pdv_id, tab_id, prazo, frete,
                    nr_cliente, nr_fornecedor, data_emissao, data_entrega,
                    desc_geral, observacao, status_ini, itens):
     try:
-        conn = conectar()
-        cur  = conn.cursor()
+        from database import _check_supabase, conectar as _con
         from datetime import date as _date
         _hoje = data_emissao if data_emissao else _date.today().isoformat()
-        cur.execute("""INSERT INTO pedido
-            (cliente_id, pdv_id, fornecedor_id, tabela_preco_id,
-             prazo_pagamento, frete, nr_pedido_cliente, nr_pedido_fornecedor,
-             data_pedido, data_entrega, desconto_geral, observacao, status_pedido)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (cli_id, pdv_id, forn_id, tab_id,
-             prazo if prazo != "—" else None,
-             frete if frete != "—" else None,
-             nr_cliente or None, nr_fornecedor or None,
-             _hoje, data_entrega, desc_geral, observacao or None, status_ini))
-        pedido_id = cur.lastrowid
+
+        conn = _con()
+        cur  = conn.cursor()
+
+        if _check_supabase():
+            # PostgreSQL — usa RETURNING para obter o ID gerado
+            cur.execute("""INSERT INTO pedido
+                (cliente_id, pdv_id, fornecedor_id, tabela_preco_id,
+                 prazo_pagamento, frete, nr_pedido_cliente, nr_pedido_fornecedor,
+                 data_pedido, data_entrega, desconto_geral, observacao, status_pedido)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING pedido_id""",
+                (cli_id, pdv_id, forn_id, tab_id,
+                 prazo if prazo != "—" else None,
+                 frete if frete != "—" else None,
+                 nr_cliente or None, nr_fornecedor or None,
+                 _hoje, data_entrega, desc_geral, observacao or None, status_ini))
+            pedido_id = cur.fetchone()[0]
+        else:
+            # SQLite — usa lastrowid
+            cur.execute("""INSERT INTO pedido
+                (cliente_id, pdv_id, fornecedor_id, tabela_preco_id,
+                 prazo_pagamento, frete, nr_pedido_cliente, nr_pedido_fornecedor,
+                 data_pedido, data_entrega, desconto_geral, observacao, status_pedido)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (cli_id, pdv_id, forn_id, tab_id,
+                 prazo if prazo != "—" else None,
+                 frete if frete != "—" else None,
+                 nr_cliente or None, nr_fornecedor or None,
+                 _hoje, data_entrega, desc_geral, observacao or None, status_ini))
+            pedido_id = cur.lastrowid
 
         for prod_id, item in itens:
             preco_final = item["preco"] * (1 - item["desc"]/100) * (1 - desc_geral/100)
-            cur.execute("""INSERT INTO pedido_item
-                (pedido_id, produto_id, preco_tabela, desconto, preco_final, quantidade, status_item)
-                VALUES (?,?,?,?,?,?,'NORMAL')""",
-                (pedido_id, prod_id, item["preco"], item["desc"],
-                 round(preco_final, 4), item["qtd"]))
+            if _check_supabase():
+                cur.execute("""INSERT INTO pedido_item
+                    (pedido_id, produto_id, preco_tabela, desconto, preco_final,
+                     quantidade, status_item)
+                    VALUES (%s,%s,%s,%s,%s,%s,'NORMAL')""",
+                    (pedido_id, prod_id, item["preco"], item["desc"],
+                     round(preco_final, 4), item["qtd"]))
+            else:
+                cur.execute("""INSERT INTO pedido_item
+                    (pedido_id, produto_id, preco_tabela, desconto, preco_final,
+                     quantidade, status_item)
+                    VALUES (?,?,?,?,?,?,'NORMAL')""",
+                    (pedido_id, prod_id, item["preco"], item["desc"],
+                     round(preco_final, 4), item["qtd"]))
 
         conn.commit(); conn.close()
 
         # Auto-ativa cliente e PDV se ainda não eram ativos
         _cli_atual = query("SELECT status, ativo FROM cliente WHERE cliente_id=?", (cli_id,))
         if _cli_atual:
-            _status_at, _ativo_at = _cli_atual[0][0], _cli_atual[0][1]
+            _status_at = _cli_atual[0]["status"] if hasattr(_cli_atual[0], '__getitem__') else _cli_atual[0][0]
+            _ativo_at  = _cli_atual[0]["ativo"]  if hasattr(_cli_atual[0], '__getitem__') else _cli_atual[0][1]
             if _status_at != "Ativo" or not _ativo_at:
-                conn2 = conectar()
+                conn2 = _con()
                 conn2.execute(
                     "UPDATE cliente SET status='Ativo', ativo=1 WHERE cliente_id=?",
                     (cli_id,))
