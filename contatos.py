@@ -1102,28 +1102,28 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
     # SEÇÃO B — HISTÓRICO DE INTERAÇÕES com edição inline
     # ════════════════════════════════════════════════════
 
-    # Busca interações: prioriza as vinculadas ao fornecedor selecionado,
-    # mas inclui todas com fornecedor_id NULL (dados pré-migração)
+    # Busca TODAS as interações do tópico — mostra sempre tudo
+    # O campo fornecedor_id indica a qual fornecedor pertence (pode ser NULL = pré-migração)
     ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
                ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
                ci.fornecedor_id
         FROM contato_interacao ci
         WHERE ci.contato_id=? AND ci.ativo=1
-          AND (ci.fornecedor_id=? OR ci.fornecedor_id IS NULL)
-        ORDER BY ci.data_interacao DESC""", (cid, _forn_id_ativo))
-
-    # Se não achou nenhuma interação vinculada, mostra todas (fallback seguro)
-    if not ints:
-        ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
-               ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
-               ci.fornecedor_id
-            FROM contato_interacao ci
-            WHERE ci.contato_id=? AND ci.ativo=1
-            ORDER BY ci.data_interacao DESC""", (cid,))
+        ORDER BY
+            CASE WHEN ci.fornecedor_id=? THEN 0 ELSE 1 END,
+            ci.data_interacao DESC""", (cid, _forn_id_ativo))
 
     if ints:
-        st.markdown(f"**📅 {_forn_nome_ativo} — {len(ints)} interação(ões)**")
-        for irow in ints:
+        _ints_forn = [i for i in ints if i[7] == _forn_id_ativo or i[7] is None]
+        _ints_outros = [i for i in ints if i[7] != _forn_id_ativo and i[7] is not None]
+        _label_secao = (f"**📅 {_forn_nome_ativo} — {len(_ints_forn)} interação(ões)**"
+                        if _ints_forn else
+                        f"**📅 {_forn_nome_ativo} — sem interações específicas**")
+        st.markdown(_label_secao)
+
+        # Mostra interações do fornecedor selecionado (ou sem vínculo = pré-migração)
+        _ints_mostrar = _ints_forn if _ints_forn else ints
+        for irow in _ints_mostrar:
             iid, data_i, via, pessoa, desc, result, fup, _fi = irow
             lbl = (f"{VIA_ICONE.get(via,'')} {data_i}"
                    + (f"  —  {pessoa}" if pessoa else "")
@@ -1206,7 +1206,7 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
                             st.session_state.pop(f"conf_ei_del_{iid}", None)
                             st.rerun()
     else:
-        st.info("Ainda sem interações. Registre a primeira abaixo.")
+        st.info(f"Ainda sem interações para {_forn_nome_ativo}. Registre a primeira abaixo.")
 
     st.divider()
 
