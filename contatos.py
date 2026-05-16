@@ -1098,33 +1098,38 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
     # ════════════════════════════════════════════════════
     # SEÇÃO B — HISTÓRICO DE INTERAÇÕES com edição inline
     # ════════════════════════════════════════════════════
-    # ════════════════════════════════════════════════════
-    # SEÇÃO B — HISTÓRICO DE INTERAÇÕES com edição inline
-    # ════════════════════════════════════════════════════
 
-    # Busca TODAS as interações do tópico — mostra sempre tudo
-    # O campo fornecedor_id indica a qual fornecedor pertence (pode ser NULL = pré-migração)
-    ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
-               ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
-               ci.fornecedor_id
-        FROM contato_interacao ci
-        WHERE ci.contato_id=? AND ci.ativo=1
-        ORDER BY
-            CASE WHEN ci.fornecedor_id=? THEN 0 ELSE 1 END,
-            ci.data_interacao DESC""", (cid, _forn_id_ativo))
+    # Busca todas as interações do tópico
+    try:
+        ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
+                   ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
+                   ci.fornecedor_id
+            FROM contato_interacao ci
+            WHERE ci.contato_id=? AND ci.ativo=1
+            ORDER BY ci.data_interacao DESC""", (cid,))
+    except Exception:
+        ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
+                   ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup
+            FROM contato_interacao ci
+            WHERE ci.contato_id=? AND ci.ativo=1
+            ORDER BY ci.data_interacao DESC""", (cid,))
 
     if ints:
-        _ints_forn = [i for i in ints if i[7] == _forn_id_ativo or i[7] is None]
-        _ints_outros = [i for i in ints if i[7] != _forn_id_ativo and i[7] is not None]
-        _label_secao = (f"**📅 {_forn_nome_ativo} — {len(_ints_forn)} interação(ões)**"
-                        if _ints_forn else
-                        f"**📅 {_forn_nome_ativo} — sem interações específicas**")
-        st.markdown(_label_secao)
-
-        # Mostra interações do fornecedor selecionado (ou sem vínculo = pré-migração)
-        _ints_mostrar = _ints_forn if _ints_forn else ints
-        for irow in _ints_mostrar:
-            iid, data_i, via, pessoa, desc, result, fup, _fi = irow
+        st.markdown(f"**📅 Histórico — {len(ints)} interação(ões)**")
+        for irow in ints:
+            # Acesso defensivo — suporta DictRow e tuple
+            def _g(r, k, i): 
+                try: return r[k]
+                except: 
+                    try: return r[i]
+                    except: return None
+            iid    = _g(irow, 'interacao_id', 0)
+            data_i = _g(irow, 'data_interacao', 1)
+            via    = _g(irow, 'via_comunicacao', 2)
+            pessoa = _g(irow, 'contato_pessoa', 3)
+            desc   = _g(irow, 'descricao', 4)
+            result = _g(irow, 'resultado', 5)
+            fup    = _g(irow, 'data_followup', 6)
             lbl = (f"{VIA_ICONE.get(via,'')} {data_i}"
                    + (f"  —  {pessoa}" if pessoa else "")
                    + (f"  |  {desc[:40]}…" if desc and len(desc)>3 else
@@ -1206,7 +1211,7 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
                             st.session_state.pop(f"conf_ei_del_{iid}", None)
                             st.rerun()
     else:
-        st.info(f"Ainda sem interações para {_forn_nome_ativo}. Registre a primeira abaixo.")
+        st.info("Ainda sem interações registradas. Registre a primeira abaixo.")
 
     st.divider()
 
