@@ -57,7 +57,51 @@ def tela_novo_pedido():
     # PASSO 2: Fornecedor
     fornecedores = get_fornecedores_do_cliente(cli_id)
     if not fornecedores:
-        st.warning("Este cliente não tem fornecedores vinculados. Vá em Clientes > Vinculos.")
+        st.warning(f"**{cli_sel[1]}** ainda não tem fornecedores vinculados.")
+        st.info("Vincule um fornecedor abaixo para prosseguir com o pedido:")
+
+        # ── Vínculo inline ────────────────────────────────────────────────
+        forns_todos = query("""SELECT fornecedor_id, nome_fantasia FROM fornecedor
+            WHERE ativo=1 ORDER BY nome_fantasia""")
+        tabelas_ativas = query("""SELECT tabela_preco_id, fornecedor_id, nome_tabela,
+            tipo_tabela, prazo_pagamento FROM tabela_preco
+            WHERE ativo=1 ORDER BY nome_tabela""")
+
+        if not forns_todos:
+            st.error("Nenhum fornecedor cadastrado.")
+            return
+
+        with st.form("vinc_inline_pedido"):
+            forn_vinc = st.selectbox("Fornecedor", forns_todos,
+                                     format_func=lambda x: x[1],
+                                     key="vinc_inline_forn")
+            tabs_forn = [(t[0], f"{t[2]} — {t[3] or ''} {t[4] or ''}d".strip())
+                         for t in tabelas_ativas if forn_vinc and t[1] == forn_vinc[0]]
+            tab_vinc  = st.selectbox("Tabela de preço",
+                                     tabs_forn if tabs_forn else [(None, "— nenhuma tabela disponível")],
+                                     format_func=lambda x: x[1],
+                                     key="vinc_inline_tab")
+            prazo_vinc = st.text_input("Prazo específico (deixe vazio para usar o da tabela)",
+                                       key="vinc_inline_prazo")
+            salvar_vinc = st.form_submit_button("🔗 Vincular e continuar pedido",
+                                                type="primary", use_container_width=True)
+
+        if salvar_vinc and forn_vinc:
+            tab_id_vinc = tab_vinc[0] if tab_vinc and tab_vinc[0] else None
+            try:
+                conn = conectar()
+                conn.execute("""INSERT INTO cliente_fornecedor
+                    (cliente_id, fornecedor_id, tabela_preco_id, prazo_pagamento, ativo)
+                    VALUES (?,?,?,?,1)""",
+                    (cli_id, forn_vinc[0], tab_id_vinc, prazo_vinc or None))
+                conn.commit(); conn.close()
+                st.success(f"✅ Vínculo com {forn_vinc[1]} criado! Recarregando...")
+                st.rerun()
+            except Exception as e:
+                if "UNIQUE" in str(e):
+                    st.error("Este cliente já está vinculado a este fornecedor.")
+                else:
+                    st.error(str(e))
         return
 
     forn_sel = st.selectbox("Fornecedor", fornecedores,
