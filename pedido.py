@@ -90,18 +90,25 @@ def tela_novo_pedido():
             tab_id_vinc = tab_vinc[0] if tab_vinc and tab_vinc[0] else None
             try:
                 conn = conectar()
-                conn.execute("""INSERT INTO cliente_fornecedor
-                    (cliente_id, fornecedor_id, tabela_preco_id, prazo_pagamento, ativo)
-                    VALUES (?,?,?,?,1)""",
-                    (cli_id, forn_vinc[0], tab_id_vinc, prazo_vinc or None))
+                # Verifica se já existe vínculo (ativo ou inativo)
+                ja_existe = query("""SELECT cliente_fornecedor_id FROM cliente_fornecedor
+                    WHERE cliente_id=? AND fornecedor_id=?""", (cli_id, forn_vinc[0]))
+                if ja_existe:
+                    # Reativa e atualiza tabela/prazo
+                    conn.execute("""UPDATE cliente_fornecedor SET
+                        ativo=1, tabela_preco_id=?, prazo_pagamento=?
+                        WHERE cliente_id=? AND fornecedor_id=?""",
+                        (tab_id_vinc, prazo_vinc or None, cli_id, forn_vinc[0]))
+                else:
+                    conn.execute("""INSERT INTO cliente_fornecedor
+                        (cliente_id, fornecedor_id, tabela_preco_id, prazo_pagamento, ativo)
+                        VALUES (?,?,?,?,1)""",
+                        (cli_id, forn_vinc[0], tab_id_vinc, prazo_vinc or None))
                 conn.commit(); conn.close()
                 st.success(f"✅ Vínculo com {forn_vinc[1]} criado! Recarregando...")
                 st.rerun()
             except Exception as e:
-                if "UNIQUE" in str(e):
-                    st.error("Este cliente já está vinculado a este fornecedor.")
-                else:
-                    st.error(str(e))
+                st.error(str(e))
         return
 
     forn_sel = st.selectbox("Fornecedor", fornecedores,
