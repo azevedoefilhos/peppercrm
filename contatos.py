@@ -1098,6 +1098,12 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
     # ════════════════════════════════════════════════════
     # SEÇÃO B — HISTÓRICO DE INTERAÇÕES com edição inline
     # ════════════════════════════════════════════════════
+    # ════════════════════════════════════════════════════
+    # SEÇÃO B — HISTÓRICO DE INTERAÇÕES com edição inline
+    # ════════════════════════════════════════════════════
+
+    # Busca interações: prioriza as vinculadas ao fornecedor selecionado,
+    # mas inclui todas com fornecedor_id NULL (dados pré-migração)
     ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
                ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
                ci.fornecedor_id
@@ -1105,6 +1111,15 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
         WHERE ci.contato_id=? AND ci.ativo=1
           AND (ci.fornecedor_id=? OR ci.fornecedor_id IS NULL)
         ORDER BY ci.data_interacao DESC""", (cid, _forn_id_ativo))
+
+    # Se não achou nenhuma interação vinculada, mostra todas (fallback seguro)
+    if not ints:
+        ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
+               ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
+               ci.fornecedor_id
+            FROM contato_interacao ci
+            WHERE ci.contato_id=? AND ci.ativo=1
+            ORDER BY ci.data_interacao DESC""", (cid,))
 
     if ints:
         st.markdown(f"**📅 {_forn_nome_ativo} — {len(ints)} interação(ões)**")
