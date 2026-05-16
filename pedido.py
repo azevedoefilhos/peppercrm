@@ -292,7 +292,6 @@ def tela_novo_pedido():
                 st.success(f"Pedido #{pid} salvo com sucesso!")
                 st.balloons()
     with col_l:
-        # Exportar rascunho
         if itens_com_qtd:
             linhas = []
             for prod_id, item in itens_com_qtd:
@@ -301,15 +300,15 @@ def tela_novo_pedido():
                     "Codigo": item["codigo_forn"],
                     "Produto": item["descricao"],
                     "Un/Cx": item["un_cx"],
-                    "Preco/Cx": item["preco"],
+                    "Preco/Cx": round(item["preco"], 4),
                     "Qtd (cx)": item["qtd"],
                     "Desc %": item["desc"],
                     "Total": round(total_item, 2),
                 })
             buf = io.BytesIO()
             pd.DataFrame(linhas).to_excel(buf, index=False, sheet_name="Pedido")
-            buf.seek(0)
-            st.download_button("⬇️ Exportar rascunho Excel", data=buf,
+            st.download_button("⬇️ Exportar rascunho Excel",
+                               data=buf.getvalue(),
                                file_name="pedido_rascunho.xlsx",
                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                use_container_width=True)
@@ -389,8 +388,9 @@ def _renderizar_grade(grade: dict, ordem: str = "Descricao (A-Z)") -> dict:
 
 def _bloco_busca_produto(cli_id, forn_id, pdv_id, tab_id, grade_key):
     with st.expander("🔍 Buscar e adicionar produto fora do mix"):
-        busca = st.text_input("Digite codigo ou parte da descricao",
-                              key=f"busca_{cli_id}_{forn_id}_{pdv_id}")
+        _bkey = f"busca_{cli_id}_{forn_id}_{pdv_id}"
+        busca = st.text_input("Digite codigo ou parte da descricao", key=_bkey)
+
         if busca and len(busca) >= 2:
             resultados = query("""
                 SELECT p.produto_id, p.codigo_produto, p.descricao_curta,
@@ -428,7 +428,11 @@ def _bloco_busca_produto(cli_id, forn_id, pdv_id, tab_id, grade_key):
                                 "ultima_data": None, "qtd": qtd_busca,
                                 "desc": 0.0, "do_ultimo": False,
                             }
-                        st.success(f"'{prod_add[2]}' adicionado!")
+                        # Zera os campos de busca para o próximo produto
+                        st.session_state.pop(_bkey, None)
+                        st.session_state.pop(f"prod_add_{cli_id}_{forn_id}_{pdv_id}", None)
+                        st.session_state.pop(f"qtd_busca_{prod_add[0]}", None)
+                        st.success(f"✅ '{prod_add[2]}' adicionado! Busque o próximo produto.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro: {e}")
