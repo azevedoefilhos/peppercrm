@@ -169,11 +169,16 @@ def tela_novo_pedido():
         if cc[1] and 'CD' in cc[1] and cc[5]:
             st.caption(f"📦 Endereco do CD: {cc[5]}, {cc[6] or ''}")
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1: nr_cliente    = st.text_input("Nr. pedido cliente", placeholder="opcional")
     with col2: nr_fornecedor = st.text_input("Nr. pedido fornecedor", placeholder="opcional")
-    with col3: data_entrega  = st.date_input("Data de entrega", value=None)
-    with col4: desc_geral    = st.number_input("Desconto geral (%)", min_value=0.0,
+    with col3:
+        from datetime import date as _date
+        data_emissao = st.date_input("Data de emissão", value=_date.today(),
+                                     help="Data em que o pedido foi feito. "
+                                          "Altere se estiver lançando um pedido retroativo.")
+    with col4: data_entrega  = st.date_input("Data de entrega", value=None)
+    with col5: desc_geral    = st.number_input("Desconto geral (%)", min_value=0.0,
                                                max_value=100.0, value=0.0, step=0.5)
     col5, col6 = st.columns(2)
     with col5: observacao = st.text_input("Observacao do pedido")
@@ -277,6 +282,7 @@ def tela_novo_pedido():
                      disabled=_abaixo_minimo):
             pid = _salvar_pedido(cli_id, forn_id, pdv_id, tab_id, prazo, frete,
                                  nr_cliente, nr_fornecedor,
+                                 data_emissao.isoformat() if data_emissao else None,
                                  str(data_entrega) if data_entrega else None,
                                  desc_geral,
                                  observacao_completa,
@@ -433,13 +439,13 @@ def _bloco_busca_produto(cli_id, forn_id, pdv_id, tab_id, grade_key):
 
 
 def _salvar_pedido(cli_id, forn_id, pdv_id, tab_id, prazo, frete,
-                   nr_cliente, nr_fornecedor, data_entrega,
+                   nr_cliente, nr_fornecedor, data_emissao, data_entrega,
                    desc_geral, observacao, status_ini, itens):
     try:
         conn = conectar()
         cur  = conn.cursor()
         from datetime import date as _date
-        _hoje = _date.today().isoformat()
+        _hoje = data_emissao if data_emissao else _date.today().isoformat()
         cur.execute("""INSERT INTO pedido
             (cliente_id, pdv_id, fornecedor_id, tabela_preco_id,
              prazo_pagamento, frete, nr_pedido_cliente, nr_pedido_fornecedor,
