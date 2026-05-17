@@ -1107,7 +1107,9 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
             FROM contato_interacao ci
             WHERE ci.contato_id=? AND ci.ativo=1
             ORDER BY ci.data_interacao DESC""", (cid,))
-    except Exception:
+        st.caption(f"🔍 debug: {len(ints) if ints else 0} interações encontradas para contato #{cid}")
+    except Exception as _ex:
+        st.error(f"🔍 debug erro query: {_ex}")
         ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
                    ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup
             FROM contato_interacao ci
