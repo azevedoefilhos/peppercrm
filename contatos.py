@@ -1113,29 +1113,20 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
             WHERE contato_id=%s AND ativo=1""".replace('%s', '?'), (cid,))
         _n = _test[0]['n'] if _test and hasattr(_test[0], '__getitem__') else (_test[0][0] if _test else '?')
         
-        # Verifica se coluna fornecedor_id existe
-        try:
-            _check = query("SELECT fornecedor_id FROM contato_interacao WHERE contato_id=? LIMIT 1", (cid,))
-            _has_forn = True
-        except Exception as _fe:
-            _has_forn = False
-            st.caption(f"🔍 fornecedor_id nao existe: {_fe}")
+        # Testa variações do filtro ativo para descobrir qual funciona no PostgreSQL
+        _t1 = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=? AND ativo=1", (cid,))
+        _t2 = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=? AND ativo=true", (cid,))
+        _t3 = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=? AND ativo!=0", (cid,))
+        _t4 = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=?", (cid,))
+        st.caption(f"🔍 ativo=1:{_t1[0]['n']} | ativo=true:{_t2[0]['n']} | ativo!=0:{_t3[0]['n']} | sem filtro:{_t4[0]['n']}")
 
-        if _has_forn:
-            ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
-                       ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
-                       ci.fornecedor_id
-                FROM contato_interacao ci
-                WHERE ci.contato_id=? AND ci.ativo IS NOT FALSE AND ci.ativo IS NOT NULL
-                ORDER BY ci.data_interacao DESC""", (cid,))
-        else:
-            ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
-                       ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup
-                FROM contato_interacao ci
-                WHERE ci.contato_id=? AND ci.ativo IS NOT FALSE AND ci.ativo IS NOT NULL
-                ORDER BY ci.data_interacao DESC""", (cid,))
-
-        st.caption(f"🔍 cid={cid} | count_direto={_n} | has_forn_col={_has_forn} | ints={len(ints) if ints else 0}")
+        ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
+                   ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
+                   ci.fornecedor_id
+            FROM contato_interacao ci
+            WHERE ci.contato_id=? AND ci.ativo!=0
+            ORDER BY ci.data_interacao DESC""", (cid,))
+        st.caption(f"🔍 ints com ativo!=0: {len(ints) if ints else 0}")
     except Exception as _ex:
         st.error(f"🔍 debug erro query: {_ex}")
         ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
