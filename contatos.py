@@ -1107,7 +1107,10 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
             FROM contato_interacao ci
             WHERE ci.contato_id=? AND ci.ativo=1
             ORDER BY ci.data_interacao DESC""", (cid,))
-        st.caption(f"🔍 debug: {len(ints) if ints else 0} interações encontradas para contato #{cid}")
+        # Debug: verifica sem filtro ativo
+        _all = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=?", (cid,))
+        _atv = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=? AND ativo=1", (cid,))
+        st.caption(f"🔍 debug: cid={cid} | total={_all[0]['n'] if _all else '?'} | ativo=1: {_atv[0]['n'] if _atv else '?'} | query retornou: {len(ints) if ints else 0}")
     except Exception as _ex:
         st.error(f"🔍 debug erro query: {_ex}")
         ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
