@@ -1126,13 +1126,13 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
                        ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
                        ci.fornecedor_id
                 FROM contato_interacao ci
-                WHERE ci.contato_id=? AND ci.ativo=1
+                WHERE ci.contato_id=? AND ci.ativo IS NOT FALSE AND ci.ativo IS NOT NULL
                 ORDER BY ci.data_interacao DESC""", (cid,))
         else:
             ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
                        ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup
                 FROM contato_interacao ci
-                WHERE ci.contato_id=? AND ci.ativo=1
+                WHERE ci.contato_id=? AND ci.ativo IS NOT FALSE AND ci.ativo IS NOT NULL
                 ORDER BY ci.data_interacao DESC""", (cid,))
 
         st.caption(f"🔍 cid={cid} | count_direto={_n} | has_forn_col={_has_forn} | ints={len(ints) if ints else 0}")
