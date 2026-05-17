@@ -1101,13 +1101,17 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
 
     # Busca todas as interações do tópico
     try:
-        ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
+        _sql_test = """SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
                    ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
                    ci.fornecedor_id
             FROM contato_interacao ci
             WHERE ci.contato_id=? AND ci.ativo=1
-            ORDER BY ci.data_interacao DESC""", (cid,))
-        # Debug: verifica sem filtro ativo
+            ORDER BY ci.data_interacao DESC"""
+        from database import _traduzir_sql_pg, _check_supabase
+        if _check_supabase():
+            _sql_pg = _traduzir_sql_pg(_sql_test)
+            st.caption(f"🔍 SQL: {_sql_pg[:200]}")
+        ints = query(_sql_test, (cid,))
         _all = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=?", (cid,))
         _atv = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=? AND ativo=1", (cid,))
         st.caption(f"🔍 debug: cid={cid} | total={_all[0]['n'] if _all else '?'} | ativo=1: {_atv[0]['n'] if _atv else '?'} | query retornou: {len(ints) if ints else 0}")
