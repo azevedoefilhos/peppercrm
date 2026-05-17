@@ -148,7 +148,7 @@ def _lista_topicos():
         params.append(fil_forn[0])
     # Filtro de periodo — datas calculadas em Python (compativel SQLite + PostgreSQL)
     _ult_int = """(SELECT MAX(ci.data_interacao) FROM contato_interacao ci
-                   WHERE ci.contato_id=cr.contato_id AND ci.ativo=1)"""
+                   WHERE ci.contato_id=cr.contato_id AND ci.ativo!=0)"""
     if fil_periodo == "Hoje":
         where.append(f"(cr.data_contato = '2026-05-13' OR {_ult_int} = '2026-05-13')")
     elif fil_periodo == "Esta semana":
@@ -175,9 +175,9 @@ def _lista_topicos():
                     JOIN fornecedor fn ON cxf.fornecedor_id=fn.fornecedor_id
                     WHERE cxf.contato_id=cr.contato_id),'—') AS fornecedores,
                (SELECT COUNT(*) FROM contato_interacao ci
-                WHERE ci.contato_id=cr.contato_id AND ci.ativo=1) AS n_int,
+                WHERE ci.contato_id=cr.contato_id AND ci.ativo!=0) AS n_int,
                (SELECT MAX(ci.data_interacao) FROM contato_interacao ci
-                WHERE ci.contato_id=cr.contato_id AND ci.ativo=1) AS ultima_int
+                WHERE ci.contato_id=cr.contato_id AND ci.ativo!=0) AS ultima_int
         FROM contato_registro cr
         LEFT JOIN cliente    c ON cr.cliente_id    = c.cliente_id
         LEFT JOIN fornecedor f ON cr.fornecedor_id = f.fornecedor_id
@@ -278,7 +278,7 @@ def _lista_topicos():
                    cft.status, cft.tipo_topico, cft.prioridade, cft.data_followup
             FROM contato_fornecedor_topico cft
             JOIN fornecedor f ON f.fornecedor_id=cft.fornecedor_id
-            WHERE cft.contato_id=? AND cft.ativo=1
+            WHERE cft.contato_id=? AND cft.ativo!=0
             ORDER BY f.nome_fantasia
         """, (cid,))
 
@@ -482,7 +482,7 @@ def _gerar_pdf_topico(cid, fornecedor_id=None):
             SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
                    ci.descricao, ci.resultado, ci.data_followup
             FROM contato_interacao ci
-            WHERE ci.contato_id=? AND ci.ativo=1
+            WHERE ci.contato_id=? AND ci.ativo!=0
               AND (ci.fornecedor_id=? OR ci.fornecedor_id IS NULL)
             ORDER BY ci.data_interacao ASC""", (cid, fornecedor_id))
     else:
@@ -490,7 +490,7 @@ def _gerar_pdf_topico(cid, fornecedor_id=None):
             SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
                    ci.descricao, ci.resultado, ci.data_followup
             FROM contato_interacao ci
-            WHERE ci.contato_id=? AND ci.ativo=1
+            WHERE ci.contato_id=? AND ci.ativo!=0
             ORDER BY ci.data_interacao ASC""", (cid,))
 
     # ── Estilos ───────────────────────────────────────────
@@ -777,7 +777,7 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
                 SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
                        ci.descricao, ci.resultado, ci.data_followup
                 FROM contato_interacao ci
-                WHERE ci.contato_id=? AND ci.ativo=1
+                WHERE ci.contato_id=? AND ci.ativo!=0
                   AND ci.data_interacao >= ? AND ci.data_interacao <= ?
                 ORDER BY ci.data_interacao ASC""", (cid, data_ini, data_fim))
         else:
@@ -785,7 +785,7 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
                 SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
                        ci.descricao, ci.resultado, ci.data_followup
                 FROM contato_interacao ci
-                WHERE ci.contato_id=? AND ci.ativo=1
+                WHERE ci.contato_id=? AND ci.ativo!=0
                 ORDER BY ci.data_interacao ASC""", (cid,))
 
         total_interacoes += len(ints)
@@ -956,7 +956,7 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
                cft.status, cft.tipo_topico, cft.prioridade, cft.data_followup
         FROM contato_fornecedor_topico cft
         JOIN fornecedor f ON f.fornecedor_id=cft.fornecedor_id
-        WHERE cft.contato_id=? AND cft.ativo=1
+        WHERE cft.contato_id=? AND cft.ativo!=0
         ORDER BY f.nome_fantasia
     """, (cid,))
 
@@ -1108,31 +1108,24 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
 
     # Busca todas as interações do tópico
     try:
-        # Testa primeiro sem fornecedor_id para isolar o problema
-        _test = query("""SELECT COUNT(*) as n FROM contato_interacao 
-            WHERE contato_id=%s AND ativo=1""".replace('%s', '?'), (cid,))
-        _n = _test[0]['n'] if _test and hasattr(_test[0], '__getitem__') else (_test[0][0] if _test else '?')
-        
-        # Testa variações do filtro ativo para descobrir qual funciona no PostgreSQL
-        _t1 = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=? AND ativo=1", (cid,))
-        _t2 = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=? AND ativo=true", (cid,))
-        _t3 = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=? AND ativo!=0", (cid,))
-        _t4 = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=?", (cid,))
-        st.caption(f"🔍 ativo=1:{_t1[0]['n']} | ativo=true:{_t2[0]['n']} | ativo!=0:{_t3[0]['n']} | sem filtro:{_t4[0]['n']}")
-
         ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
                    ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
                    ci.fornecedor_id
             FROM contato_interacao ci
             WHERE ci.contato_id=? AND ci.ativo!=0
             ORDER BY ci.data_interacao DESC""", (cid,))
-        st.caption(f"🔍 ints com ativo!=0: {len(ints) if ints else 0}")
+    except Exception:
+        ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
+                   ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup
+            FROM contato_interacao ci
+            WHERE ci.contato_id=? AND ci.ativo!=0
+            ORDER BY ci.data_interacao DESC""", (cid,))
     except Exception as _ex:
         st.error(f"🔍 debug erro query: {_ex}")
         ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
                    ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup
             FROM contato_interacao ci
-            WHERE ci.contato_id=? AND ci.ativo=1
+            WHERE ci.contato_id=? AND ci.ativo!=0
             ORDER BY ci.data_interacao DESC""", (cid,))
 
     if ints:
@@ -1715,7 +1708,7 @@ def _por_entidade():
                COALESCE(cr.tipo_topico,'Contato'),
                cr.data_contato, cr.data_followup,
                (SELECT COUNT(*) FROM contato_interacao ci
-                WHERE ci.contato_id=cr.contato_id AND ci.ativo=1)
+                WHERE ci.contato_id=cr.contato_id AND ci.ativo!=0)
         FROM contato_registro cr
         WHERE cr.{'cliente_id' if tipo_h=='Cliente' else 'fornecedor_id'}=?
           AND cr.ativo=1
@@ -1784,7 +1777,7 @@ def _por_fornecedor():
                COALESCE(c.nome_fantasia, f2.nome_fantasia,'—') AS entidade,
                cr.tipo_entidade, cr.data_contato,
                (SELECT COUNT(*) FROM contato_interacao ci
-                WHERE ci.contato_id=cr.contato_id AND ci.ativo=1)
+                WHERE ci.contato_id=cr.contato_id AND ci.ativo!=0)
         FROM contato_x_fornecedor cxf
         JOIN contato_registro cr ON cxf.contato_id=cr.contato_id
         LEFT JOIN cliente    c  ON cr.cliente_id    = c.cliente_id
