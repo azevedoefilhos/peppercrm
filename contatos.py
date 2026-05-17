@@ -1,4 +1,11 @@
-from cache_helpers import cache_clientes, cache_fornecedores, cache_categorias, cache_produtos_fornecedor
+from cache_helpers import cache_clientes, cache_categorias, cache_produtos_fornecedor
+from database import query, conectar, _cache_fornecedores as _db_cache_fornecedores
+
+def cache_fornecedores():
+    """Wrapper que converte _DictRow para list serializável pelo st.cache_data."""
+    rows = _db_cache_fornecedores()
+    return [(r[0], r[1]) if not hasattr(r, 'keys') else (r['fornecedor_id'], r['nome_fantasia'])
+            for r in rows]
 # contatos.py — PepperCRM
 # Módulo unificado: Contatos, Follow-ups & Negociações
 # Modelo: Tópico (assunto) + Linha do tempo de interações
@@ -1101,20 +1108,34 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
 
     # Busca todas as interações do tópico
     try:
-        _sql_test = """SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
-                   ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
-                   ci.fornecedor_id
-            FROM contato_interacao ci
-            WHERE ci.contato_id=? AND ci.ativo=1
-            ORDER BY ci.data_interacao DESC"""
-        from database import _traduzir_sql_pg, _check_supabase
-        if _check_supabase():
-            _sql_pg = _traduzir_sql_pg(_sql_test)
-            st.caption(f"🔍 SQL: {_sql_pg[:200]}")
-        ints = query(_sql_test, (cid,))
-        _all = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=?", (cid,))
-        _atv = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=? AND ativo=1", (cid,))
-        st.caption(f"🔍 debug: cid={cid} | total={_all[0]['n'] if _all else '?'} | ativo=1: {_atv[0]['n'] if _atv else '?'} | query retornou: {len(ints) if ints else 0}")
+        # Testa primeiro sem fornecedor_id para isolar o problema
+        _test = query("""SELECT COUNT(*) as n FROM contato_interacao 
+            WHERE contato_id=%s AND ativo=1""".replace('%s', '?'), (cid,))
+        _n = _test[0]['n'] if _test and hasattr(_test[0], '__getitem__') else (_test[0][0] if _test else '?')
+        
+        # Verifica se coluna fornecedor_id existe
+        try:
+            _check = query("SELECT fornecedor_id FROM contato_interacao WHERE contato_id=? LIMIT 1", (cid,))
+            _has_forn = True
+        except Exception as _fe:
+            _has_forn = False
+            st.caption(f"🔍 fornecedor_id nao existe: {_fe}")
+
+        if _has_forn:
+            ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
+                       ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
+                       ci.fornecedor_id
+                FROM contato_interacao ci
+                WHERE ci.contato_id=? AND ci.ativo=1
+                ORDER BY ci.data_interacao DESC""", (cid,))
+        else:
+            ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
+                       ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup
+                FROM contato_interacao ci
+                WHERE ci.contato_id=? AND ci.ativo=1
+                ORDER BY ci.data_interacao DESC""", (cid,))
+
+        st.caption(f"🔍 cid={cid} | count_direto={_n} | has_forn_col={_has_forn} | ints={len(ints) if ints else 0}")
     except Exception as _ex:
         st.error(f"🔍 debug erro query: {_ex}")
         ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
