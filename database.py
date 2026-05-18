@@ -423,26 +423,15 @@ def registrar_historico(conn, pedido_id, campo, valor_antes, valor_depois, obs=N
 
 
 def _migrar_contato_por_fornecedor():
-    """
-    Reestrutura o módulo de contatos para separação por fornecedor.
-    Mudanças:
-    1. Cria tabela contato_fornecedor_topico (status/tipo/followup por fornecedor)
-    2. Adiciona coluna fornecedor_id em contato_interacao
-    3. Migra dados existentes:
-       - Para cada contato_x_fornecedor, cria registro em contato_fornecedor_topico
-       - Vincula todas as interações existentes a todos os fornecedores do tópico
-    """
+    """Migration: adiciona fornecedor_id em contato_interacao e cria contato_fornecedor_topico."""
     try:
         if _check_supabase():
-            conn = conectar()
-            cur = conn._conn.cursor()
-
-            # 1. Cria tabela contato_fornecedor_topico
-            cur.execute("""
+            # Usa execute_write que funciona corretamente com o pool
+            execute_write("""
                 CREATE TABLE IF NOT EXISTS contato_fornecedor_topico (
                     cft_id SERIAL PRIMARY KEY,
-                    contato_id INTEGER NOT NULL REFERENCES contato_registro(contato_id),
-                    fornecedor_id INTEGER NOT NULL REFERENCES fornecedor(fornecedor_id),
+                    contato_id INTEGER NOT NULL,
+                    fornecedor_id INTEGER NOT NULL,
                     status VARCHAR(50) DEFAULT 'A contatar',
                     tipo_topico VARCHAR(30) DEFAULT 'Contato',
                     data_followup DATE,
@@ -452,20 +441,11 @@ def _migrar_contato_por_fornecedor():
                     UNIQUE(contato_id, fornecedor_id)
                 )
             """)
-
-            # 2. Adiciona fornecedor_id em contato_interacao
-            cur.execute("""
-                SELECT column_name FROM information_schema.columns
-                WHERE table_name='contato_interacao' AND column_name='fornecedor_id'
+            execute_write("""
+                ALTER TABLE contato_interacao
+                ADD COLUMN IF NOT EXISTS fornecedor_id INTEGER
             """)
-            if not cur.fetchone():
-                cur.execute("""
-                    ALTER TABLE contato_interacao ADD COLUMN fornecedor_id INTEGER
-                    REFERENCES fornecedor(fornecedor_id)
-                """)
-
-            # 3. Migra contato_x_fornecedor → contato_fornecedor_topico
-            cur.execute("""
+            execute_write("""
                 INSERT INTO contato_fornecedor_topico
                     (contato_id, fornecedor_id, status, tipo_topico, prioridade,
                      data_followup, ativo)
@@ -478,26 +458,19 @@ def _migrar_contato_por_fornecedor():
                 JOIN contato_registro cr ON cr.contato_id=cxf.contato_id
                 ON CONFLICT(contato_id, fornecedor_id) DO NOTHING
             """)
-
-            # 4. Vincula interações existentes a todos os fornecedores do tópico
-            # Para cada interação sem fornecedor_id, associa a todos os fornecedores do tópico
-            cur.execute("""
-                UPDATE contato_interacao ci
+            execute_write("""
+                UPDATE contato_interacao
                 SET fornecedor_id = (
                     SELECT MIN(fornecedor_id) FROM contato_x_fornecedor
-                    WHERE contato_id = ci.contato_id
+                    WHERE contato_id = contato_interacao.contato_id
                 )
-                WHERE ci.fornecedor_id IS NULL
+                WHERE fornecedor_id IS NULL
             """)
-
-            conn._conn.commit()
-            conn.close()
         else:
             import sqlite3 as _sq
             _db = os.path.join(os.path.dirname(__file__), "peppercrm.db")
             if not os.path.exists(_db): return
             _conn = _sq.connect(_db)
-
             _conn.execute("""CREATE TABLE IF NOT EXISTS contato_fornecedor_topico (
                 cft_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 contato_id INTEGER NOT NULL,
@@ -510,13 +483,11 @@ def _migrar_contato_por_fornecedor():
                 ativo INTEGER DEFAULT 1,
                 UNIQUE(contato_id, fornecedor_id)
             )""")
-
             cols = [r[1] for r in _conn.execute(
                 "PRAGMA table_info(contato_interacao)").fetchall()]
             if "fornecedor_id" not in cols:
                 _conn.execute(
                     "ALTER TABLE contato_interacao ADD COLUMN fornecedor_id INTEGER")
-
             _conn.execute("""
                 INSERT OR IGNORE INTO contato_fornecedor_topico
                     (contato_id, fornecedor_id, status, tipo_topico, prioridade,
@@ -529,7 +500,6 @@ def _migrar_contato_por_fornecedor():
                 FROM contato_x_fornecedor cxf
                 JOIN contato_registro cr ON cr.contato_id=cxf.contato_id
             """)
-
             _conn.execute("""
                 UPDATE contato_interacao SET fornecedor_id=(
                     SELECT MIN(fornecedor_id) FROM contato_x_fornecedor

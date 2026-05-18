@@ -1323,13 +1323,13 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
         _fup_val = _fup.isoformat() if _fup and hasattr(_fup,'isoformat') else None
 
         conn = conectar()
-        # Grava interação com fornecedor_id do fornecedor selecionado no painel
+        # Grava interação — sem fornecedor_id pois coluna pode não existir ainda no Supabase
         conn.execute("""INSERT INTO contato_interacao
-            (contato_id, fornecedor_id, data_interacao, via_comunicacao,
+            (contato_id, data_interacao, via_comunicacao,
              contato_pessoa, contato_cliente_id,
              descricao, resultado, data_followup, ativo)
-            VALUES (?,?,?,?,?,?,?,?,?,1)""",
-            (cid, _forn_id_ativo,
+            VALUES (?,?,?,?,?,?,?,?,1)""",
+            (cid,
              _dt.isoformat() if hasattr(_dt,'isoformat') else str(_dt),
              _via, pessoa_nome or None, novo_ct_id or ct_cli_id,
              _dc or None, _re or None, _fup_val))
