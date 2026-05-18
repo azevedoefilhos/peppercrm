@@ -480,18 +480,21 @@ def _gerar_pdf_topico(cid, fornecedor_id=None):
     if fornecedor_id:
         ints = query("""
             SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
-                   ci.descricao, ci.resultado, ci.data_followup
+                   ci.descricao, ci.resultado, ci.data_followup, ci.ativo
             FROM contato_interacao ci
-            WHERE ci.contato_id=? AND ci.ativo!=0
+            WHERE ci.contato_id=?
               AND (ci.fornecedor_id=? OR ci.fornecedor_id IS NULL)
             ORDER BY ci.data_interacao ASC""", (cid, fornecedor_id))
     else:
         ints = query("""
             SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
-                   ci.descricao, ci.resultado, ci.data_followup
+                   ci.descricao, ci.resultado, ci.data_followup, ci.ativo
             FROM contato_interacao ci
-            WHERE ci.contato_id=? AND ci.ativo!=0
+            WHERE ci.contato_id=?
             ORDER BY ci.data_interacao ASC""", (cid,))
+
+    # Filtra inativos em Python — compatível SQLite e PostgreSQL
+    ints = [r for r in ints if r['ativo'] not in (0, False, '0')] if ints else []
 
     # ── Estilos ───────────────────────────────────────────
     buf  = _io.BytesIO()
@@ -775,18 +778,21 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
         if modo_interacoes == "periodo" and data_ini and data_fim:
             ints = query("""
                 SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
-                       ci.descricao, ci.resultado, ci.data_followup
+                       ci.descricao, ci.resultado, ci.data_followup, ci.ativo
                 FROM contato_interacao ci
-                WHERE ci.contato_id=? AND ci.ativo!=0
+                WHERE ci.contato_id=?
                   AND ci.data_interacao >= ? AND ci.data_interacao <= ?
                 ORDER BY ci.data_interacao ASC""", (cid, data_ini, data_fim))
         else:
             ints = query("""
                 SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
-                       ci.descricao, ci.resultado, ci.data_followup
+                       ci.descricao, ci.resultado, ci.data_followup, ci.ativo
                 FROM contato_interacao ci
-                WHERE ci.contato_id=? AND ci.ativo!=0
+                WHERE ci.contato_id=?
                 ORDER BY ci.data_interacao ASC""", (cid,))
+
+        # Filtra inativos em Python
+        ints = [r for r in ints if r['ativo'] not in (0, False, '0')] if ints else []
 
         total_interacoes += len(ints)
         for irow in ints:
