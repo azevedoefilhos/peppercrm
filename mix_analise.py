@@ -6,7 +6,7 @@ from cache_helpers import cache_clientes, cache_fornecedores
 import streamlit as st
 import pandas as pd
 import io
-from database import query
+from database import query, _cache_fornecedores
 
 
 def _ir(p):
@@ -175,7 +175,7 @@ def _executar_analise(cli_id, forn_id, pdv_id, data_corte, pdv_label):
               AND {'p.pdv_id=?' if pdv_id else 'p.pdv_id IS NULL'}
               AND p.status_pedido NOT IN ('CANCELADO')
               AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO','CANCELADO')
-              AND p.data_pedido >= {data_corte}
+              AND p.data_pedido >= ?
             ORDER BY p.data_pedido DESC LIMIT 1
         """, (prod_id, cli_id, forn_id, pdv_id) if pdv_id else (prod_id, cli_id, forn_id))
 
