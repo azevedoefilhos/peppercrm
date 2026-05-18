@@ -999,8 +999,8 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
         _forn_nome_ativo = _forn_opts[_fsel_idx][1] if _forn_opts else "Geral"
 
     # PDF por fornecedor
-    _pdf_key      = f"pdf_cache_{cid}_{_forn_id_ativo}"
-    _pdf_nome_key = f"pdf_nome_{cid}_{_forn_id_ativo}"
+    _pdf_key      = f"pdf_cache_v2_{cid}_{_forn_id_ativo}"
+    _pdf_nome_key = f"pdf_nome_v2_{cid}_{_forn_id_ativo}"
     if _pdf_key not in st.session_state:
         with st.spinner("Preparando PDF..."):
             _pdf_bytes = _gerar_pdf_topico(cid, _forn_id_ativo)
