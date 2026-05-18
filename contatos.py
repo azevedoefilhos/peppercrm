@@ -129,7 +129,7 @@ def _lista_topicos():
                                  key="fl_ordem")
 
     # Query
-    where = ["cr.ativo=1"]
+    where = ["cr.ativo!=0"]
     params = []
     if fil_tipo != "Todos":
         where.append("COALESCE(cr.tipo_topico,'Contato')=?"); params.append(fil_tipo)
@@ -1711,7 +1711,7 @@ def _por_entidade():
                 WHERE ci.contato_id=cr.contato_id AND ci.ativo!=0)
         FROM contato_registro cr
         WHERE cr.{'cliente_id' if tipo_h=='Cliente' else 'fornecedor_id'}=?
-          AND cr.ativo=1
+          AND cr.ativo!=0
         ORDER BY cr.data_contato DESC
     """, (ent_sel[0],))
 
@@ -1782,7 +1782,7 @@ def _por_fornecedor():
         JOIN contato_registro cr ON cxf.contato_id=cr.contato_id
         LEFT JOIN cliente    c  ON cr.cliente_id    = c.cliente_id
         LEFT JOIN fornecedor f2 ON cr.fornecedor_id = f2.fornecedor_id
-        WHERE cxf.fornecedor_id=? AND cr.ativo=1
+        WHERE cxf.fornecedor_id=? AND cr.ativo!=0
         ORDER BY cr.data_contato DESC
     """, (forn_sel[0],))
 
