@@ -4,6 +4,7 @@ from cache_helpers import cache_clientes, cache_fornecedores, cache_categorias, 
 # comparação de períodos, evolução mensal + exportação Excel
 
 import streamlit as st
+from database import _cache_fornecedores, _cache_todos_clientes
 import pandas as pd
 import io
 from database import query
@@ -63,7 +64,7 @@ def _filtro_periodo(col_data, label="Período"):
     if op == "Mês atual":
         return (
             "date('now','start of month')",
-            "date('now')",
+            "'2026-05-18'",
         )
     elif op == "Mês anterior":
         return (
@@ -73,12 +74,12 @@ def _filtro_periodo(col_data, label="Período"):
     elif op == "Trimestre atual":
         return (
             "date('now','start of month','-2 months')",
-            "date('now')",
+            "'2026-05-18'",
         )
     elif op == "Ano atual":
         return (
-            "date('now','start of year')",
-            "date('now')",
+            "'2026-01-01'",
+            "'2026-05-18'",
         )
     else:
         col1, col2 = st.columns(2)
@@ -1114,7 +1115,7 @@ def _rel_cobertura():
               AND c.cliente_id NOT IN (
                   SELECT DISTINCT cr.cliente_id FROM contato_registro cr
                   JOIN contato_x_fornecedor cxf ON cxf.contato_id=cr.contato_id
-                  WHERE cxf.fornecedor_id=? AND cr.cliente_id IS NOT NULL AND cr.ativo=1)
+                  WHERE cxf.fornecedor_id=? AND cr.cliente_id IS NOT NULL AND cr.ativo!=0)
               AND c.cliente_id NOT IN (
                   SELECT DISTINCT p.cliente_id FROM pedido p
                   WHERE p.fornecedor_id=? AND p.status_pedido NOT IN ('CANCELADO','RECUSADO'))
@@ -1128,7 +1129,7 @@ def _rel_cobertura():
             JOIN contato_registro cr ON cr.cliente_id=c.cliente_id
             JOIN contato_x_fornecedor cxf ON cxf.contato_id=cr.contato_id
             WHERE {where_sql}
-              AND cxf.fornecedor_id=? AND cr.ativo=1
+              AND cxf.fornecedor_id=? AND cr.ativo!=0
               AND cr.tipo_topico='Negociação'
               AND cr.status NOT IN ('Concluído','Cancelado')
             GROUP BY c.cliente_id, c.nome_fantasia, c.cidade, c.status, pdv.tipo_pdv, pdv.cluster
@@ -1160,7 +1161,7 @@ def _rel_cobertura():
               AND c.cliente_id NOT IN (
                   SELECT DISTINCT cr.cliente_id FROM contato_registro cr
                   JOIN contato_x_fornecedor cxf ON cxf.contato_id=cr.contato_id
-                  WHERE cxf.fornecedor_id=? AND cr.cliente_id IS NOT NULL AND cr.ativo=1)
+                  WHERE cxf.fornecedor_id=? AND cr.cliente_id IS NOT NULL AND cr.ativo!=0)
               AND c.cliente_id NOT IN (
                   SELECT DISTINCT p.cliente_id FROM pedido p
                   WHERE p.fornecedor_id=? AND p.status_pedido NOT IN ('CANCELADO','RECUSADO'))
@@ -1175,7 +1176,7 @@ def _rel_cobertura():
             JOIN contato_registro cr ON cr.cliente_id=c.cliente_id
             JOIN contato_x_fornecedor cxf ON cxf.contato_id=cr.contato_id
             WHERE {where_sql}
-              AND cxf.fornecedor_id=? AND cr.ativo=1
+              AND cxf.fornecedor_id=? AND cr.ativo!=0
               AND cr.tipo_topico='Negociação'
               AND cr.status NOT IN ('Concluído','Cancelado')
             GROUP BY c.cliente_id, c.nome_fantasia, c.cidade, c.status, c.perfil, pdv.cluster ORDER BY MAX(cr.data_contato) DESC""",

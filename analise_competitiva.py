@@ -35,7 +35,7 @@ def tela_analise_competitiva():
     col1, col2, col3 = st.columns(3)
     col1.metric("Pesquisas finalizadas", n_pesq)
     col2.metric("Produtos concorrentes cadastrados", n_conc)
-    pdvs_pesq = query("""SELECT COUNT(DISTINCT COALESCE(pdv_id::TEXT, cliente_id::TEXT||'c'))
+    pdvs_pesq = query("""SELECT COUNT(DISTINCT COALESCE(CAST(pdv_id AS TEXT), CAST(cliente_id AS TEXT)||'c'))
         FROM pesquisa_preco WHERE status='finalizado'""")[0][0]
     col3.metric("PDVs/locais pesquisados", pdvs_pesq)
 
@@ -158,7 +158,7 @@ def _presenca_pdv():
 
     # Total de PDVs unicos pesquisados para este fornecedor
     total_pdvs = query("""
-        SELECT COUNT(DISTINCT COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c'))
+        SELECT COUNT(DISTINCT COALESCE(pp.CAST(pdv_id AS TEXT), pp.CAST(cliente_id AS TEXT)||'c'))
         FROM pesquisa_preco pp
         WHERE pp.fornecedor_id=? AND pp.status='finalizado'
     """, (forn_id,))[0][0]
@@ -180,7 +180,7 @@ def _presenca_pdv():
             COALESCE(pc.descricao_curta, pc.descricao) AS produto,
             COALESCE(cat.nome_categoria, 'Sem categoria') AS categoria,
             COALESCE(rel_tipo.tipo_relacao, 'nao_vinculado') AS tipo,
-            COUNT(DISTINCT COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c')) AS pdvs_presentes
+            COUNT(DISTINCT COALESCE(pp.CAST(pdv_id AS TEXT), pp.CAST(cliente_id AS TEXT)||'c')) AS pdvs_presentes
         FROM pesquisa_preco_item ppi
         JOIN pesquisa_preco pp       ON ppi.pesquisa_id=pp.pesquisa_id
         JOIN produto_concorrente pc  ON ppi.produto_concorrente_id=pc.produto_concorrente_id
@@ -235,7 +235,7 @@ def _presenca_pdv():
     resumo_marc = query("""
         SELECT
             conc.marca_concorrente,
-            COUNT(DISTINCT COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c')) AS pdvs_presentes,
+            COUNT(DISTINCT COALESCE(pp.CAST(pdv_id AS TEXT), pp.CAST(cliente_id AS TEXT)||'c')) AS pdvs_presentes,
             COUNT(DISTINCT pc.produto_concorrente_id) AS produtos_encontrados
         FROM pesquisa_preco_item ppi
         JOIN pesquisa_preco pp       ON ppi.pesquisa_id=pp.pesquisa_id
@@ -338,14 +338,14 @@ def _meu_produto_vs():
 
     # Total de PDVs pesquisados
     total_pdvs = query("""
-        SELECT COUNT(DISTINCT COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c'))
+        SELECT COUNT(DISTINCT COALESCE(pp.CAST(pdv_id AS TEXT), pp.CAST(cliente_id AS TEXT)||'c'))
         FROM pesquisa_preco pp
         WHERE pp.fornecedor_id=? AND pp.status='finalizado'
     """, (forn_id,))[0][0]
 
     # Meu produto nos PDVs
     meu_nos_pdvs = query("""
-        SELECT COUNT(DISTINCT COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c'))
+        SELECT COUNT(DISTINCT COALESCE(pp.CAST(pdv_id AS TEXT), pp.CAST(cliente_id AS TEXT)||'c'))
         FROM pesquisa_preco_item ppi
         JOIN pesquisa_preco pp ON ppi.pesquisa_id=pp.pesquisa_id
         WHERE pp.fornecedor_id=? AND pp.status='finalizado'
@@ -354,7 +354,7 @@ def _meu_produto_vs():
     """, (forn_id, prod_id))[0][0]
 
     meu_rupturas = query("""
-        SELECT COUNT(DISTINCT COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c'))
+        SELECT COUNT(DISTINCT COALESCE(pp.CAST(pdv_id AS TEXT), pp.CAST(cliente_id AS TEXT)||'c'))
         FROM pesquisa_preco_item ppi
         JOIN pesquisa_preco pp ON ppi.pesquisa_id=pp.pesquisa_id
         WHERE pp.fornecedor_id=? AND pp.status='finalizado'
@@ -377,10 +377,10 @@ def _meu_produto_vs():
             conc.marca_concorrente,
             COALESCE(pc.descricao_curta, pc.descricao) AS produto_conc,
             rel.tipo_relacao,
-            COUNT(DISTINCT COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c')) AS pdvs_conc,
+            COUNT(DISTINCT COALESCE(pp.CAST(pdv_id AS TEXT), pp.CAST(cliente_id AS TEXT)||'c')) AS pdvs_conc,
             -- PDVs onde concorrente esta mas MEU nao esta (ruptura)
             COUNT(DISTINCT CASE WHEN ppi_nosso.ruptura=1 OR ppi_nosso.pesquisa_item_id IS NULL
-                THEN COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c') END) AS pdvs_so_conc
+                THEN COALESCE(pp.CAST(pdv_id AS TEXT), pp.CAST(cliente_id AS TEXT)||'c') END) AS pdvs_so_conc
         FROM produto_concorrente_relacao rel
         JOIN produto_concorrente pc   ON rel.produto_concorrente_id=pc.produto_concorrente_id
         JOIN concorrente conc         ON pc.concorrente_id=conc.concorrente_id
@@ -494,7 +494,7 @@ def _oportunidades():
     forn_id = forn_sel[0]
 
     total_pdvs = query("""
-        SELECT COUNT(DISTINCT COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c'))
+        SELECT COUNT(DISTINCT COALESCE(pp.CAST(pdv_id AS TEXT), pp.CAST(cliente_id AS TEXT)||'c'))
         FROM pesquisa_preco pp WHERE pp.fornecedor_id=? AND pp.status='finalizado'
     """, (forn_id,))[0][0]
 
@@ -534,7 +534,7 @@ def _oportunidades():
           AND p.fornecedor_id=?
           AND ppi_conc.ruptura=0
           AND (ppi_nosso.pesquisa_item_id IS NULL OR ppi_nosso.ruptura=1)
-        GROUP BY COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT), p.produto_id, pc.produto_concorrente_id, p.descricao_curta, conc.marca_concorrente, pc.descricao_curta, pdv.nome_loja, cli.nome_fantasia, pdv.cidade, cli.cidade
+        GROUP BY COALESCE(pp.CAST(pdv_id AS TEXT), pp.CAST(cliente_id AS TEXT)), p.produto_id, pc.produto_concorrente_id, p.descricao_curta, conc.marca_concorrente, pc.descricao_curta, pdv.nome_loja, cli.nome_fantasia, pdv.cidade, cli.cidade
         ORDER BY vezes_detectado DESC, local
     """, (forn_id, forn_id))
 
@@ -569,7 +569,7 @@ def _oportunidades():
         LEFT JOIN cliente cli       ON pp.cliente_id=cli.cliente_id
         WHERE pp.fornecedor_id=? AND pp.status='finalizado'
           AND ppi.produto_concorrente_id IS NOT NULL
-        GROUP BY COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c'), pdv.nome_loja, cli.nome_fantasia, pdv.cidade, cli.cidade
+        GROUP BY COALESCE(pp.CAST(pdv_id AS TEXT), pp.CAST(cliente_id AS TEXT)||'c'), pdv.nome_loja, cli.nome_fantasia, pdv.cidade, cli.cidade
         ORDER BY marcas_concorrentes DESC, produtos_concorrentes DESC
     """, (forn_id,))
 
@@ -618,7 +618,7 @@ def _oportunidades():
     op4 = query("""
         SELECT
             conc.marca_concorrente,
-            COUNT(DISTINCT COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c')) AS pdvs_presentes,
+            COUNT(DISTINCT COALESCE(pp.CAST(pdv_id AS TEXT), pp.CAST(cliente_id AS TEXT)||'c')) AS pdvs_presentes,
             SUM(CASE WHEN ppi.ponto_extra=1 THEN 1 ELSE 0 END) AS com_ponto_extra,
             SUM(CASE WHEN ppi.ponto_extra=0 THEN 1 ELSE 0 END) AS sem_ponto_extra,
             ROUND(100.0*SUM(CASE WHEN ppi.ponto_extra=0 THEN 1 ELSE 0 END)/COUNT(*),1) AS pct_sem_ponto
@@ -629,7 +629,7 @@ def _oportunidades():
         WHERE pp.fornecedor_id=? AND pp.status='finalizado'
           AND ppi.produto_concorrente_id IS NOT NULL AND ppi.ruptura=0
         GROUP BY conc.concorrente_id, conc.marca_concorrente
-        HAVING COUNT(DISTINCT COALESCE(pp.pdv_id::TEXT, pp.cliente_id::TEXT||'c')) > 0
+        HAVING COUNT(DISTINCT COALESCE(pp.CAST(pdv_id AS TEXT), pp.CAST(cliente_id AS TEXT)||'c')) > 0
         ORDER BY pct_sem_ponto DESC, pdvs_presentes DESC
     """, (forn_id,))
 
