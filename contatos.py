@@ -1114,19 +1114,9 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
             FROM contato_interacao ci
             WHERE ci.contato_id=? AND ci.ativo!=0
             ORDER BY ci.data_interacao DESC""", (cid,))
-    except Exception:
-        ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
-                   ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup
-            FROM contato_interacao ci
-            WHERE ci.contato_id=? AND ci.ativo!=0
-            ORDER BY ci.data_interacao DESC""", (cid,))
     except Exception as _ex:
-        st.error(f"🔍 debug erro query: {_ex}")
-        ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
-                   ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup
-            FROM contato_interacao ci
-            WHERE ci.contato_id=? AND ci.ativo!=0
-            ORDER BY ci.data_interacao DESC""", (cid,))
+        st.warning(f"Erro ao buscar interações: {_ex}")
+        ints = []
 
     if ints:
         st.markdown(f"**📅 Histórico — {len(ints)} interação(ões)**")
