@@ -170,7 +170,7 @@ def _lista_topicos():
                cr.data_contato,
                cr.data_followup,
                COALESCE(
-                   (SELECT STRING_AGG(fn.nome_fantasia, ' / ' ORDER BY fn.nome_fantasia)
+                   (SELECT GROUP_CONCAT(fn.nome_fantasia,' / ')
                     FROM contato_x_fornecedor cxf
                     JOIN fornecedor fn ON cxf.fornecedor_id=fn.fornecedor_id
                     WHERE cxf.contato_id=cr.contato_id),'—') AS fornecedores,

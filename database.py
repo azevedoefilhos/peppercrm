@@ -146,9 +146,9 @@ def _traduzir_sql_pg(sql):
         lambda m: f"LPAD(CAST({m.group(1).strip()} AS TEXT), 2, '0')", sql)
     sql = _traduzir_julianday(sql)
     sql = re.sub(r"GROUP_CONCAT\(([^,)]+),\s*'([^']+)'\)",
-        lambda m: f"STRING_AGG({m.group(1).strip()}, '{m.group(2)}')", sql)
+        lambda m: f"STRING_AGG({m.group(1).strip()}, '{m.group(2)}' ORDER BY {m.group(1).strip()})", sql)
     sql = re.sub(r"GROUP_CONCAT\(([^)]+)\)",
-        lambda m: f"STRING_AGG({m.group(1).strip()}, ',')", sql)
+        lambda m: f"STRING_AGG({m.group(1).strip()}, ',' ORDER BY {m.group(1).strip()})", sql)
     sql = sql.replace("IFNULL(", "COALESCE(")
     had_or_ignore = bool(re.search(r"INSERT\s+OR\s+IGNORE\s+INTO", sql, re.IGNORECASE))
     sql = re.sub(r"INSERT\s+OR\s+(?:IGNORE|REPLACE)\s+INTO", "INSERT INTO", sql, flags=re.IGNORECASE)
