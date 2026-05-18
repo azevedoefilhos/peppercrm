@@ -1112,14 +1112,15 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
     # SEÇÃO B — HISTÓRICO DE INTERAÇÕES com edição inline
     # ════════════════════════════════════════════════════
 
-    # Busca todas as interações do tópico
+    # Busca todas as interações do tópico (sem filtro ativo para máxima compatibilidade)
     try:
         ints = query("""SELECT ci.interacao_id, ci.data_interacao, ci.via_comunicacao,
-                   ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup,
-                   ci.fornecedor_id
+                   ci.contato_pessoa, ci.descricao, ci.resultado, ci.data_followup
             FROM contato_interacao ci
-            WHERE ci.contato_id=? AND ci.ativo!=0
+            WHERE ci.contato_id=?
             ORDER BY ci.data_interacao DESC""", (cid,))
+        # Filtra em Python para máxima compatibilidade SQLite/PostgreSQL
+        ints = [r for r in ints if r['ativo'] not in (0, False, '0')] if ints and hasattr(ints[0], 'keys') and 'ativo' in ints[0].keys() else ints
     except Exception as _ex:
         st.warning(f"Erro ao buscar interações: {_ex}")
         ints = []
