@@ -598,7 +598,7 @@ def _gerar_pdf_topico(cid, fornecedor_id=None):
         elementos.append(Paragraph("Nenhuma interação registrada.", s_inter_texto))
     else:
         for idx, irow in enumerate(ints, 1):
-            data_i, via, pessoa, desc, result, fup_i = irow
+            data_i, via, pessoa, desc, result, fup_i = irow[:6] if not hasattr(irow, 'keys') else (irow['data_interacao'], irow['via_comunicacao'], irow['contato_pessoa'], irow['descricao'], irow['resultado'], irow['data_followup'])
             via_lbl = VIA_LABEL.get(via, via or "—")
             cabecalho = f"<b>#{idx} — {_fmt_data(data_i)}  |  {via_lbl}"
             if pessoa:
@@ -848,7 +848,7 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
                 "Nenhuma interacao no periodo selecionado.", s_inter_tx))
         else:
             for idx_i, irow in enumerate(ints, 1):
-                data_i, via, pessoa, desc, result, fup_i = irow
+                data_i, via, pessoa, desc, result, fup_i = irow[:6] if not hasattr(irow, 'keys') else (irow['data_interacao'], irow['via_comunicacao'], irow['contato_pessoa'], irow['descricao'], irow['resultado'], irow['data_followup'])
                 via_lbl = VIA_LABEL.get(via, via or "—")
                 cab = f"<b>#{idx_i} — {_fd(data_i)}  |  {via_lbl}"
                 if pessoa: cab += f"  |  {pessoa}"
