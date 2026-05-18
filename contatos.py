@@ -951,26 +951,32 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
         st.success(_msg_inline)
 
     # ── Fornecedores do tópico ────────────────────────────────────────────
-    _forns_pan = query("""
-        SELECT cft.cft_id, cft.fornecedor_id, f.nome_fantasia,
-               cft.status, cft.tipo_topico, cft.prioridade, cft.data_followup
-        FROM contato_fornecedor_topico cft
-        JOIN fornecedor f ON f.fornecedor_id=cft.fornecedor_id
-        WHERE cft.contato_id=? AND cft.ativo!=0
-        ORDER BY f.nome_fantasia
-    """, (cid,))
+    # Tenta contato_fornecedor_topico primeiro, fallback para contato_x_fornecedor
+    _forns_pan = []
+    try:
+        _forns_pan = query("""
+            SELECT cft.cft_id, cft.fornecedor_id, f.nome_fantasia,
+                   cft.status, cft.tipo_topico, cft.prioridade, cft.data_followup
+            FROM contato_fornecedor_topico cft
+            JOIN fornecedor f ON f.fornecedor_id=cft.fornecedor_id
+            WHERE cft.contato_id=? AND cft.ativo!=0
+            ORDER BY f.nome_fantasia
+        """, (cid,))
+    except Exception:
+        pass
 
-    # Fallback se migração não rodou ainda
     if not _forns_pan:
-        _raw = query("""SELECT cxf.fornecedor_id, f.nome_fantasia
-            FROM contato_x_fornecedor cxf
-            JOIN fornecedor fn ON cxf.fornecedor_id=fn.fornecedor_id
-            JOIN fornecedor f ON f.fornecedor_id=cxf.fornecedor_id
-            WHERE cxf.contato_id=?""", (cid,))
-        _forns_pan = [(None, r[0], r[1], status_atual,
-                       tipo_atual, prioridade_atual, None) for r in _raw]
+        try:
+            _raw = query("""SELECT cxf.fornecedor_id, f.nome_fantasia
+                FROM contato_x_fornecedor cxf
+                JOIN fornecedor f ON f.fornecedor_id=cxf.fornecedor_id
+                WHERE cxf.contato_id=?""", (cid,))
+            _forns_pan = [(None, r[0], r[1], status_atual,
+                           tipo_atual, prioridade_atual, None) for r in _raw]
+        except Exception:
+            pass
 
-    _forn_opts = [(ft[1], ft[2]) for ft in _forns_pan]
+    _forn_opts = [(ft[1], ft[2]) for ft in _forns_pan] if _forns_pan else []
 
     # Seletor de fornecedor + botão PDF
     col_fsel, col_pdf = st.columns([3, 2])
@@ -984,7 +990,7 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
         else:
             _fsel_idx = 0
         _forn_id_ativo   = _forn_opts[_fsel_idx][0] if _forn_opts else None
-        _forn_nome_ativo = _forn_opts[_fsel_idx][1] if _forn_opts else "—"
+        _forn_nome_ativo = _forn_opts[_fsel_idx][1] if _forn_opts else "Geral"
 
     # PDF por fornecedor
     _pdf_key      = f"pdf_cache_{cid}_{_forn_id_ativo}"
