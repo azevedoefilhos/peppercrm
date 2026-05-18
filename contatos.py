@@ -476,25 +476,13 @@ def _gerar_pdf_topico(cid, fornecedor_id=None):
         WHERE cxf.contato_id=?""", (cid,))
     forns_str = " / ".join(f[0] for f in forns) if forns else "—"
 
-    # Busca interações filtradas por fornecedor se informado
-    if fornecedor_id:
-        ints = query("""
-            SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
-                   ci.descricao, ci.resultado, ci.data_followup, ci.ativo
-            FROM contato_interacao ci
-            WHERE ci.contato_id=?
-              AND (ci.fornecedor_id=? OR ci.fornecedor_id IS NULL)
-            ORDER BY ci.data_interacao ASC""", (cid, fornecedor_id))
-    else:
-        ints = query("""
-            SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
-                   ci.descricao, ci.resultado, ci.data_followup, ci.ativo
-            FROM contato_interacao ci
-            WHERE ci.contato_id=?
-            ORDER BY ci.data_interacao ASC""", (cid,))
-
-    # Filtra inativos em Python — compatível SQLite e PostgreSQL
-    ints = [r for r in ints if r['ativo'] not in (0, False, '0')] if ints else []
+    # Busca todas as interações do tópico para o PDF
+    ints = query("""
+        SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
+               ci.descricao, ci.resultado, ci.data_followup
+        FROM contato_interacao ci
+        WHERE ci.contato_id=?
+        ORDER BY ci.data_interacao ASC""", (cid,))
 
     # ── Estilos ───────────────────────────────────────────
     buf  = _io.BytesIO()
