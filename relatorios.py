@@ -729,7 +729,7 @@ def _rel_cluster():
             except: return ""
 
         st.dataframe(
-            df_cob.style.applymap(_cor_cob, subset=["Cobertura %"]),
+            df_cob.style.map(_cor_cob, subset=["Cobertura %"]),
             use_container_width=True, hide_index=True
         )
         _excel_download(df_cob, "cobertura_cluster")
