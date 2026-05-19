@@ -549,14 +549,14 @@ def _migrar_todos():
 
 
 # ── Auto-migration ao importar ───────────────────────────────────────────────
-# Só roda automaticamente no Railway (variável RAILWAY_ENVIRONMENT presente).
+# Migration desativada do startup — roda manualmente via admin ou primeira sessão
 import os as _os
 if _os.environ.get("RAILWAY_ENVIRONMENT") or _os.environ.get("RAILWAY_PROJECT_ID"):
     try:
-        _migrar_contato_por_fornecedor()
         _migrar_pedido_minimo()
     except Exception:
         pass
+    # _migrar_contato_por_fornecedor() — desativado: causa timeout no startup
 
 
 def get_nome_empresa():
