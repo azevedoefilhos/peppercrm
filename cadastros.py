@@ -2042,6 +2042,12 @@ def _lista_clientes():
     if msg_massa:
         st.success(msg_massa)
 
+    PERFIS_CLI = ["Todos","Emporio","Supermercado","Hipermercado","Atacadista",
+                  "Mini Mercado","Mercearia","Sacolao","Hortifruti","Acougue",
+                  "Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen",
+                  "Hamburgueria","Restaurante","Lanchonete","Bar / Boteco",
+                  "Clube / Associacao","Outro"]
+
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
         fil_status = st.selectbox("Filtrar por status",
@@ -2050,7 +2056,8 @@ def _lista_clientes():
         fil_busca  = st.text_input("Buscar por nome", key="fil_cli_nome",
                                    placeholder="Digite parte do nome...")
     with col_f3:
-        pass  # reservado
+        fil_perfil = st.selectbox("Tipo de estabelecimento",
+                                  PERFIS_CLI, key="fil_cli_perfil")
 
     # Alteracao em massa — session_state para capturar apos rerun
     with st.expander("🔄 Alterar status em massa"):
@@ -2076,6 +2083,8 @@ def _lista_clientes():
         where_q.append("c.status=?"); params_q.append(fil_status)
     if fil_busca.strip():
         where_q.append("c.nome_fantasia LIKE ?"); params_q.append(f"%{fil_busca.strip()}%")
+    if fil_perfil != "Todos":
+        where_q.append("c.perfil=?"); params_q.append(fil_perfil)
     where_sql = ("WHERE " + " AND ".join(where_q)) if where_q else ""
 
     dados = query(f"""
