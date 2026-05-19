@@ -2100,17 +2100,15 @@ def _lista_clientes():
         st.info("Nenhum cliente encontrado.")
         return
 
-    # Gera Excel dos dados já carregados + fone/email complementares
+    # Gera Excel com todos os campos
     try:
-        # Busca fone e email separadamente — query simples sem GROUP BY
-        _ids = [r[0] for r in dados]
-        _ph = ",".join("?" * len(_ids))
         _tem_email = True
         try:
             query("SELECT email FROM cliente LIMIT 1")
         except Exception:
             _tem_email = False
         _ec = "COALESCE(c.email,'')" if _tem_email else "''"
+
         extras = query(f"""
             SELECT c.cliente_id, COALESCE(c.razao_social,''),
                    COALESCE(c.perfil,''), COALESCE(c.fone,''), {_ec},
@@ -2118,8 +2116,9 @@ def _lista_clientes():
                    COALESCE(c.bairro,''), COALESCE(c.site,''),
                    COALESCE(c.instagram,''), COALESCE(c.observacao,'')
             FROM cliente c
-            WHERE c.cliente_id IN ({_ph})
-        """, tuple(_ids))
+            {where_sql}
+            ORDER BY c.nome_fantasia
+        """, tuple(params_q))
         extras_map = {r[0]: r for r in extras}
 
         cols_exp = ["ID","Nome fantasia","Razao social","Perfil/Tipo","Fone","E-mail",
