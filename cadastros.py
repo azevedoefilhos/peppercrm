@@ -2098,59 +2098,49 @@ def _lista_clientes():
     col_ct, col_exp = st.columns([3,1])
     col_ct.caption(f"{len(dados)} cliente(s)")
     with col_exp:
-        if st.button("⬇️ Exportar Excel", key="exp_cli_xlsx", use_container_width=True):
-            st.session_state["exp_cli_trigger"] = True
+        _exportar = st.button("⬇️ Exportar Excel", key="exp_cli_xlsx", use_container_width=True)
 
-    if st.session_state.pop("exp_cli_trigger", False):
-        # Verifica se coluna email existe
-        _tem_email = bool(query("SELECT email FROM cliente LIMIT 1") is not None)
+    if _exportar:
         try:
-            query("SELECT email FROM cliente LIMIT 1")
             _tem_email = True
-        except Exception:
-            _tem_email = False
-
-        _email_col = "COALESCE(c.email,'')" if _tem_email else "''"
-
-        dados_exp = query(f"""
-            SELECT c.cliente_id, c.nome_fantasia, c.razao_social,
-                   COALESCE(c.perfil,''), COALESCE(c.fone,''),
-                   {_email_col}, COALESCE(c.cnpj,''),
-                   COALESCE(c.site,''), COALESCE(c.instagram,''),
-                   COALESCE(c.endereco,''), COALESCE(c.bairro,''),
-                   COALESCE(c.cidade,''), COALESCE(c.estado,''),
-                   COALESCE(a.nome,'') AS associacao,
-                   COALESCE(c.status,'Ativo'), COALESCE(c.observacao,''),
-                   COUNT(DISTINCT p.pdv_id) AS pdvs
-            FROM cliente c
-            LEFT JOIN associacao a ON c.associacao_id=a.associacao_id
-            LEFT JOIN pdv p ON c.cliente_id=p.cliente_id
-            {where_sql}
-            GROUP BY c.cliente_id
-            ORDER BY c.nome_fantasia
-        """, tuple(params_q))
-        colunas_exp = ["ID","Nome fantasia","Razao social","Perfil","Fone","E-mail","CNPJ",
-                       "Site","Instagram","Endereco","Bairro","Cidade","UF",
-                       "Associacao","Status","Observacao","PDVs"]
-        linhas = []
-        for r in (dados_exp or []):
             try:
-                linhas.append([
-                    r[0], r[1], r[2], r[3], r[4], r[5], r[6],
-                    r[7], r[8], r[9], r[10], r[11], r[12],
-                    r[13], r[14], r[15], r[16]
-                ])
+                query("SELECT email FROM cliente LIMIT 1")
             except Exception:
-                linhas.append(list(r.values()) if hasattr(r, 'values') else list(r))
-        df_exp = pd.DataFrame(linhas, columns=colunas_exp)
-        buf_exp = io.BytesIO()
-        df_exp.to_excel(buf_exp, index=False, sheet_name="Clientes")
-        buf_exp.seek(0)
-        st.download_button("📥 Baixar lista de clientes",
-                           data=buf_exp.read(),
-                           file_name="clientes_peppercrm.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                _tem_email = False
+            _ec = "COALESCE(c.email,'')" if _tem_email else "''"
+            dados_exp = query(f"""
+                SELECT c.cliente_id, c.nome_fantasia, c.razao_social,
+                       COALESCE(c.perfil,''), COALESCE(c.fone,''),
+                       {_ec}, COALESCE(c.cnpj,''),
+                       COALESCE(c.site,''), COALESCE(c.instagram,''),
+                       COALESCE(c.endereco,''), COALESCE(c.bairro,''),
+                       COALESCE(c.cidade,''), COALESCE(c.estado,''),
+                       COALESCE(a.nome,'') AS associacao,
+                       COALESCE(c.status,'Ativo'), COALESCE(c.observacao,''),
+                       COUNT(DISTINCT p.pdv_id) AS pdvs
+                FROM cliente c
+                LEFT JOIN associacao a ON c.associacao_id=a.associacao_id
+                LEFT JOIN pdv p ON c.cliente_id=p.cliente_id
+                {where_sql}
+                GROUP BY c.cliente_id
+                ORDER BY c.nome_fantasia
+            """, tuple(params_q))
+            cols_exp = ["ID","Nome fantasia","Razao social","Perfil","Fone","E-mail","CNPJ",
+                        "Site","Instagram","Endereco","Bairro","Cidade","UF",
+                        "Associacao","Status","Observacao","PDVs"]
+            linhas = [[r[i] for i in range(17)] for r in dados_exp]
+            df_exp = pd.DataFrame(linhas, columns=cols_exp)
+            buf_exp = io.BytesIO()
+            df_exp.to_excel(buf_exp, index=False, sheet_name="Clientes")
+            buf_exp.seek(0)
+            st.download_button("📥 Baixar lista de clientes",
+                               data=buf_exp.read(),
+                               file_name="clientes_peppercrm.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                               use_container_width=True,
+                               key="dl_cli_xlsx_now")
+        except Exception as _ex:
+            st.error(f"Erro ao exportar: {_ex}")
 
     h1,h2,h3,h4,h5,h6 = st.columns([0.4,2.8,1.2,0.6,1.5,1.2])
     for col, txt in zip([h1,h2,h3,h4,h5,h6],
