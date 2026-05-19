@@ -2119,9 +2119,20 @@ def _lista_clientes():
             GROUP BY c.cliente_id
             ORDER BY c.nome_fantasia
         """, tuple(params_q))
-        df_exp = pd.DataFrame(dados_exp, columns=[
-            "ID","Nome fantasia","Razao social","Perfil","Fone","E-mail","CNPJ","Site","Instagram",
-            "Endereco","Bairro","Cidade","UF","Associacao","Status","Observacao","PDVs"])
+        colunas_exp = ["ID","Nome fantasia","Razao social","Perfil","Fone","E-mail","CNPJ",
+                       "Site","Instagram","Endereco","Bairro","Cidade","UF",
+                       "Associacao","Status","Observacao","PDVs"]
+        if dados_exp:
+            # Converte DictRow para lista de dicts
+            rows = []
+            for r in dados_exp:
+                if hasattr(r, 'keys'):
+                    rows.append(dict(r))
+                else:
+                    rows.append(dict(zip(colunas_exp, r)))
+            df_exp = pd.DataFrame(rows)[colunas_exp] if rows and hasattr(dados_exp[0], 'keys') else pd.DataFrame(dados_exp, columns=colunas_exp)
+        else:
+            df_exp = pd.DataFrame(columns=colunas_exp)
         buf_exp = io.BytesIO()
         df_exp.to_excel(buf_exp, index=False, sheet_name="Clientes")
         buf_exp.seek(0)
