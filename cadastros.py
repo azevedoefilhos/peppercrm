@@ -2095,42 +2095,40 @@ def _lista_clientes():
         st.info("Nenhum cliente encontrado.")
         return
 
-    # Gera Excel antecipadamente para download em 1 clique
+    # Gera Excel dos dados já carregados + fone/email complementares
     try:
+        # Busca fone e email separadamente — query simples sem GROUP BY
+        _ids = [r[0] for r in dados]
+        _ph = ",".join("?" * len(_ids))
         _tem_email = True
         try:
             query("SELECT email FROM cliente LIMIT 1")
         except Exception:
             _tem_email = False
         _ec = "COALESCE(c.email,'')" if _tem_email else "''"
-        dados_exp = query(f"""
-            SELECT c.cliente_id, c.nome_fantasia, c.razao_social,
-                   COALESCE(c.perfil,''), COALESCE(c.fone,''),
-                   {_ec}, COALESCE(c.cnpj,''),
-                   COALESCE(c.site,''), COALESCE(c.instagram,''),
-                   COALESCE(c.endereco,''), COALESCE(c.bairro,''),
-                   COALESCE(c.cidade,''), COALESCE(c.estado,''),
-                   COALESCE(a.nome,'') AS associacao,
-                   COALESCE(c.status,'Ativo'), COALESCE(c.observacao,''),
-                   COUNT(DISTINCT p.pdv_id) AS pdvs
+        extras = query(f"""
+            SELECT c.cliente_id, COALESCE(c.fone,''), {_ec},
+                   COALESCE(c.cnpj,''), COALESCE(c.cidade,''),
+                   COALESCE(c.estado,'')
             FROM cliente c
-            LEFT JOIN associacao a ON c.associacao_id=a.associacao_id
-            LEFT JOIN pdv p ON c.cliente_id=p.cliente_id
-            {where_sql}
-            GROUP BY c.cliente_id
-            ORDER BY c.nome_fantasia
-        """, tuple(params_q))
-        cols_exp = ["ID","Nome fantasia","Razao social","Perfil","Fone","E-mail","CNPJ",
-                    "Site","Instagram","Endereco","Bairro","Cidade","UF",
-                    "Associacao","Status","Observacao","PDVs"]
-        linhas = [[r[i] for i in range(17)] for r in dados_exp]
+            WHERE c.cliente_id IN ({_ph})
+        """, tuple(_ids))
+        extras_map = {r[0]: r for r in extras}
+
+        cols_exp = ["ID","Nome fantasia","Cidade","UF","Status","Fone","E-mail","CNPJ","Fornecedores","PDVs"]
+        linhas = []
+        for r in dados:
+            ex = extras_map.get(r[0], [r[0],'','','','',''])
+            linhas.append([r[0], r[1], r[2], r[3], r[5],
+                           ex[1], ex[2], ex[3], r[6], r[7]])
         df_exp = pd.DataFrame(linhas, columns=cols_exp)
         buf_exp = io.BytesIO()
         with pd.ExcelWriter(buf_exp, engine='openpyxl') as writer:
             df_exp.to_excel(writer, index=False, sheet_name="Clientes")
         _xlsx_pronto = buf_exp.getvalue()
-    except Exception:
+    except Exception as _ex_xlsx:
         _xlsx_pronto = None
+        st.error(f"Erro export: {_ex_xlsx}")
 
     col_ct, col_exp = st.columns([3,1])
     col_ct.caption(f"{len(dados)} cliente(s)")
