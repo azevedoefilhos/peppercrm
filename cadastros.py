@@ -2042,11 +2042,7 @@ def _lista_clientes():
     if msg_massa:
         st.success(msg_massa)
 
-    PERFIS_CLI = ["Todos","Emporio","Supermercado","Hipermercado","Atacadista",
-                  "Mini Mercado","Mercearia","Sacolao","Hortifruti","Acougue",
-                  "Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen",
-                  "Hamburgueria","Restaurante","Lanchonete","Bar / Boteco",
-                  "Clube / Associacao","Outro"]
+    PERFIS_CLI = ["Todos","Empório","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolão","Hortifruti","Açougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associação","Outro"]
 
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
@@ -2116,20 +2112,41 @@ def _lista_clientes():
             _tem_email = False
         _ec = "COALESCE(c.email,'')" if _tem_email else "''"
         extras = query(f"""
-            SELECT c.cliente_id, COALESCE(c.fone,''), {_ec},
-                   COALESCE(c.cnpj,''), COALESCE(c.cidade,''),
-                   COALESCE(c.estado,'')
+            SELECT c.cliente_id, COALESCE(c.razao_social,''),
+                   COALESCE(c.perfil,''), COALESCE(c.fone,''), {_ec},
+                   COALESCE(c.cnpj,''), COALESCE(c.endereco,''),
+                   COALESCE(c.bairro,''), COALESCE(c.site,''),
+                   COALESCE(c.instagram,''), COALESCE(c.observacao,'')
             FROM cliente c
             WHERE c.cliente_id IN ({_ph})
         """, tuple(_ids))
         extras_map = {r[0]: r for r in extras}
 
-        cols_exp = ["ID","Nome fantasia","Cidade","UF","Status","Fone","E-mail","CNPJ","Fornecedores","PDVs"]
+        cols_exp = ["ID","Nome fantasia","Razao social","Perfil/Tipo","Fone","E-mail",
+                    "CNPJ","Endereco","Bairro","Cidade","UF","Site","Instagram",
+                    "Status","Observacao","Fornecedores","PDVs"]
         linhas = []
         for r in dados:
-            ex = extras_map.get(r[0], [r[0],'','','','',''])
-            linhas.append([r[0], r[1], r[2], r[3], r[5],
-                           ex[1], ex[2], ex[3], r[6], r[7]])
+            ex = extras_map.get(r[0], [r[0],'','','','','','','','','',''])
+            linhas.append([
+                r[0],   # ID
+                r[1],   # Nome fantasia
+                ex[1],  # Razao social
+                ex[2],  # Perfil/Tipo
+                ex[3],  # Fone
+                ex[4],  # Email
+                ex[5],  # CNPJ
+                ex[6],  # Endereco
+                ex[7],  # Bairro
+                r[2],   # Cidade (vem do dados principal)
+                r[3],   # UF
+                ex[8],  # Site
+                ex[9],  # Instagram
+                r[5],   # Status
+                ex[10], # Observacao
+                r[6],   # Fornecedores
+                r[7],   # PDVs
+            ])
         df_exp = pd.DataFrame(linhas, columns=cols_exp)
         buf_exp = io.BytesIO()
         with pd.ExcelWriter(buf_exp, engine='openpyxl') as writer:
@@ -2241,7 +2258,7 @@ def _form_novo_cliente():
         with col1:
             fantasia = st.text_input("Nome fantasia *")
             razao    = st.text_input("Razao social")
-            perfil   = st.selectbox("Perfil / tipo", ["Emporio","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolao","Hortifruti","Acougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associacao","Outro"])
+            perfil   = st.selectbox("Perfil / tipo *", ["— Selecione —","Empório","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolão","Hortifruti","Açougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associação","Outro"])
             fone     = st.text_input("Fone / WhatsApp", placeholder="Ex: 13988776655")
             email    = st.text_input("E-mail", placeholder="Ex: compras@cliente.com.br")
             cnpj     = st.text_input("CNPJ")
@@ -2262,6 +2279,8 @@ def _form_novo_cliente():
     if salvar:
         if not fantasia.strip():
             _erro("Nome fantasia e obrigatorio."); return
+        if perfil == "— Selecione —":
+            _erro("Selecione o tipo de estabelecimento."); return
         existe = query("SELECT cliente_id FROM cliente WHERE LOWER(nome_fantasia)=LOWER(?)",
                        (fantasia.strip(),))
         if existe:
@@ -2291,7 +2310,7 @@ def _form_editar_cliente(cli_id):
     assoc_opts = [(None, "— Nenhuma")] + [(a[0], a[1]) for a in assocs]
     assoc_ids  = [a[0] for a in assoc_opts]
     idx_assoc  = assoc_ids.index(c["associacao_id"]) if c["associacao_id"] in assoc_ids else 0
-    perfis_e   = ["Emporio","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolao","Hortifruti","Acougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associacao","Outro"]
+    perfis_e   = ["— Selecione —","Empório","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolão","Hortifruti","Açougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associação","Outro"]
     perfil_at  = c["perfil"] if c["perfil"] and c["perfil"] in perfis_e else perfis_e[0]
 
     with st.form(f"edit_cli_{cli_id}"):
