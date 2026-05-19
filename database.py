@@ -511,6 +511,26 @@ def _migrar_contato_por_fornecedor():
         import traceback; traceback.print_exc()
 
 
+def _migrar_email_cliente():
+    """Adiciona coluna email na tabela cliente se não existir."""
+    try:
+        if _check_supabase():
+            execute_write("""
+                ALTER TABLE cliente ADD COLUMN IF NOT EXISTS email VARCHAR(255)
+            """)
+        else:
+            import sqlite3 as _sq
+            _db = os.path.join(os.path.dirname(__file__), "peppercrm.db")
+            if not os.path.exists(_db): return
+            _conn = _sq.connect(_db)
+            cols = [r[1] for r in _conn.execute("PRAGMA table_info(cliente)").fetchall()]
+            if "email" not in cols:
+                _conn.execute("ALTER TABLE cliente ADD COLUMN email TEXT")
+            _conn.commit(); _conn.close()
+    except Exception:
+        import traceback; traceback.print_exc()
+
+
 def _migrar_pedido_minimo():
     """
     Adiciona coluna pedido_minimo à tabela fornecedor, se ainda não existir.
@@ -553,6 +573,7 @@ def _migrar_todos():
 import os as _os
 if _os.environ.get("RAILWAY_ENVIRONMENT") or _os.environ.get("RAILWAY_PROJECT_ID"):
     try:
+        _migrar_email_cliente()
         _migrar_pedido_minimo()
     except Exception:
         pass

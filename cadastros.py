@@ -2124,8 +2124,9 @@ def _lista_clientes():
             "Endereco","Bairro","Cidade","UF","Associacao","Status","Observacao","PDVs"])
         buf_exp = io.BytesIO()
         df_exp.to_excel(buf_exp, index=False, sheet_name="Clientes")
+        buf_exp.seek(0)
         st.download_button("📥 Baixar lista de clientes",
-                           data=buf_exp.getvalue(),
+                           data=buf_exp.read(),
                            file_name="clientes_peppercrm.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                            use_container_width=True)
