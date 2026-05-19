@@ -2310,16 +2310,35 @@ def _form_editar_cliente(cli_id):
         if existe:
             _erro(f"Ja existe outro cliente com o nome '{fantasia}'."); return
         ativo_novo = 1 if status_e == "Ativo" else 0
+        # Verifica se coluna email existe antes de incluir no UPDATE
+        _tem_email = True
+        try:
+            query("SELECT email FROM cliente LIMIT 1")
+        except Exception:
+            _tem_email = False
+
         conn = conectar()
-        conn.execute("""
-            UPDATE cliente SET razao_social=?, nome_fantasia=?, perfil=?, fone=?,
-            email=?, cnpj=?, endereco=?, bairro=?, cidade=?, estado=?,
-            site=?, instagram=?, associacao_id=?, observacao=?, status=?, ativo=?
-            WHERE cliente_id=?
-        """, (razao, fantasia.strip(), perfil, fone or None,
-              email or None, cnpj or None, endereco or None, bairro or None, cidade, estado,
-              site or None, insta or None, assoc_e[0], obs or None,
-              status_e, ativo_novo, cli_id))
+        if _tem_email:
+            conn.execute("""
+                UPDATE cliente SET razao_social=?, nome_fantasia=?, perfil=?, fone=?,
+                email=?, cnpj=?, endereco=?, bairro=?, cidade=?, estado=?,
+                site=?, instagram=?, associacao_id=?, observacao=?, status=?, ativo=?
+                WHERE cliente_id=?
+            """, (razao, fantasia.strip(), perfil, fone or None,
+                  email or None, cnpj or None, endereco or None, bairro or None, cidade, estado,
+                  site or None, insta or None, assoc_e[0], obs or None,
+                  status_e, ativo_novo, cli_id))
+        else:
+            conn.execute("""
+                UPDATE cliente SET razao_social=?, nome_fantasia=?, perfil=?, fone=?,
+                cnpj=?, endereco=?, bairro=?, cidade=?, estado=?,
+                site=?, instagram=?, associacao_id=?, observacao=?, status=?, ativo=?
+                WHERE cliente_id=?
+            """, (razao, fantasia.strip(), perfil, fone or None,
+                  cnpj or None, endereco or None, bairro or None, cidade, estado,
+                  site or None, insta or None, assoc_e[0], obs or None,
+                  status_e, ativo_novo, cli_id))
+            st.warning("⚠️ E-mail não foi salvo — coluna ainda não existe no banco. Aguarde migration.")
         conn.commit(); conn.close()
         _sucesso("Cliente atualizado!")
 

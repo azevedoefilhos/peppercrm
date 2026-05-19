@@ -515,9 +515,26 @@ def _migrar_email_cliente():
     """Adiciona coluna email na tabela cliente se não existir."""
     try:
         if _check_supabase():
-            execute_write("""
-                ALTER TABLE cliente ADD COLUMN IF NOT EXISTS email VARCHAR(255)
-            """)
+            # Tenta com timeout estendido
+            try:
+                import psycopg2
+                conn = psycopg2.connect(
+                    host="aws-1-sa-east-1.pooler.supabase.com",
+                    port=5432,
+                    dbname="postgres",
+                    user="postgres.yunzqndswpwttejlgeaa",
+                    password=os.environ.get("SUPABASE_DB_PASSWORD", ""),
+                    sslmode="require",
+                    connect_timeout=30,
+                    options="-c statement_timeout=60000"
+                )
+                conn.autocommit = True
+                cur = conn.cursor()
+                cur.execute("ALTER TABLE cliente ADD COLUMN IF NOT EXISTS email VARCHAR(255)")
+                cur.close()
+                conn.close()
+            except Exception as e:
+                print(f"[migration] email cliente: {e}")
         else:
             import sqlite3 as _sq
             _db = os.path.join(os.path.dirname(__file__), "peppercrm.db")
@@ -528,7 +545,7 @@ def _migrar_email_cliente():
                 _conn.execute("ALTER TABLE cliente ADD COLUMN email TEXT")
             _conn.commit(); _conn.close()
     except Exception:
-        import traceback; traceback.print_exc()
+        pass
 
 
 def _migrar_pedido_minimo():
