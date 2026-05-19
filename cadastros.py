@@ -2102,10 +2102,20 @@ def _lista_clientes():
             st.session_state["exp_cli_trigger"] = True
 
     if st.session_state.pop("exp_cli_trigger", False):
+        # Verifica se coluna email existe
+        _tem_email = bool(query("SELECT email FROM cliente LIMIT 1") is not None)
+        try:
+            query("SELECT email FROM cliente LIMIT 1")
+            _tem_email = True
+        except Exception:
+            _tem_email = False
+
+        _email_col = "COALESCE(c.email,'')" if _tem_email else "''"
+
         dados_exp = query(f"""
             SELECT c.cliente_id, c.nome_fantasia, c.razao_social,
                    COALESCE(c.perfil,''), COALESCE(c.fone,''),
-                   COALESCE(c.email,''), COALESCE(c.cnpj,''),
+                   {_email_col}, COALESCE(c.cnpj,''),
                    COALESCE(c.site,''), COALESCE(c.instagram,''),
                    COALESCE(c.endereco,''), COALESCE(c.bairro,''),
                    COALESCE(c.cidade,''), COALESCE(c.estado,''),
