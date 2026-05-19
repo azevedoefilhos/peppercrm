@@ -2122,17 +2122,17 @@ def _lista_clientes():
         colunas_exp = ["ID","Nome fantasia","Razao social","Perfil","Fone","E-mail","CNPJ",
                        "Site","Instagram","Endereco","Bairro","Cidade","UF",
                        "Associacao","Status","Observacao","PDVs"]
-        if dados_exp:
-            # Converte DictRow para lista de dicts
-            rows = []
-            for r in dados_exp:
-                if hasattr(r, 'keys'):
-                    rows.append(dict(r))
-                else:
-                    rows.append(dict(zip(colunas_exp, r)))
-            df_exp = pd.DataFrame(rows)[colunas_exp] if rows and hasattr(dados_exp[0], 'keys') else pd.DataFrame(dados_exp, columns=colunas_exp)
-        else:
-            df_exp = pd.DataFrame(columns=colunas_exp)
+        linhas = []
+        for r in (dados_exp or []):
+            try:
+                linhas.append([
+                    r[0], r[1], r[2], r[3], r[4], r[5], r[6],
+                    r[7], r[8], r[9], r[10], r[11], r[12],
+                    r[13], r[14], r[15], r[16]
+                ])
+            except Exception:
+                linhas.append(list(r.values()) if hasattr(r, 'values') else list(r))
+        df_exp = pd.DataFrame(linhas, columns=colunas_exp)
         buf_exp = io.BytesIO()
         df_exp.to_excel(buf_exp, index=False, sheet_name="Clientes")
         buf_exp.seek(0)
