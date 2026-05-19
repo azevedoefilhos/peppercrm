@@ -2102,30 +2102,30 @@ def _lista_clientes():
             st.session_state["exp_cli_trigger"] = True
 
     if st.session_state.pop("exp_cli_trigger", False):
-        dados_exp = query("""
+        dados_exp = query(f"""
             SELECT c.cliente_id, c.nome_fantasia, c.razao_social,
-                   COALESCE(c.perfil,'—'), COALESCE(c.fone,'—'),
-                   COALESCE(c.cnpj,'—'), COALESCE(c.site,'—'),
-                   COALESCE(c.instagram,'—'),
-                   COALESCE(c.endereco,'—'), COALESCE(c.bairro,'—'),
-                   COALESCE(c.cidade,'—'), COALESCE(c.estado,'—'),
-                   COALESCE(a.nome,'—') AS associacao,
+                   COALESCE(c.perfil,''), COALESCE(c.fone,''),
+                   COALESCE(c.email,''), COALESCE(c.cnpj,''),
+                   COALESCE(c.site,''), COALESCE(c.instagram,''),
+                   COALESCE(c.endereco,''), COALESCE(c.bairro,''),
+                   COALESCE(c.cidade,''), COALESCE(c.estado,''),
+                   COALESCE(a.nome,'') AS associacao,
                    COALESCE(c.status,'Ativo'), COALESCE(c.observacao,''),
                    COUNT(DISTINCT p.pdv_id) AS pdvs
             FROM cliente c
             LEFT JOIN associacao a ON c.associacao_id=a.associacao_id
             LEFT JOIN pdv p ON c.cliente_id=p.cliente_id
+            {where_sql}
             GROUP BY c.cliente_id
             ORDER BY c.nome_fantasia
-        """)
+        """, tuple(params_q))
         df_exp = pd.DataFrame(dados_exp, columns=[
-            "ID","Nome fantasia","Razao social","Perfil","Fone","CNPJ","Site","Instagram",
+            "ID","Nome fantasia","Razao social","Perfil","Fone","E-mail","CNPJ","Site","Instagram",
             "Endereco","Bairro","Cidade","UF","Associacao","Status","Observacao","PDVs"])
         buf_exp = io.BytesIO()
         df_exp.to_excel(buf_exp, index=False, sheet_name="Clientes")
-        buf_exp.seek(0)
         st.download_button("📥 Baixar lista de clientes",
-                           data=buf_exp,
+                           data=buf_exp.getvalue(),
                            file_name="clientes_peppercrm.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                            use_container_width=True)
@@ -2223,6 +2223,7 @@ def _form_novo_cliente():
             razao    = st.text_input("Razao social")
             perfil   = st.selectbox("Perfil / tipo", ["Emporio","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolao","Hortifruti","Acougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associacao","Outro"])
             fone     = st.text_input("Fone / WhatsApp", placeholder="Ex: 13988776655")
+            email    = st.text_input("E-mail", placeholder="Ex: compras@cliente.com.br")
             cnpj     = st.text_input("CNPJ")
             site     = st.text_input("Site")
             insta    = st.text_input("Instagram", placeholder="@perfil")
@@ -2249,10 +2250,11 @@ def _form_novo_cliente():
         conn = conectar()
         conn.execute("""
             INSERT INTO cliente
-            (razao_social, nome_fantasia, perfil, fone, cnpj, ie, endereco, bairro,
+            (razao_social, nome_fantasia, perfil, fone, email, cnpj, ie, endereco, bairro,
              cidade, estado, site, instagram, associacao_id, observacao, status, ativo)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """, (razao, fantasia.strip(), perfil, fone or None, cnpj or None, None,
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (razao, fantasia.strip(), perfil, fone or None, email or None,
+              cnpj or None, None,
               endereco or None, bairro or None, cidade, estado,
               site or None, insta or None, assoc_sel[0], obs or None,
               status_n, ativo_n))
@@ -2280,6 +2282,7 @@ def _form_editar_cliente(cli_id):
             perfil   = st.selectbox("Perfil / tipo", perfis_e,
                                     index=perfis_e.index(perfil_at))
             fone     = st.text_input("Fone / WhatsApp", c["fone"] or "")
+            email    = st.text_input("E-mail",          c["email"] or "" if "email" in (c.keys() if hasattr(c,'keys') else []) else "")
             cnpj     = st.text_input("CNPJ",           c["cnpj"]     or "")
             site     = st.text_input("Site",            c["site"]     or "")
             insta    = st.text_input("Instagram",       c["instagram"] or "")
@@ -2309,11 +2312,11 @@ def _form_editar_cliente(cli_id):
         conn = conectar()
         conn.execute("""
             UPDATE cliente SET razao_social=?, nome_fantasia=?, perfil=?, fone=?,
-            cnpj=?, endereco=?, bairro=?, cidade=?, estado=?,
+            email=?, cnpj=?, endereco=?, bairro=?, cidade=?, estado=?,
             site=?, instagram=?, associacao_id=?, observacao=?, status=?, ativo=?
             WHERE cliente_id=?
         """, (razao, fantasia.strip(), perfil, fone or None,
-              cnpj or None, endereco or None, bairro or None, cidade, estado,
+              email or None, cnpj or None, endereco or None, bairro or None, cidade, estado,
               site or None, insta or None, assoc_e[0], obs or None,
               status_e, ativo_novo, cli_id))
         conn.commit(); conn.close()
