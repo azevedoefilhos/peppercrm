@@ -70,9 +70,11 @@ def tela_contatos():
         "forn":    "🏭 Por fornecedor",
         "mensagens":"💬 Mensagens",
     }
-    # Fix 6: sempre começa na aba lista ao entrar no módulo
-    if st.session_state.get("ct_pagina_anterior") != "contatos":
-        st.session_state["ct_pagina_anterior"] = "contatos"
+    # Sempre reseta para aba lista ao entrar no módulo vindo de outra página
+    _pagina_atual = st.session_state.get("pagina", "contatos")
+    if st.session_state.get("_ct_ultima_pagina") != _pagina_atual or \
+       st.session_state.get("_ct_ultima_pagina") is None:
+        st.session_state["_ct_ultima_pagina"] = _pagina_atual
         st.session_state["ct_aba"] = "lista"
 
     if "ct_aba" not in st.session_state:
@@ -228,16 +230,26 @@ def _lista_topicos():
                 key="pdf_con_modo",
                 help="Completo: todo o histórico. Período: só interações do período. Resumo: apenas cabeçalhos dos tópicos.")
         with col_per2:
-            # Datas do período para filtrar interações (só relevante no modo período)
-            _usar_datas = "periodo" in modo_int.lower() or "periodo" in modo_int
-            data_ini_pdf = st.date_input(
-                "De", value=date.today() - timedelta(days=30),
-                key="pdf_con_ini",
-                disabled=("completo" in modo_int.lower()))
-            data_fim_pdf = st.date_input(
-                "Ate", value=date.today(),
-                key="pdf_con_fim",
-                disabled=("completo" in modo_int.lower()))
+            # Sincroniza datas com o filtro de período selecionado acima
+            _hoje = date.today()
+            if fil_periodo == "Hoje":
+                _ini_default = _hoje; _fim_default = _hoje
+            elif fil_periodo == "Esta semana":
+                _ini_default = _hoje - timedelta(days=7); _fim_default = _hoje
+            elif fil_periodo == "Este mês":
+                _ini_default = _hoje.replace(day=1); _fim_default = _hoje
+            elif fil_periodo == "Últimos 30 dias":
+                _ini_default = _hoje - timedelta(days=30); _fim_default = _hoje
+            elif fil_periodo == "Últimos 90 dias":
+                _ini_default = _hoje - timedelta(days=90); _fim_default = _hoje
+            else:
+                _ini_default = _hoje - timedelta(days=30); _fim_default = _hoje
+
+            _disabled = "completo" in modo_int.lower() or "resumo" in modo_int.lower()
+            data_ini_pdf = st.date_input("De", value=_ini_default,
+                key="pdf_con_ini", disabled=_disabled)
+            data_fim_pdf = st.date_input("Até", value=_fim_default,
+                key="pdf_con_fim", disabled=_disabled)
 
         # Monta descrição dos filtros aplicados para capa do PDF
         _filtros_desc = {
@@ -763,7 +775,83 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
     contagem_via    = {}
     contagem_forn   = {}
 
-    # ── TÓPICOS ───────────────────────────────────────────
+    # ── MODO RESUMO: tabela compacta em paisagem ─────────────────────────
+    if modo_interacoes == "resumo":
+        from reportlab.lib.pagesizes import A4, landscape
+        buf2  = _io.BytesIO()
+        doc2  = SimpleDocTemplate(buf2, pagesize=landscape(A4),
+                                  leftMargin=1.5*cm, rightMargin=1.5*cm,
+                                  topMargin=1.5*cm, bottomMargin=1.5*cm)
+        el2   = []
+
+        # Cabeçalho
+        el2.append(Paragraph("PepperCRM — Resumo de Contatos", s_capa_titulo))
+        _subtitulo_partes = []
+        for k, v in filtros_desc.items():
+            if v and v not in ("Todos","Todas","—") and k != "Total de topicos":
+                _subtitulo_partes.append(f"{k}: {v}")
+        el2.append(Paragraph(" | ".join(_subtitulo_partes), s_capa_sub))
+        el2.append(Spacer(1, 0.4*cm))
+
+        # Tabela
+        _cab = ["#","Cliente","Data","Tipo","Status","Prioridade","Próx. contato","Interações"]
+        _rows = [_cab]
+        s_th = ParagraphStyle("th", parent=getSampleStyleSheet()["Normal"],
+                               fontSize=8, fontName="Helvetica-Bold",
+                               textColor=colors.white)
+        s_td = ParagraphStyle("td", parent=getSampleStyleSheet()["Normal"],
+                               fontSize=8, leading=10)
+
+        for idx_t, cid in enumerate(topicos_ids, 1):
+            cr2 = query("""
+                SELECT cr.assunto, cr.tipo_topico, cr.status, cr.prioridade,
+                       cr.data_contato, cr.data_followup,
+                       COALESCE(c.nome_fantasia, f.nome_fantasia, '—') AS entidade
+                FROM contato_registro cr
+                LEFT JOIN cliente    c ON cr.cliente_id    = c.cliente_id
+                LEFT JOIN fornecedor f ON cr.fornecedor_id = f.fornecedor_id
+                WHERE cr.contato_id=?""", (cid,))
+            if not cr2: continue
+            assunto2, tipo2, status2, prior2, data_c2, followup2, entidade2 = cr2[0]
+            n_int2 = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=? AND ativo!=0",
+                           (cid,))
+            n2 = n_int2[0]['n'] if n_int2 else 0
+            _rows.append([
+                Paragraph(str(idx_t), s_td),
+                Paragraph(entidade2 or "—", s_td),
+                Paragraph(_fd(data_c2), s_td),
+                Paragraph(tipo2 or "Contato", s_td),
+                Paragraph(status2 or "—", s_td),
+                Paragraph(prior2 or "—", s_td),
+                Paragraph(_fd(followup2) if followup2 else "—", s_td),
+                Paragraph(str(n2), s_td),
+            ])
+
+        _cws = [0.8*cm, 6*cm, 2*cm, 2.2*cm, 3.2*cm, 2*cm, 2.8*cm, 1.8*cm]
+        t_res = Table(_rows, colWidths=_cws, repeatRows=1)
+        t_res.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), VERDE),
+            ("TEXTCOLOR",  (0,0), (-1,0), colors.white),
+            ("FONTNAME",   (0,0), (-1,0), "Helvetica-Bold"),
+            ("FONTSIZE",   (0,0), (-1,0), 8),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, CINZA]),
+            ("BOX",        (0,0), (-1,-1), 0.5, colors.HexColor("#CCC")),
+            ("INNERGRID",  (0,0), (-1,-1), 0.3, colors.HexColor("#DDD")),
+            ("TOPPADDING", (0,0), (-1,-1), 3),
+            ("BOTTOMPADDING",(0,0),(-1,-1),3),
+            ("LEFTPADDING",(0,0),(-1,-1), 4),
+            ("VALIGN",     (0,0), (-1,-1), "TOP"),
+        ]))
+        el2.append(t_res)
+        el2.append(Spacer(1, 0.5*cm))
+        el2.append(Paragraph(
+            f"PepperCRM — Azevedo e Filhos Representação Comercial | "
+            f"Gerado em {_date.today().strftime('%d/%m/%Y')} | Confidencial",
+            s_rodape))
+        doc2.build(el2)
+        return buf2.getvalue()
+
+    # ── TÓPICOS (modo completo ou período) ───────────────────────────────
     elementos.append(PageBreak())
 
     for idx_t, cid in enumerate(topicos_ids, 1):
@@ -849,11 +937,6 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
 
         # Label "Histórico" fica junto ao cabeçalho para não ficar solto
         modo_lbl = "do periodo" if modo_interacoes == "periodo" else "completo"
-
-        # Modo resumo: pula interações
-        if modo_interacoes == "resumo":
-            elementos.extend(_bloco_cabecalho)
-            continue
         _bloco_cabecalho.append(Paragraph(
             f"<b>Historico {modo_lbl} — {len(ints)} interacao(oes)</b>", s_inter_t))
 

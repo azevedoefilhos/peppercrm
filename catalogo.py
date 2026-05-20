@@ -579,19 +579,17 @@ def _tela_enviar_mensagem():
     vend = query("SELECT nome FROM vendedor WHERE ativo=1 LIMIT 1")
     nome_vend = vend[0][0] if vend else ""
 
-    # Limpa session_state do corpo quando modelo muda
+    # Limpa session_state quando modelo muda E inicializa com conteúdo personalizado
     _mod_id = mod_sel[0] if mod_sel and mod_sel[0] else None
     if st.session_state.get("ms_modelo_anterior") != _mod_id:
         st.session_state["ms_modelo_anterior"] = _mod_id
-        st.session_state.pop("ms_corpo", None)
-
-    corpo_personalizado = corpo_base.replace(
-        "{cliente}", dest_nome or "").replace("{vendedor}", nome_vend)
+        corpo_personalizado = corpo_base.replace(
+            "{cliente}", dest_nome or "").replace("{vendedor}", nome_vend)
+        st.session_state["ms_corpo"] = corpo_personalizado
 
     corpo_edit = st.text_area("Mensagem",
-                              value=st.session_state.get("ms_corpo", corpo_personalizado),
-                              height=200,
                               key="ms_corpo",
+                              height=200,
                               help="Edite livremente antes de enviar.")
 
     # Registrar também em Contatos?
@@ -708,7 +706,12 @@ def _tela_enviar_mensagem():
                 st.success("✅ Envio confirmado!")
             st.rerun()
     else:
-        st.info("Preencha o número e a mensagem para gerar o link de envio.")
+        if not wa_num and not corpo_edit:
+            st.info("Preencha o número e a mensagem para gerar o link de envio.")
+        elif not wa_num:
+            st.info("Preencha o número WhatsApp para gerar o link.")
+        elif not corpo_edit:
+            st.info("Selecione um modelo ou escreva a mensagem para gerar o link.")
 
 
 def _tela_gerenciar_modelos():
