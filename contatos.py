@@ -70,6 +70,11 @@ def tela_contatos():
         "forn":    "🏭 Por fornecedor",
         "mensagens":"💬 Mensagens",
     }
+    # Fix 6: sempre começa na aba lista ao entrar no módulo
+    if st.session_state.get("ct_pagina_anterior") != "contatos":
+        st.session_state["ct_pagina_anterior"] = "contatos"
+        st.session_state["ct_aba"] = "lista"
+
     if "ct_aba" not in st.session_state:
         st.session_state["ct_aba"] = "lista"
 
@@ -125,7 +130,7 @@ def _lista_topicos():
                                    key="fl_periodo")
     with col_ord:
         fil_ordem = st.selectbox("Ordenar por",
-                                 ["Status/Prioridade", "Mais recentes", "Mais antigos", "Próx. followup"],
+                                 ["Mais recentes", "Status/Prioridade", "Mais antigos", "Próx. followup"],
                                  key="fl_ordem")
 
     # Query
@@ -150,15 +155,19 @@ def _lista_topicos():
     _ult_int = """(SELECT MAX(ci.data_interacao) FROM contato_interacao ci
                    WHERE ci.contato_id=cr.contato_id AND ci.ativo!=0)"""
     if fil_periodo == "Hoje":
-        where.append(f"(cr.data_contato = '2026-05-13' OR {_ult_int} = '2026-05-13')")
+        where.append(f"(cr.data_contato = '{hoje}' OR {_ult_int} = '{hoje}')")
     elif fil_periodo == "Esta semana":
-        where.append(f"(cr.data_contato >= '2026-05-06' OR {_ult_int} >= '2026-05-06')")
+        _d7 = (date.today() - timedelta(days=7)).isoformat()
+        where.append(f"(cr.data_contato >= '{_d7}' OR {_ult_int} >= '{_d7}')")
     elif fil_periodo == "Este mês":
-        where.append(f"(cr.data_contato >= '2026-05-01' OR {_ult_int} >= '2026-05-01')")
+        _dm = date.today().strftime("%Y-%m-01")
+        where.append(f"(cr.data_contato >= '{_dm}' OR {_ult_int} >= '{_dm}')")
     elif fil_periodo == "Últimos 30 dias":
-        where.append(f"(cr.data_contato >= '2026-04-13' OR {_ult_int} >= '2026-04-13')")
+        _d30 = (date.today() - timedelta(days=30)).isoformat()
+        where.append(f"(cr.data_contato >= '{_d30}' OR {_ult_int} >= '{_d30}')")
     elif fil_periodo == "Últimos 90 dias":
-        where.append(f"(cr.data_contato >= '2026-02-12' OR {_ult_int} >= '2026-02-12')")
+        _d90 = (date.today() - timedelta(days=90)).isoformat()
+        where.append(f"(cr.data_contato >= '{_d90}' OR {_ult_int} >= '{_d90}')")
 
     topicos = query(f"""
         SELECT cr.contato_id,
@@ -213,10 +222,10 @@ def _lista_topicos():
             modo_int = st.radio(
                 "Interações a incluir",
                 ["Historico completo de cada topico",
-                 "Apenas interacoes do periodo filtrado"],
+                 "Apenas interacoes do periodo filtrado",
+                 "Resumo apenas (sem mensagens)"],
                 key="pdf_con_modo",
-                help="Completo: todo o histórico do tópico. "
-                     "Período: só as interações que caem no filtro de data.")
+                help="Completo: todo o histórico. Período: só interações do período. Resumo: apenas cabeçalhos dos tópicos.")
         with col_per2:
             # Datas do período para filtrar interações (só relevante no modo período)
             _usar_datas = "periodo" in modo_int.lower() or "periodo" in modo_int
@@ -241,7 +250,9 @@ def _lista_topicos():
                                   else f"Periodo: {data_ini_pdf} a {data_fim_pdf}"),
             "Total de topicos":  str(len(topicos)),
         }
-        _modo_key = ("completo" if "completo" in modo_int.lower() else "periodo")
+        _modo_key = ("completo" if "completo" in modo_int.lower()
+                     else "resumo" if "resumo" in modo_int.lower()
+                     else "periodo")
         _ids = [row[0] for row in topicos]
         _pdf_con_key = f"pdf_con_cache_{hash(str(_ids)+_modo_key)}"
 
@@ -476,22 +487,24 @@ def _gerar_pdf_topico(cid, fornecedor_id=None):
         WHERE cxf.contato_id=?""", (cid,))
     forns_str = " / ".join(f[0] for f in forns) if forns else "—"
 
-    # Busca interações filtradas por fornecedor se informado
+    # Busca interações — sem filtro ativo no SQL (compatível SQLite e PostgreSQL)
     if fornecedor_id:
         ints = query("""
             SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
-                   ci.descricao, ci.resultado, ci.data_followup
+                   ci.descricao, ci.resultado, ci.data_followup, ci.ativo
             FROM contato_interacao ci
-            WHERE ci.contato_id=? AND ci.ativo!=0
+            WHERE ci.contato_id=?
               AND (ci.fornecedor_id=? OR ci.fornecedor_id IS NULL)
             ORDER BY ci.data_interacao ASC""", (cid, fornecedor_id))
     else:
         ints = query("""
             SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
-                   ci.descricao, ci.resultado, ci.data_followup
+                   ci.descricao, ci.resultado, ci.data_followup, ci.ativo
             FROM contato_interacao ci
-            WHERE ci.contato_id=? AND ci.ativo!=0
+            WHERE ci.contato_id=?
             ORDER BY ci.data_interacao ASC""", (cid,))
+    # Filtra inativos em Python
+    ints = [r for r in (ints or []) if r['ativo'] not in (0, False)]
 
     # ── Estilos ───────────────────────────────────────────
     buf  = _io.BytesIO()
@@ -595,7 +608,7 @@ def _gerar_pdf_topico(cid, fornecedor_id=None):
         elementos.append(Paragraph("Nenhuma interação registrada.", s_inter_texto))
     else:
         for idx, irow in enumerate(ints, 1):
-            data_i, via, pessoa, desc, result, fup_i = irow[:6] if not hasattr(irow, 'keys') else (irow['data_interacao'], irow['via_comunicacao'], irow['contato_pessoa'], irow['descricao'], irow['resultado'], irow['data_followup'])
+            data_i, via, pessoa, desc, result, fup_i = (irow['data_interacao'], irow['via_comunicacao'], irow['contato_pessoa'], irow['descricao'], irow['resultado'], irow['data_followup']) if hasattr(irow, 'keys') else irow[:6]
             via_lbl = VIA_LABEL.get(via, via or "—")
             cabecalho = f"<b>#{idx} — {_fmt_data(data_i)}  |  {via_lbl}"
             if pessoa:
@@ -653,6 +666,7 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
     Gera PDF consolidado com múltiplos tópicos.
     modo_interacoes: 'periodo' = só interações do período
                      'completo' = histórico completo de cada tópico
+                     'resumo' = apenas cabeçalhos, sem mensagens
     """
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -771,13 +785,13 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
         for f in forns:
             contagem_forn[f[0]] = contagem_forn.get(f[0], 0) + 1
 
-        # Busca interações conforme modo
+        # Busca interações — sem filtro ativo no SQL (compatível SQLite e PostgreSQL)
         if modo_interacoes == "periodo" and data_ini and data_fim:
             ints = query("""
                 SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
                        ci.descricao, ci.resultado, ci.data_followup, ci.ativo
                 FROM contato_interacao ci
-                WHERE ci.contato_id=? AND ci.ativo!=0
+                WHERE ci.contato_id=?
                   AND ci.data_interacao >= ? AND ci.data_interacao <= ?
                 ORDER BY ci.data_interacao ASC""", (cid, data_ini, data_fim))
         else:
@@ -785,11 +799,10 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
                 SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
                        ci.descricao, ci.resultado, ci.data_followup, ci.ativo
                 FROM contato_interacao ci
-                WHERE ci.contato_id=? AND ci.ativo!=0
+                WHERE ci.contato_id=?
                 ORDER BY ci.data_interacao ASC""", (cid,))
-
         # Filtra inativos em Python
-        ints = [r for r in ints if r['ativo'] not in (0, False, '0')] if ints else []
+        ints = [r for r in (ints or []) if r['ativo'] not in (0, False)]
 
         total_interacoes += len(ints)
         for irow in ints:
@@ -835,6 +848,11 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
 
         # Label "Histórico" fica junto ao cabeçalho para não ficar solto
         modo_lbl = "do periodo" if modo_interacoes == "periodo" else "completo"
+
+        # Modo resumo: pula interações
+        if modo_interacoes == "resumo":
+            elementos.extend(_bloco_cabecalho)
+            continue
         _bloco_cabecalho.append(Paragraph(
             f"<b>Historico {modo_lbl} — {len(ints)} interacao(oes)</b>", s_inter_t))
 
@@ -845,7 +863,7 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
                 "Nenhuma interacao no periodo selecionado.", s_inter_tx))
         else:
             for idx_i, irow in enumerate(ints, 1):
-                data_i, via, pessoa, desc, result, fup_i = irow[:6] if not hasattr(irow, 'keys') else (irow['data_interacao'], irow['via_comunicacao'], irow['contato_pessoa'], irow['descricao'], irow['resultado'], irow['data_followup'])
+                data_i, via, pessoa, desc, result, fup_i = (irow['data_interacao'], irow['via_comunicacao'], irow['contato_pessoa'], irow['descricao'], irow['resultado'], irow['data_followup']) if hasattr(irow, 'keys') else irow[:6]
                 via_lbl = VIA_LABEL.get(via, via or "—")
                 cab = f"<b>#{idx_i} — {_fd(data_i)}  |  {via_lbl}"
                 if pessoa: cab += f"  |  {pessoa}"

@@ -3353,12 +3353,13 @@ def _baixar_templates():
 
     with col1:
         st.markdown("**Template de Clientes**")
-        st.caption("Colunas: nome_fantasia*, perfil, fone, cidade, estado, bairro, "
+        st.caption("Colunas: nome_fantasia*, perfil, fone, email, cidade, estado, bairro, "
                    "endereco, cnpj, site, instagram, associacao_nome, observacao")
         df_cli = pd.DataFrame([{
-            "nome_fantasia":   "Emporio Exemplo",
-            "perfil":          "Emporio",
+            "nome_fantasia":   "Empório Exemplo",
+            "perfil":          "Empório",
             "fone":            "13988776655",
+            "email":           "compras@emporio.com.br",
             "cidade":          "Santos",
             "estado":          "SP",
             "bairro":          "Gonzaga",
@@ -3370,9 +3371,9 @@ def _baixar_templates():
             "observacao":      "",
         }])
         buf = io.BytesIO()
-        df_cli.to_excel(buf, index=False, sheet_name="Clientes")
-        buf.seek(0)
-        st.download_button("Baixar template Clientes", data=buf,
+        with pd.ExcelWriter(buf, engine='openpyxl') as w:
+            df_cli.to_excel(w, index=False, sheet_name="Clientes")
+        st.download_button("Baixar template Clientes", data=buf.getvalue(),
                            file_name="template_importacao_clientes.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                            use_container_width=True)
