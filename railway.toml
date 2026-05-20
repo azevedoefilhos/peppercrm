@@ -2,6 +2,6 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "streamlit run crm_app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true"
+startCommand = "python keepalive.py & streamlit run crm_app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
