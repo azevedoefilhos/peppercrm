@@ -513,10 +513,15 @@ def _tela_enviar_mensagem():
     wa_num = ""
     pessoa_nome = ""
     if dest_tipo == "Cliente":
+        # Busca fone do próprio cadastro do cliente como fallback
+        _cli_fone = query("SELECT COALESCE(fone,'') FROM cliente WHERE cliente_id=?",
+                          (dest_id,)) if dest_id else []
+        _fone_cli = _cli_fone[0][0] if _cli_fone and _cli_fone[0][0] else ""
+
         if contatos:
-            ct_opts = [(c[0], f"{c[1]}" + (f" — {c[2]}" if c[2] else "") +
-                        f" | {c[3]}") for c in contatos]
-            ct_opts_full = [(None, "— digitar número manualmente —")] + ct_opts
+            ct_opts_full = [(None, "— usar fone do cadastro —")] + \
+                           [(c[0], f"{c[1]}" + (f" — {c[2]}" if c[2] else "") +
+                             f" | {c[3]}") for c in contatos]
             ct_sel = st.selectbox("Contato", ct_opts_full,
                                   format_func=lambda x: x[1], key="ms_ct")
             if ct_sel and ct_sel[0]:
@@ -524,13 +529,16 @@ def _tela_enviar_mensagem():
                 if ct_info:
                     wa_num      = ct_info[3]
                     pessoa_nome = ct_info[1]
+            else:
+                wa_num = _fone_cli  # usa fone do cadastro
+        else:
+            wa_num = _fone_cli  # usa fone do cadastro
+
         wa_num = st.text_input("Número WhatsApp",
                                value=wa_num,
                                placeholder="11 9 9999-9999",
-                               key="ms_wa_num")
-        if not wa_num:
-            wa_num = st.text_input("Ou digite o número", key="ms_wa_livre",
-                                   placeholder="11 9 9999-9999")
+                               key="ms_wa_num",
+                               help="Auto-preenchido com o fone do cadastro do cliente")
     else:
         wa_num = st.text_input("Número WhatsApp do fornecedor",
                                placeholder="11 9 9999-9999", key="ms_wa_forn")
@@ -623,17 +631,31 @@ def _tela_enviar_mensagem():
                 # Registra em contato_registro + contato_interacao
                 _forns = st.session_state.get("ms_forns_sel", [])
                 conn   = conectar()
-                conn.execute("""INSERT INTO contato_registro
-                    (data_contato, via_comunicacao, tipo_entidade, cliente_id,
-                     contato_pessoa, assunto, descricao, status, prioridade,
-                     tipo_topico, ativo)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,1)""",
-                    (date.today().isoformat(), "WhatsApp", "cliente", dest_id,
-                     pessoa_nome or None,
-                     assunto_msg.strip() or "Mensagem WhatsApp",
-                     corpo_edit.strip(),
-                     "Em andamento", "Média", "Contato"))
-                novo_cid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                from database import _check_supabase
+                if _check_supabase():
+                    novo_cid = conn.execute("""INSERT INTO contato_registro
+                        (data_contato, via_comunicacao, tipo_entidade, cliente_id,
+                         contato_pessoa, assunto, descricao, status, prioridade,
+                         tipo_topico, ativo)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,1)
+                        RETURNING contato_id""",
+                        (date.today().isoformat(), "WhatsApp", "cliente", dest_id,
+                         pessoa_nome or None,
+                         assunto_msg.strip() or "Mensagem WhatsApp",
+                         corpo_edit.strip(),
+                         "Em andamento", "Média", "Contato")).fetchone()[0]
+                else:
+                    conn.execute("""INSERT INTO contato_registro
+                        (data_contato, via_comunicacao, tipo_entidade, cliente_id,
+                         contato_pessoa, assunto, descricao, status, prioridade,
+                         tipo_topico, ativo)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,1)""",
+                        (date.today().isoformat(), "WhatsApp", "cliente", dest_id,
+                         pessoa_nome or None,
+                         assunto_msg.strip() or "Mensagem WhatsApp",
+                         corpo_edit.strip(),
+                         "Em andamento", "Média", "Contato"))
+                    novo_cid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
                 for ft in _forns:
                     fid = ft[0] if isinstance(ft,(list,tuple)) else ft
