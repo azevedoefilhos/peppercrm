@@ -134,6 +134,7 @@ def _lista_topicos():
                                  key="fl_ordem")
 
     # Query
+    hoje  = date.today().isoformat()
     where = ["cr.ativo!=0"]
     params = []
     if fil_tipo != "Todos":
