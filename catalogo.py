@@ -576,13 +576,20 @@ def _tela_enviar_mensagem():
     vend = query("SELECT nome FROM vendedor WHERE ativo=1 LIMIT 1")
     nome_vend = vend[0][0] if vend else ""
 
-    corpo_personalizado = corpo_base.replace("{cliente}", dest_nome or "").replace("{vendedor}", nome_vend)
+    # Limpa session_state do corpo quando modelo muda
+    _mod_id = mod_sel[0] if mod_sel and mod_sel[0] else None
+    if st.session_state.get("ms_modelo_anterior") != _mod_id:
+        st.session_state["ms_modelo_anterior"] = _mod_id
+        st.session_state.pop("ms_corpo", None)
+
+    corpo_personalizado = corpo_base.replace(
+        "{cliente}", dest_nome or "").replace("{vendedor}", nome_vend)
 
     corpo_edit = st.text_area("Mensagem",
-                              value=corpo_personalizado,
+                              value=st.session_state.get("ms_corpo", corpo_personalizado),
                               height=200,
                               key="ms_corpo",
-                              help="Edite livremente antes de enviar. O texto acima é editável.")
+                              help="Edite livremente antes de enviar.")
 
     # Registrar também em Contatos?
     registrar = st.checkbox("✅ Registrar este contato em Contatos & Negociações",
