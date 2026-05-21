@@ -245,13 +245,22 @@ def _lista_topicos():
             else:
                 _ini_default = _hoje - timedelta(days=30); _fim_default = _hoje
 
-            _disabled = "completo" in modo_int.lower() or "resumo" in modo_int.lower()
+            # Datas sempre habilitadas — servem para todos os modos inclusive resumo
+            _disabled_datas = False
             data_ini_pdf = st.date_input("De", value=_ini_default,
-                key="pdf_con_ini", disabled=_disabled)
+                key="pdf_con_ini", disabled=_disabled_datas)
             data_fim_pdf = st.date_input("Até", value=_fim_default,
-                key="pdf_con_fim", disabled=_disabled)
+                key="pdf_con_fim", disabled=_disabled_datas)
 
         # Monta descrição dos filtros aplicados para capa do PDF
+        _modo_key = ("completo" if "completo" in modo_int.lower()
+                     else "resumo" if "resumo" in modo_int.lower()
+                     else "periodo")
+
+        _hist_label = ("Completo" if _modo_key == "completo"
+                       else f"Resumo: {data_ini_pdf} a {data_fim_pdf}" if _modo_key == "resumo"
+                       else f"Periodo: {data_ini_pdf} a {data_fim_pdf}")
+
         _filtros_desc = {
             "Periodo (topicos)": fil_periodo if fil_periodo != "Todos" else "Todos",
             "Fornecedor":        fil_forn[1] if fil_forn[0] else "Todos",
@@ -259,22 +268,18 @@ def _lista_topicos():
             "Status":            fil_status if fil_status != "Todos" else "Todos",
             "Prioridade":        fil_prior if fil_prior != "Todas" else "Todas",
             "Busca":             busca.strip() if busca.strip() else "—",
-            "Historico":         ("Completo" if "completo" in modo_int.lower()
-                                  else f"Periodo: {data_ini_pdf} a {data_fim_pdf}"),
+            "Historico":         _hist_label,
             "Total de topicos":  str(len(topicos)),
         }
-        _modo_key = ("completo" if "completo" in modo_int.lower()
-                     else "resumo" if "resumo" in modo_int.lower()
-                     else "periodo")
         _ids = [row[0] for row in topicos]
-        _pdf_con_key = f"pdf_con_cache_{hash(str(_ids)+_modo_key)}"
+        _pdf_con_key = f"pdf_con_cache_{hash(str(_ids)+_modo_key+str(data_ini_pdf)+str(data_fim_pdf))}"
 
         if _pdf_con_key not in st.session_state:
             with st.spinner("Preparando PDF..."):
                 _pdf_bytes = _gerar_pdf_consolidado(
                     _ids, _filtros_desc, _modo_key,
-                    data_ini=data_ini_pdf.isoformat() if _modo_key=="periodo" else None,
-                    data_fim=data_fim_pdf.isoformat() if _modo_key=="periodo" else None)
+                    data_ini=data_ini_pdf.isoformat(),
+                    data_fim=data_fim_pdf.isoformat())
             st.session_state[_pdf_con_key] = _pdf_bytes
 
         _hoje_fn = date.today().strftime("%Y%m%d")
@@ -788,7 +793,7 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
         el2.append(Paragraph("PepperCRM — Resumo de Contatos", s_capa_titulo))
         _subtitulo_partes = []
         for k, v in filtros_desc.items():
-            if v and v not in ("Todos","Todas","—") and k != "Total de topicos":
+            if v and v not in ("Todos","Todas","—") and k not in ("Total de topicos","Historico"):
                 _subtitulo_partes.append(f"{k}: {v}")
         el2.append(Paragraph(" | ".join(_subtitulo_partes), s_capa_sub))
         el2.append(Spacer(1, 0.4*cm))
