@@ -63,12 +63,13 @@ def tela_contatos():
             height=0)
 
     ABAS = {
-        "lista":   "📋 Registros",
-        "novo":    "➕ Novo",
-        "agenda":  "📅 Follow-ups",
-        "entidade":"📊 Por cliente/forn.",
-        "forn":    "🏭 Por fornecedor",
-        "mensagens":"💬 Mensagens",
+        "lista":      "📋 Registros",
+        "novo":       "➕ Novo",
+        "agenda":     "📅 Follow-ups",
+        "entidade":   "📊 Por cliente/forn.",
+        "forn":       "🏭 Por fornecedor",
+        "prospeccao": "🎯 Prospecção",
+        "mensagens":  "💬 Mensagens",
     }
     # Sempre reseta para aba lista ao entrar no módulo vindo de outra página
     _pagina_atual = st.session_state.get("pagina", "contatos")
@@ -95,11 +96,12 @@ def tela_contatos():
     if msg: st.success(msg)
 
     a = st.session_state["ct_aba"]
-    if a == "lista":      _lista_topicos()
-    elif a == "novo":     _form_novo_topico()
-    elif a == "agenda":   _agenda()
-    elif a == "entidade": _por_entidade()
-    elif a == "forn":     _por_fornecedor()
+    if a == "lista":        _lista_topicos()
+    elif a == "novo":       _form_novo_topico()
+    elif a == "agenda":     _agenda()
+    elif a == "entidade":   _por_entidade()
+    elif a == "forn":       _por_fornecedor()
+    elif a == "prospeccao": _prospeccao()
     elif a == "mensagens":
         from catalogo import _tela_mensagens
         _tela_mensagens()
@@ -1923,6 +1925,259 @@ def _por_entidade():
 # ═══════════════════════════════════════════════════════
 # 6. POR FORNECEDOR TRATADO
 # ═══════════════════════════════════════════════════════
+def _prospeccao():
+    """Visão estratégica de clientes não contatados ou esfriando por fornecedor."""
+    from datetime import date, timedelta
+    import pandas as pd
+    import io
+
+    st.markdown("### 🎯 Prospecção Estratégica")
+    st.caption("Identifique clientes a prospectar ou reativar por fornecedor.")
+
+    # ── Filtros ──────────────────────────────────────────────────────────
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        forns = query("""SELECT fornecedor_id, nome_fantasia FROM fornecedor
+            WHERE ativo=1 ORDER BY nome_fantasia""")
+        forn_opts = [(0, "Todos os fornecedores")] + [(f[0], f[1]) for f in forns]
+        forn_sel = st.selectbox("Fornecedor", forn_opts,
+                                format_func=lambda x: x[1], key="pr_forn")
+
+    with col2:
+        PERFIS = ["Todos","Empório","Supermercado","Hipermercado","Atacadista",
+                  "Mini Mercado","Mercearia","Sacolão","Hortifruti","Açougue",
+                  "Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen",
+                  "Hamburgueria","Restaurante","Lanchonete","Bar / Boteco",
+                  "Clube / Associação","Outro"]
+        perfil_sel = st.selectbox("Tipo de estabelecimento", PERFIS, key="pr_perfil")
+
+    with col3:
+        cidades = query("""SELECT DISTINCT cidade FROM cliente
+            WHERE cidade IS NOT NULL AND cidade != '' ORDER BY cidade""")
+        cidade_opts = ["Todas"] + [r[0] for r in cidades]
+        cidade_sel = st.selectbox("Cidade", cidade_opts, key="pr_cidade")
+
+    with col4:
+        SITUACOES = [
+            "Nunca contatados",
+            "Sem contato há +30 dias",
+            "Sem contato há +60 dias",
+            "Sem contato há +90 dias",
+            "Contatos cancelados (reativação)",
+            "Todos acima (visão completa)",
+        ]
+        situacao_sel = st.selectbox("Situação", SITUACOES, key="pr_situacao")
+
+    hoje = date.today()
+
+    # ── Busca todos os clientes ativos com filtros ────────────────────────
+    where_cli = ["c.ativo!=0"]
+    params_cli = []
+    if perfil_sel != "Todos":
+        where_cli.append("c.perfil=?"); params_cli.append(perfil_sel)
+    if cidade_sel != "Todas":
+        where_cli.append("c.cidade=?"); params_cli.append(cidade_sel)
+
+    clientes = query(f"""
+        SELECT c.cliente_id, c.nome_fantasia, c.perfil, c.cidade, c.estado,
+               COALESCE(c.fone,''), COALESCE(c.email,'')
+        FROM cliente c
+        WHERE {' AND '.join(where_cli)}
+        ORDER BY c.nome_fantasia
+    """, tuple(params_cli))
+
+    if not clientes:
+        st.info("Nenhum cliente encontrado para os filtros selecionados.")
+        return
+
+    # ── Para cada cliente, verifica situação de contato por fornecedor ───
+    forn_id = forn_sel[0] if forn_sel else 0
+
+    # Busca todos os tópicos relevantes de uma vez (performance)
+    if forn_id:
+        topicos_map = query("""
+            SELECT cr.cliente_id, cr.status, cr.data_contato,
+                   MAX(ci.data_interacao) as ultima_int
+            FROM contato_registro cr
+            JOIN contato_x_fornecedor cxf ON cxf.contato_id=cr.contato_id
+            LEFT JOIN contato_interacao ci ON ci.contato_id=cr.contato_id AND ci.ativo!=0
+            WHERE cxf.fornecedor_id=? AND cr.ativo!=0 AND cr.cliente_id IS NOT NULL
+            GROUP BY cr.cliente_id, cr.status, cr.data_contato
+        """, (forn_id,))
+    else:
+        topicos_map = query("""
+            SELECT cr.cliente_id, cr.status, cr.data_contato,
+                   MAX(ci.data_interacao) as ultima_int
+            FROM contato_registro cr
+            LEFT JOIN contato_interacao ci ON ci.contato_id=cr.contato_id AND ci.ativo!=0
+            WHERE cr.ativo!=0 AND cr.cliente_id IS NOT NULL
+            GROUP BY cr.cliente_id, cr.status, cr.data_contato
+        """)
+
+    # Monta dicionário: cliente_id → lista de (status, data_contato, ultima_int)
+    contatos_por_cli = {}
+    for t in topicos_map:
+        cid_t = t[0]
+        if cid_t not in contatos_por_cli:
+            contatos_por_cli[cid_t] = []
+        contatos_por_cli[cid_t].append({
+            'status': t[1], 'data_contato': t[2], 'ultima_int': t[3]
+        })
+
+    # ── Classifica cada cliente ───────────────────────────────────────────
+    NUNCA         = []
+    ESFRIANDO_30  = []
+    ESFRIANDO_60  = []
+    ESFRIANDO_90  = []
+    CANCELADOS    = []
+
+    for cli in clientes:
+        cli_id = cli[0]
+        nome   = cli[1]
+        perfil = cli[2] or "—"
+        cidade = cli[3] or "—"
+        estado = cli[4] or ""
+        fone   = cli[5]
+        email  = cli[6]
+
+        topicos_cli = contatos_por_cli.get(cli_id, [])
+
+        # Filtra só ativos (não cancelados) para calcular última interação
+        ativos = [t for t in topicos_cli if t['status'] not in ('Cancelado',)]
+        cancelados = [t for t in topicos_cli if t['status'] == 'Cancelado']
+
+        if not topicos_cli:
+            # Nunca contatado para este fornecedor
+            NUNCA.append({
+                'Cliente': nome, 'Perfil': perfil,
+                'Cidade': f"{cidade}/{estado}", 'Fone': fone, 'E-mail': email,
+                'Situação': '🔵 Nunca contatado', 'Última interação': '—', 'Status': '—'
+            })
+        elif not ativos and cancelados:
+            # Só tem cancelados
+            _ult = max((t['ultima_int'] or t['data_contato'] or '') for t in cancelados)
+            CANCELADOS.append({
+                'Cliente': nome, 'Perfil': perfil,
+                'Cidade': f"{cidade}/{estado}", 'Fone': fone, 'E-mail': email,
+                'Situação': '⚪ Cancelado', 'Última interação': _ult or '—', 'Status': 'Cancelado'
+            })
+        else:
+            # Tem contatos ativos — verifica esfriamento
+            _ult_str = max(
+                (t['ultima_int'] or t['data_contato'] or '') for t in ativos
+                if (t['ultima_int'] or t['data_contato'])
+            ) if ativos else ''
+
+            if not _ult_str:
+                NUNCA.append({
+                    'Cliente': nome, 'Perfil': perfil,
+                    'Cidade': f"{cidade}/{estado}", 'Fone': fone, 'E-mail': email,
+                    'Situação': '🔵 Nunca contatado', 'Última interação': '—', 'Status': '—'
+                })
+                continue
+
+            try:
+                _ult_date = date.fromisoformat(_ult_str[:10])
+                _dias = (hoje - _ult_date).days
+            except Exception:
+                _dias = 0
+
+            _status_ult = ativos[0]['status'] if ativos else '—'
+            _row = {
+                'Cliente': nome, 'Perfil': perfil,
+                'Cidade': f"{cidade}/{estado}", 'Fone': fone, 'E-mail': email,
+                'Última interação': _ult_str[:10], 'Status': _status_ult,
+                '_dias': _dias
+            }
+
+            if _dias > 90:
+                _row['Situação'] = f'🔴 +{_dias}d sem contato'
+                ESFRIANDO_90.append(_row)
+            elif _dias > 60:
+                _row['Situação'] = f'🟠 +{_dias}d sem contato'
+                ESFRIANDO_60.append(_row)
+            elif _dias > 30:
+                _row['Situação'] = f'🟡 +{_dias}d sem contato'
+                ESFRIANDO_30.append(_row)
+            # Se < 30 dias, não aparece em nenhuma lista de atenção
+
+    # ── Seleciona registros conforme situação escolhida ───────────────────
+    if situacao_sel == "Nunca contatados":
+        resultado = NUNCA
+    elif situacao_sel == "Sem contato há +30 dias":
+        resultado = sorted(ESFRIANDO_30 + ESFRIANDO_60 + ESFRIANDO_90,
+                           key=lambda x: x.get('_dias', 0), reverse=True)
+    elif situacao_sel == "Sem contato há +60 dias":
+        resultado = sorted(ESFRIANDO_60 + ESFRIANDO_90,
+                           key=lambda x: x.get('_dias', 0), reverse=True)
+    elif situacao_sel == "Sem contato há +90 dias":
+        resultado = sorted(ESFRIANDO_90,
+                           key=lambda x: x.get('_dias', 0), reverse=True)
+    elif situacao_sel == "Contatos cancelados (reativação)":
+        resultado = CANCELADOS
+    else:  # Todos
+        resultado = (NUNCA +
+                     sorted(ESFRIANDO_90, key=lambda x: x.get('_dias',0), reverse=True) +
+                     sorted(ESFRIANDO_60, key=lambda x: x.get('_dias',0), reverse=True) +
+                     sorted(ESFRIANDO_30, key=lambda x: x.get('_dias',0), reverse=True) +
+                     CANCELADOS)
+
+    # ── Métricas de cobertura ─────────────────────────────────────────────
+    total_cli = len(clientes)
+    n_nunca   = len(NUNCA)
+    n_esf30   = len(ESFRIANDO_30)
+    n_esf60   = len(ESFRIANDO_60)
+    n_esf90   = len(ESFRIANDO_90)
+    n_cancel  = len(CANCELADOS)
+    n_ativos_recentes = total_cli - n_nunca - n_esf30 - n_esf60 - n_esf90 - n_cancel
+    pct_cobertura = round((total_cli - n_nunca) / total_cli * 100) if total_cli else 0
+
+    st.divider()
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1.metric("Total clientes", total_cli)
+    m2.metric("✅ Cobertura", f"{pct_cobertura}%",
+              help="% de clientes com ao menos um contato")
+    m3.metric("🔵 Nunca contatados", n_nunca)
+    m4.metric("🟡 +30d sem contato", n_esf30)
+    m5.metric("🟠 +60d sem contato", n_esf60)
+    m6.metric("🔴 +90d sem contato", n_esf90)
+
+    st.divider()
+
+    if not resultado:
+        st.success("✅ Nenhum cliente nesta situação para os filtros selecionados!")
+        return
+
+    st.markdown(f"**{len(resultado)} cliente(s) encontrado(s)**")
+
+    # ── Tabela de resultados ──────────────────────────────────────────────
+    cols_show = ['Cliente','Perfil','Cidade','Situação','Última interação','Status','Fone','E-mail']
+    df_res = pd.DataFrame(resultado)[cols_show]
+    st.dataframe(df_res, use_container_width=True, hide_index=True,
+                 column_config={
+                     "Cliente":           st.column_config.TextColumn(width="medium"),
+                     "Situação":          st.column_config.TextColumn(width="medium"),
+                     "Última interação":  st.column_config.TextColumn(width="small"),
+                     "Status":            st.column_config.TextColumn(width="small"),
+                 })
+
+    # ── Export Excel ──────────────────────────────────────────────────────
+    try:
+        buf_pr = io.BytesIO()
+        with pd.ExcelWriter(buf_pr, engine='openpyxl') as w:
+            df_res.to_excel(w, index=False, sheet_name="Prospecção")
+        _forn_nm = forn_sel[1].replace(" ","_")[:15] if forn_id else "geral"
+        st.download_button(
+            "⬇️ Exportar Excel",
+            data=buf_pr.getvalue(),
+            file_name=f"prospeccao_{_forn_nm}_{hoje.strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True)
+    except Exception as _ex:
+        st.error(f"Erro ao exportar: {_ex}")
+
+
 def _por_fornecedor():
     st.subheader("🏭 Por fornecedor tratado")
     st.caption("Tópicos onde o fornecedor foi parte da tratativa — independente de com quem o contato foi feito.")
