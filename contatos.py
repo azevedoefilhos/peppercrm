@@ -229,93 +229,84 @@ def _lista_topicos():
              "Apenas interacoes do periodo de datas abaixo",
              "Resumo apenas (sem mensagens)"],
             key="pdf_con_modo",
-            horizontal=True,
-            help="Completo: todo o histórico. Período: só interações do intervalo de datas. Resumo: só cabeçalhos.")
+            horizontal=True)
 
         _modo_key = ("completo" if "completo" in modo_int.lower()
                      else "resumo" if "resumo" in modo_int.lower()
                      else "periodo")
 
         st.divider()
-        st.markdown("**📅 Período do relatório** — escolha uma opção:")
+        st.markdown("**📅 Período do relatório** — use A ou B, não ambos:")
 
         col_pred, col_custom = st.columns([1, 1])
 
         with col_pred:
-            st.caption("Opção A — Período predefinido")
-            _periodo_opts = ["Todos","Hoje","Esta semana","Este mês",
-                             "Últimos 30 dias","Últimos 90 dias"]
-            # Sincroniza com filtro de período da lista se foi selecionado
-            _pred_default = fil_periodo if fil_periodo in _periodo_opts else "Todos"
-            # Reseta para Todos se usuário usou datas personalizadas
-            if st.session_state.get("_pdf_usou_custom"):
-                _pred_default = "Todos"
-
+            st.caption("**Opção A** — Período predefinido")
+            _periodo_opts = ["— nenhum —","Hoje","Esta semana","Este mês",
+                             "Últimos 30 dias","Últimos 90 dias","Todos"]
             _pred = st.selectbox("Período predefinido", _periodo_opts,
-                                 index=_periodo_opts.index(_pred_default),
                                  key="pdf_pred_periodo",
                                  label_visibility="collapsed")
-
-            if _pred != "Todos":
-                st.session_state.pop("_pdf_usou_custom", None)
+            # Se A selecionado, limpa B
+            if _pred != "— nenhum —":
+                st.session_state.pop("pdf_ini", None)
+                st.session_state.pop("pdf_fim", None)
 
         with col_custom:
-            st.caption("Opção B — Período personalizado")
-            col_ini, col_fim, col_lim = st.columns([2, 2, 1])
+            st.caption("**Opção B** — Período personalizado")
+            _disabled_custom = (_pred != "— nenhum —")
+            col_ini, col_fim = st.columns(2)
             with col_ini:
-                _ini_val = st.session_state.get("pdf_custom_ini", None)
-                data_ini_custom = st.date_input("De", value=_ini_val,
-                                                key="pdf_custom_ini")
+                data_ini_custom = st.date_input("De", value=None,
+                    key="pdf_ini",
+                    disabled=_disabled_custom,
+                    label_visibility="visible")
             with col_fim:
-                _fim_val = st.session_state.get("pdf_custom_fim", None)
-                data_fim_custom = st.date_input("Até", value=_fim_val,
-                                                key="pdf_custom_fim")
-            with col_lim:
-                st.caption("")
-                if st.button("🗑️", key="pdf_limpar_custom",
-                             help="Limpar datas personalizadas"):
-                    st.session_state.pop("pdf_custom_ini", None)
-                    st.session_state.pop("pdf_custom_fim", None)
-                    st.session_state.pop("_pdf_usou_custom", None)
-                    st.rerun()
-
-            _tem_custom = (data_ini_custom is not None and data_fim_custom is not None)
-            if _tem_custom:
-                st.session_state["_pdf_usou_custom"] = True
+                data_fim_custom = st.date_input("Até", value=None,
+                    key="pdf_fim",
+                    disabled=_disabled_custom,
+                    label_visibility="visible")
+            if not _disabled_custom and st.button("🗑️ Limpar datas", key="pdf_limpar",
+                                                   use_container_width=True):
+                st.session_state.pop("pdf_ini", None)
+                st.session_state.pop("pdf_fim", None)
+                st.rerun()
 
         # Resolve datas finais
-        if _tem_custom and st.session_state.get("_pdf_usou_custom"):
-            # Opção B prevalece
-            data_ini_pdf = data_ini_custom
-            data_fim_pdf = data_fim_custom
-            _periodo_label = f"Personalizado: {data_ini_pdf.strftime('%d/%m/%Y')} a {data_fim_pdf.strftime('%d/%m/%Y')}"
-        elif _pred == "Hoje":
+        _ini_set = st.session_state.get("pdf_ini")
+        _fim_set = st.session_state.get("pdf_fim")
+        _usa_custom = (_pred == "— nenhum —") and (_ini_set or _fim_set)
+
+        if _pred == "Hoje":
             data_ini_pdf = _hoje; data_fim_pdf = _hoje
-            _periodo_label = f"Hoje: {_hoje.strftime('%d/%m/%Y')}"
+            _periodo_label = f"Hoje ({_hoje.strftime('%d/%m/%Y')})"
         elif _pred == "Esta semana":
             data_ini_pdf = _hoje - timedelta(days=7); data_fim_pdf = _hoje
-            _periodo_label = f"Esta semana: {data_ini_pdf.strftime('%d/%m/%Y')} a {data_fim_pdf.strftime('%d/%m/%Y')}"
+            _periodo_label = f"Esta semana ({data_ini_pdf.strftime('%d/%m/%Y')} a {data_fim_pdf.strftime('%d/%m/%Y')})"
         elif _pred == "Este mês":
             data_ini_pdf = _hoje.replace(day=1); data_fim_pdf = _hoje
-            _periodo_label = f"Este mês: {data_ini_pdf.strftime('%d/%m/%Y')} a {data_fim_pdf.strftime('%d/%m/%Y')}"
+            _periodo_label = f"Este mês ({data_ini_pdf.strftime('%d/%m/%Y')} a {data_fim_pdf.strftime('%d/%m/%Y')})"
         elif _pred == "Últimos 30 dias":
             data_ini_pdf = _hoje - timedelta(days=30); data_fim_pdf = _hoje
-            _periodo_label = f"Últimos 30 dias: {data_ini_pdf.strftime('%d/%m/%Y')} a {data_fim_pdf.strftime('%d/%m/%Y')}"
+            _periodo_label = f"Últimos 30 dias ({data_ini_pdf.strftime('%d/%m/%Y')} a {data_fim_pdf.strftime('%d/%m/%Y')})"
         elif _pred == "Últimos 90 dias":
             data_ini_pdf = _hoje - timedelta(days=90); data_fim_pdf = _hoje
-            _periodo_label = f"Últimos 90 dias: {data_ini_pdf.strftime('%d/%m/%Y')} a {data_fim_pdf.strftime('%d/%m/%Y')}"
+            _periodo_label = f"Últimos 90 dias ({data_ini_pdf.strftime('%d/%m/%Y')} a {data_fim_pdf.strftime('%d/%m/%Y')})"
+        elif _pred == "Todos":
+            data_ini_pdf = None; data_fim_pdf = None
+            _periodo_label = "Todos os períodos"
+        elif _usa_custom:
+            data_ini_pdf = _ini_set
+            data_fim_pdf = _fim_set
+            _ini_str = _ini_set.strftime('%d/%m/%Y') if _ini_set else "?"
+            _fim_str = _fim_set.strftime('%d/%m/%Y') if _fim_set else "?"
+            _periodo_label = f"Personalizado: {_ini_str} a {_fim_str}"
         else:
             data_ini_pdf = None; data_fim_pdf = None
             _periodo_label = "Todos os períodos"
 
-        # Validação datas personalizadas incompletas
-        _custom_ini_set = st.session_state.get("pdf_custom_ini") is not None
-        _custom_fim_set = st.session_state.get("pdf_custom_fim") is not None
-        if _custom_ini_set != _custom_fim_set:
-            st.warning("⚠️ Defina corretamente as datas do relatório — preencha 'De' e 'Até'.")
-            st.stop()
-
-        st.info(f"📅 Período do relatório: **{_periodo_label}**")
+        if _periodo_label != "Todos os períodos":
+            st.info(f"📅 {_periodo_label}")
 
         _filtros_desc = {
             "Período":    _periodo_label,
@@ -328,24 +319,31 @@ def _lista_topicos():
         _ids = [row[0] for row in topicos]
         _pdf_con_key = f"pdf_con_cache_{hash(str(_ids)+_modo_key+_periodo_label)}"
 
-        if _pdf_con_key not in st.session_state:
-            with st.spinner("Preparando PDF..."):
-                _pdf_bytes = _gerar_pdf_consolidado(
-                    _ids, _filtros_desc, _modo_key,
-                    data_ini=data_ini_pdf.isoformat() if data_ini_pdf else None,
-                    data_fim=data_fim_pdf.isoformat() if data_fim_pdf else None)
-            st.session_state[_pdf_con_key] = _pdf_bytes
+        # Botão exportar — validação só aqui
+        _exportar_pdf = st.button("⬇️ Gerar e Baixar PDF", key="pdf_con_gerar",
+                                  use_container_width=True, type="primary")
+        if _exportar_pdf:
+            # Valida datas personalizadas incompletas
+            if _usa_custom and bool(_ini_set) != bool(_fim_set):
+                st.warning("⚠️ Defina corretamente as datas: preencha 'De' e 'Até'.")
+            else:
+                with st.spinner("Preparando PDF..."):
+                    _pdf_bytes = _gerar_pdf_consolidado(
+                        _ids, _filtros_desc, _modo_key,
+                        data_ini=data_ini_pdf.isoformat() if data_ini_pdf else None,
+                        data_fim=data_fim_pdf.isoformat() if data_fim_pdf else None)
+                st.session_state[_pdf_con_key] = _pdf_bytes
 
-        _hoje_fn = date.today().strftime("%Y%m%d")
-        _forn_fn = (fil_forn[1].replace(" ","_")[:15] if fil_forn[0] else "geral")
-        st.download_button(
-            label="⬇️ Baixar PDF",
-            data=st.session_state[_pdf_con_key],
-            file_name=f"contatos_{_forn_fn}_{_hoje_fn}.pdf",
-            mime="application/pdf",
-            key="pdf_con_dl",
-            use_container_width=True,
-            type="primary")
+        if _pdf_con_key in st.session_state:
+            _hoje_fn = date.today().strftime("%Y%m%d")
+            _forn_fn = (fil_forn[1].replace(" ","_")[:15] if fil_forn[0] else "geral")
+            st.download_button(
+                label="📥 Baixar PDF gerado",
+                data=st.session_state[_pdf_con_key],
+                file_name=f"contatos_{_forn_fn}_{_hoje_fn}.pdf",
+                mime="application/pdf",
+                key="pdf_con_dl",
+                use_container_width=True)
 
     for row in topicos:
         (cid, tipo, assunto, entidade, tipo_ent,
