@@ -219,7 +219,9 @@ def _lista_topicos():
     st.caption(f"**{len(topicos)}** registro(s)")
 
     # ── Exportação PDF consolidado ────────────────────────────────────────
-    with st.expander("📄 Exportar relatório PDF consolidado", expanded=False):
+    with st.expander("📄 Exportar relatório PDF consolidado",
+                     expanded=st.session_state.get("pdf_expander_open", False)):
+        st.session_state["pdf_expander_open"] = True
         _hoje = date.today()
 
         # Modo de interações
@@ -850,14 +852,12 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
         el2.append(Paragraph(" | ".join(_subtitulo_partes), s_capa_sub))
         el2.append(Spacer(1, 0.4*cm))
 
-        # Tabela
-        _cab = ["#","Cliente","Data","Tipo","Status","Prioridade","Próx. contato","Interações"]
+        # Tabela resumida com fornecedor
+        _cab = ["#", "Assunto / Cliente", "Fornecedor(es)", "Data", "Status",
+                "Prioridade", "Próx. contato", "Inter."]
         _rows = [_cab]
-        s_th = ParagraphStyle("th", parent=getSampleStyleSheet()["Normal"],
-                               fontSize=8, fontName="Helvetica-Bold",
-                               textColor=colors.white)
         s_td = ParagraphStyle("td", parent=getSampleStyleSheet()["Normal"],
-                               fontSize=8, leading=10)
+                               fontSize=7.5, leading=10)
 
         for idx_t, cid in enumerate(topicos_ids, 1):
             cr2 = query("""
@@ -870,21 +870,36 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
                 WHERE cr.contato_id=?""", (cid,))
             if not cr2: continue
             assunto2, tipo2, status2, prior2, data_c2, followup2, entidade2 = cr2[0]
+
+            # Busca fornecedores do tópico
+            forns2 = query("""SELECT fn.nome_fantasia
+                FROM contato_x_fornecedor cxf
+                JOIN fornecedor fn ON cxf.fornecedor_id=fn.fornecedor_id
+                WHERE cxf.contato_id=?
+                ORDER BY fn.nome_fantasia""", (cid,))
+            forns_str2 = " / ".join(f[0] for f in forns2) if forns2 else "—"
+
             n_int2 = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=? AND ativo!=0",
                            (cid,))
             n2 = n_int2[0]['n'] if n_int2 else 0
+
+            # Cor da linha por prioridade
+            _pr_cor = (colors.HexColor("#FFEBEE") if prior2 == "Alta"
+                      else colors.HexColor("#FFF8E1") if prior2 == "Média"
+                      else colors.white)
+
             _rows.append([
                 Paragraph(str(idx_t), s_td),
-                Paragraph(entidade2 or "—", s_td),
+                Paragraph(f"<b>{assunto2 or '—'}</b><br/><font size=7>{entidade2 or '—'}</font>", s_td),
+                Paragraph(forns_str2, s_td),
                 Paragraph(_fd(data_c2), s_td),
-                Paragraph(tipo2 or "Contato", s_td),
                 Paragraph(status2 or "—", s_td),
                 Paragraph(prior2 or "—", s_td),
                 Paragraph(_fd(followup2) if followup2 else "—", s_td),
                 Paragraph(str(n2), s_td),
             ])
 
-        _cws = [0.8*cm, 6*cm, 2*cm, 2.2*cm, 3.2*cm, 2*cm, 2.8*cm, 1.8*cm]
+        _cws = [0.7*cm, 5.5*cm, 3.5*cm, 1.8*cm, 3*cm, 1.8*cm, 2.5*cm, 1*cm]
         t_res = Table(_rows, colWidths=_cws, repeatRows=1)
         t_res.setStyle(TableStyle([
             ("BACKGROUND", (0,0), (-1,0), VERDE),
