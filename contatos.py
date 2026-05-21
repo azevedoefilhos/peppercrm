@@ -839,22 +839,22 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
         from reportlab.lib.pagesizes import A4, landscape
         buf2  = _io.BytesIO()
         doc2  = SimpleDocTemplate(buf2, pagesize=landscape(A4),
-                                  leftMargin=1.5*cm, rightMargin=1.5*cm,
-                                  topMargin=1.5*cm, bottomMargin=1.5*cm)
+                                  leftMargin=1*cm, rightMargin=1*cm,
+                                  topMargin=1.2*cm, bottomMargin=1.2*cm)
         el2   = []
 
         # Cabeçalho
         el2.append(Paragraph("PepperCRM — Resumo de Contatos", s_capa_titulo))
         _subtitulo_partes = []
         for k, v in filtros_desc.items():
-            if v and v not in ("Todos","Todas","—") and k not in ("Total de topicos","Historico"):
+            if v and v not in ("Todos","Todas","—") and k not in ("Total","Historico"):
                 _subtitulo_partes.append(f"{k}: {v}")
         el2.append(Paragraph(" | ".join(_subtitulo_partes), s_capa_sub))
-        el2.append(Spacer(1, 0.4*cm))
+        el2.append(Spacer(1, 0.3*cm))
 
-        # Tabela resumida com fornecedor
-        _cab = ["#", "Assunto / Cliente", "Fornecedor(es)", "Data", "Status",
-                "Prioridade", "Próx. contato", "Inter."]
+        # Tabela — colunas separadas
+        _cab = ["#", "Cliente", "Assunto", "Fornecedor(es)", "Data",
+                "Status", "Prior.", "Próx. contato", "Int."]
         _rows = [_cab]
         s_td = ParagraphStyle("td", parent=getSampleStyleSheet()["Normal"],
                                fontSize=7.5, leading=10)
@@ -871,26 +871,20 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
             if not cr2: continue
             assunto2, tipo2, status2, prior2, data_c2, followup2, entidade2 = cr2[0]
 
-            # Busca fornecedores do tópico
             forns2 = query("""SELECT fn.nome_fantasia
                 FROM contato_x_fornecedor cxf
                 JOIN fornecedor fn ON cxf.fornecedor_id=fn.fornecedor_id
-                WHERE cxf.contato_id=?
-                ORDER BY fn.nome_fantasia""", (cid,))
+                WHERE cxf.contato_id=? ORDER BY fn.nome_fantasia""", (cid,))
             forns_str2 = " / ".join(f[0] for f in forns2) if forns2 else "—"
 
-            n_int2 = query("SELECT COUNT(*) as n FROM contato_interacao WHERE contato_id=? AND ativo!=0",
-                           (cid,))
+            n_int2 = query("""SELECT COUNT(*) as n FROM contato_interacao
+                WHERE contato_id=? AND ativo!=0""", (cid,))
             n2 = n_int2[0]['n'] if n_int2 else 0
-
-            # Cor da linha por prioridade
-            _pr_cor = (colors.HexColor("#FFEBEE") if prior2 == "Alta"
-                      else colors.HexColor("#FFF8E1") if prior2 == "Média"
-                      else colors.white)
 
             _rows.append([
                 Paragraph(str(idx_t), s_td),
-                Paragraph(f"<b>{assunto2 or '—'}</b><br/><font size=7>{entidade2 or '—'}</font>", s_td),
+                Paragraph(entidade2 or "—", s_td),
+                Paragraph(assunto2 or "—", s_td),
                 Paragraph(forns_str2, s_td),
                 Paragraph(_fd(data_c2), s_td),
                 Paragraph(status2 or "—", s_td),
@@ -899,7 +893,8 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
                 Paragraph(str(n2), s_td),
             ])
 
-        _cws = [0.7*cm, 5.5*cm, 3.5*cm, 1.8*cm, 3*cm, 1.8*cm, 2.5*cm, 1*cm]
+        # Largura total disponível landscape A4 com margens 1cm = ~27.7cm
+        _cws = [0.7*cm, 4.5*cm, 5*cm, 4*cm, 1.8*cm, 3.2*cm, 1.8*cm, 2.5*cm, 0.8*cm]
         t_res = Table(_rows, colWidths=_cws, repeatRows=1)
         t_res.setStyle(TableStyle([
             ("BACKGROUND", (0,0), (-1,0), VERDE),
