@@ -880,9 +880,9 @@ def _importar_produtos_excel():
         "ativo":            1,
     }])
     buf_tpl = io.BytesIO()
-    df_tpl.to_excel(buf_tpl, index=False, sheet_name="Produtos")
-    buf_tpl.seek(0)
-    st.download_button("Baixar template de produtos", data=buf_tpl,
+    with pd.ExcelWriter(buf_tpl, engine="openpyxl") as _w:
+        df_tpl.to_excel(_w, index=False, sheet_name="Produtos")
+    st.download_button("⬇️ Baixar template de Produtos", data=buf_tpl.getvalue(),
                        file_name="template_produtos.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     st.caption(
@@ -1755,9 +1755,9 @@ def _importar_tabela_excel():
         "observacao":       "",
     }])
     buf_tpl_tab = io.BytesIO()
-    df_tpl_tab.to_excel(buf_tpl_tab, index=False, sheet_name="Tabela")
-    buf_tpl_tab.seek(0)
-    st.download_button("Baixar template de tabela de precos", data=buf_tpl_tab,
+    with pd.ExcelWriter(buf_tpl_tab, engine="openpyxl") as _w:
+        df_tpl_tab.to_excel(_w, index=False, sheet_name="Tabela")
+    st.download_button("⬇️ Baixar template de Tabela de Preços", data=buf_tpl_tab.getvalue(),
                        file_name="template_tabela_precos.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     st.caption(
