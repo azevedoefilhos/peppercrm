@@ -3434,25 +3434,23 @@ def _baixar_templates():
 def _importar_clientes_excel():
     st.subheader("Importar clientes via Excel")
 
-    # Template disponível direto na aba
-    with st.expander("📥 Baixar template de Clientes", expanded=False):
-        st.caption("Colunas: nome_fantasia*, razao_social, perfil, status, fone, email, cnpj, "
-                   "endereco, bairro, cidade, estado, site, instagram, associacao_nome, observacao")
-        _df_tpl_cli = pd.DataFrame([{
-            "nome_fantasia": "Empório Exemplo", "razao_social": "",
-            "perfil": "Empório", "status": "Ativo",
-            "fone": "13988776655", "email": "compras@emporio.com.br",
-            "cnpj": "", "endereco": "Av. Ana Costa 123", "bairro": "Gonzaga",
-            "cidade": "Santos", "estado": "SP", "site": "",
-            "instagram": "@emporio_exemplo", "associacao_nome": "", "observacao": "",
-        }])
-        _buf_tpl_cli = io.BytesIO()
-        with pd.ExcelWriter(_buf_tpl_cli, engine='openpyxl') as _w:
-            _df_tpl_cli.to_excel(_w, index=False, sheet_name="Clientes")
-        st.download_button("⬇️ Baixar template Clientes", data=_buf_tpl_cli.getvalue(),
-                           file_name="template_importacao_clientes.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True, key="tpl_cli_dl_imp")
+    # Template direto — sem expander para 1 clique
+    _df_tpl_cli = pd.DataFrame([{
+        "nome_fantasia": "Empório Exemplo", "razao_social": "",
+        "perfil": "Empório", "status": "Ativo",
+        "fone": "13988776655", "email": "compras@emporio.com.br",
+        "cnpj": "", "endereco": "Av. Ana Costa 123", "bairro": "Gonzaga",
+        "cidade": "Santos", "estado": "SP", "site": "",
+        "instagram": "@emporio_exemplo", "associacao_nome": "", "observacao": "",
+    }])
+    _buf_tpl_cli = io.BytesIO()
+    with pd.ExcelWriter(_buf_tpl_cli, engine='openpyxl') as _w:
+        _df_tpl_cli.to_excel(_w, index=False, sheet_name="Clientes")
+    st.download_button("📥 Baixar template de Clientes", data=_buf_tpl_cli.getvalue(),
+                       file_name="template_importacao_clientes.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                       key="tpl_cli_dl_imp")
+    st.caption("Campos obrigatórios: nome_fantasia. Perfil: Empório, Supermercado, Padaria, etc.")
 
     resultado = st.session_state.pop("imp_cli_resultado", None)
     if resultado:
@@ -3553,26 +3551,24 @@ def _importar_pdvs_excel():
     st.subheader("Importar PDVs via Excel")
     st.info("O cliente ja deve estar cadastrado. Use o nome_fantasia exatamente como cadastrado.")
 
-    with st.expander("📥 Baixar template de PDVs", expanded=False):
-        st.caption("Colunas: cliente_nome*, numero_loja, nome_loja*, tipo_pdv, setor, "
-                   "endereco, bairro, cidade, estado, cnpj, gerente, fone_gerente, "
-                   "horario_recebimento, status, latitude, longitude, observacao")
-        _df_tpl_pdv = pd.DataFrame([{
-            "cliente_nome": "Supermercado Exemplo", "numero_loja": "01",
-            "nome_loja": "Loja Centro", "tipo_pdv": "Supermercado",
-            "setor": "Setor Centro", "endereco": "Rua XV de Novembro 100",
-            "bairro": "Centro", "cidade": "Santos", "estado": "SP",
-            "cnpj": "", "gerente": "Joao Silva", "fone_gerente": "13977665544",
-            "horario_recebimento": "Seg-Sex 08h-17h", "status": "Ativo",
-            "latitude": "", "longitude": "", "observacao": "",
-        }])
-        _buf_tpl_pdv = io.BytesIO()
-        with pd.ExcelWriter(_buf_tpl_pdv, engine='openpyxl') as _w:
-            _df_tpl_pdv.to_excel(_w, index=False, sheet_name="PDVs")
-        st.download_button("⬇️ Baixar template PDVs", data=_buf_tpl_pdv.getvalue(),
-                           file_name="template_importacao_pdvs.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True, key="tpl_pdv_dl_imp")
+    # Template direto — sem expander para 1 clique
+    _df_tpl_pdv = pd.DataFrame([{
+        "cliente_nome": "Supermercado Exemplo", "numero_loja": "01",
+        "nome_loja": "Loja Centro", "tipo_pdv": "Supermercado",
+        "setor": "Setor Centro", "endereco": "Rua XV de Novembro 100",
+        "bairro": "Centro", "cidade": "Santos", "estado": "SP",
+        "cnpj": "", "gerente": "Joao Silva", "fone_gerente": "13977665544",
+        "horario_recebimento": "Seg-Sex 08h-17h", "status": "Ativo",
+        "latitude": "", "longitude": "", "observacao": "",
+    }])
+    _buf_tpl_pdv = io.BytesIO()
+    with pd.ExcelWriter(_buf_tpl_pdv, engine='openpyxl') as _w:
+        _df_tpl_pdv.to_excel(_w, index=False, sheet_name="PDVs")
+    st.download_button("📥 Baixar template de PDVs", data=_buf_tpl_pdv.getvalue(),
+                       file_name="template_importacao_pdvs.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                       key="tpl_pdv_dl_imp")
+    st.caption("Campos obrigatórios: cliente_nome, nome_loja.")
 
     resultado = st.session_state.pop("imp_pdv_resultado", None)
     if resultado:
@@ -4274,14 +4270,15 @@ def _tela_pdvs_por_setor():
                 s_s = ParagraphStyle("ps_s", parent=sty["Normal"], fontSize=8, textColor=CINZA)
                 s_h = ParagraphStyle("ps_h", parent=sty["Normal"], fontSize=7,
                                      fontName="Helvetica-Bold", textColor=colors.white)
-                s_c = ParagraphStyle("ps_c", parent=sty["Normal"], fontSize=7)
+                s_c = ParagraphStyle("ps_c", parent=sty["Normal"], fontSize=7, leading=9)
                 s_r = ParagraphStyle("ps_r", parent=sty["Normal"], fontSize=6,
                                      textColor=CINZA, alignment=TA_CENTER)
 
                 buf_pdf = io.BytesIO()
+                # Margens menores para aproveitar a largura
                 doc = SimpleDocTemplate(buf_pdf, pagesize=landscape(A4),
-                                        leftMargin=1.2*cm, rightMargin=1.2*cm,
-                                        topMargin=1.2*cm, bottomMargin=1.2*cm)
+                                        leftMargin=0.8*cm, rightMargin=0.8*cm,
+                                        topMargin=1*cm, bottomMargin=1*cm)
                 el = []
                 rep = query("SELECT nome_fantasia FROM representante WHERE ativo=1 LIMIT 1")
                 rep_nome  = rep[0][0] if rep else "PepperCRM"
@@ -4292,14 +4289,15 @@ def _tela_pdvs_por_setor():
                     f"Gerado em {_dt.now().strftime('%d/%m/%Y %H:%M')}", s_s))
                 el.append(HRFlowable(width="100%", thickness=2, color=VERDE, spaceAfter=6))
 
-                PDF_COLS = ["Setor","Cliente","PDV","Tipo","Clust.","Tam.",
-                            "Bairro","Cidade","Gerente","Horario"]
-                PDF_IDX  = [0, 1, 3, 4, 15, 16, 6, 7, 8, 10]
-                PDF_CW   = [3.5*cm, 3.0*cm, 2.5*cm, 2.0*cm, 1.2*cm, 1.2*cm,
-                            2.0*cm, 1.8*cm, 2.0*cm, 2.0*cm]
+                # Sem Horario, com Endereco — largura total ~27.6cm
+                PDF_COLS = ["Setor","Cliente","PDV","Tipo","Endereço","Bairro",
+                            "Cidade","Gerente","Fone","Clust.","Tam."]
+                PDF_IDX  = [0, 1, 3, 4, 5, 6, 7, 8, 9, 15, 16]
+                PDF_CW   = [3.2*cm, 3.2*cm, 2.8*cm, 2.0*cm, 4.5*cm, 2.5*cm,
+                            2.2*cm, 2.5*cm, 2.2*cm, 1.2*cm, 1.3*cm]
                 rows_pdf = [[Paragraph(c, s_h) for c in PDF_COLS]]
                 for r in pdvs_setor:
-                    rows_pdf.append([Paragraph(str(r[i] or "—")[:40], s_c)
+                    rows_pdf.append([Paragraph(str(r[i] or "—")[:50], s_c)
                                      for i in PDF_IDX])
                 t_pdf = Table(rows_pdf, colWidths=PDF_CW, repeatRows=1)
                 t_pdf.setStyle(TableStyle([
@@ -4317,9 +4315,8 @@ def _tela_pdvs_por_setor():
                 el.append(Spacer(1, 0.3*cm))
                 el.append(Paragraph("PepperCRM", s_r))
                 doc.build(el)
-                buf_pdf.seek(0)
                 st.download_button("📥 Baixar PDF",
-                                   data=buf_pdf,
+                                   data=buf_pdf.getvalue(),
                                    file_name=f"pdvs_setor_{tipos_slug}.pdf",
                                    mime="application/pdf",
                                    use_container_width=True)
