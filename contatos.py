@@ -1925,6 +1925,78 @@ def _por_entidade():
 # ═══════════════════════════════════════════════════════
 # 6. POR FORNECEDOR TRATADO
 # ═══════════════════════════════════════════════════════
+def _gerar_pdf_prospeccao(df, fornecedor, perfil, cidade, situacao, hoje):
+    """Gera PDF da lista de prospecção estratégica."""
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    from reportlab.lib.enums import TA_CENTER
+    import io as _io
+
+    VERDE = colors.HexColor("#2E7D32")
+    CINZA = colors.HexColor("#F5F5F5")
+    estilos = getSampleStyleSheet()
+    s_titulo = ParagraphStyle("t", parent=estilos["Title"], fontSize=14,
+                               textColor=VERDE, spaceAfter=4)
+    s_sub    = ParagraphStyle("s", parent=estilos["Normal"], fontSize=9,
+                               textColor=colors.HexColor("#555"), spaceAfter=2)
+    s_td     = ParagraphStyle("td", parent=estilos["Normal"], fontSize=7.5, leading=10)
+    s_rod    = ParagraphStyle("r", parent=estilos["Normal"], fontSize=7,
+                               textColor=colors.HexColor("#999"), alignment=TA_CENTER)
+
+    buf = _io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+                            leftMargin=1*cm, rightMargin=1*cm,
+                            topMargin=1.2*cm, bottomMargin=1.2*cm)
+    el = []
+    el.append(Paragraph("PepperCRM — Lista de Prospecção Estratégica", s_titulo))
+    el.append(Paragraph(
+        f"Fornecedor: {fornecedor} | Tipo: {perfil} | Cidade: {cidade} | "
+        f"Situação: {situacao} | Gerado em: {hoje.strftime('%d/%m/%Y')} | "
+        f"Total: {len(df)} cliente(s)", s_sub))
+    el.append(HRFlowable(width="100%", thickness=1, color=VERDE, spaceAfter=6))
+
+    # Colunas do PDF
+    _cols_pdf = ["#","Cliente","Perfil","Cidade","Situação","Últ. interação","Fone","E-mail","Instagram"]
+    rows = [_cols_pdf]
+    for i, row in df.iterrows():
+        rows.append([
+            Paragraph(str(i+1), s_td),
+            Paragraph(str(row.get('Cliente','—')), s_td),
+            Paragraph(str(row.get('Perfil','—')), s_td),
+            Paragraph(str(row.get('Cidade','—')), s_td),
+            Paragraph(str(row.get('Situação','—')), s_td),
+            Paragraph(str(row.get('Última interação','—')), s_td),
+            Paragraph(str(row.get('Fone','—')), s_td),
+            Paragraph(str(row.get('E-mail','—')), s_td),
+            Paragraph(str(row.get('Instagram','—')), s_td),
+        ])
+
+    _cws = [0.7*cm, 4.5*cm, 2.5*cm, 2.5*cm, 3*cm, 2*cm, 2.8*cm, 5*cm, 3*cm]
+    t = Table(rows, colWidths=_cws, repeatRows=1)
+    t.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0), (-1,0), VERDE),
+        ("TEXTCOLOR",     (0,0), (-1,0), colors.white),
+        ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTSIZE",      (0,0), (-1,0), 8),
+        ("ROWBACKGROUNDS",(0,1), (-1,-1), [colors.white, CINZA]),
+        ("BOX",           (0,0), (-1,-1), 0.5, colors.HexColor("#CCC")),
+        ("INNERGRID",     (0,0), (-1,-1), 0.3, colors.HexColor("#DDD")),
+        ("TOPPADDING",    (0,0), (-1,-1), 3),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+        ("LEFTPADDING",   (0,0), (-1,-1), 4),
+        ("VALIGN",        (0,0), (-1,-1), "TOP"),
+    ]))
+    el.append(t)
+    el.append(Spacer(1, 0.4*cm))
+    el.append(Paragraph(
+        "PepperCRM — Azevedo e Filhos Representação Comercial | Confidencial", s_rod))
+    doc.build(el)
+    return buf.getvalue()
+
+
 def _prospeccao():
     """Visão estratégica de clientes não contatados ou esfriando por fornecedor."""
     from datetime import date, timedelta
@@ -1972,16 +2044,20 @@ def _prospeccao():
     hoje = date.today()
 
     # ── Busca todos os clientes ativos com filtros ────────────────────────
-    where_cli = ["c.ativo!=0"]
+    where_cli = ["(c.ativo = true OR c.ativo = 1)"]
     params_cli = []
     if perfil_sel != "Todos":
-        where_cli.append("c.perfil=?"); params_cli.append(perfil_sel)
+        where_cli.append("LOWER(c.perfil) LIKE LOWER(?)")
+        params_cli.append(f"%{perfil_sel}%")
     if cidade_sel != "Todas":
         where_cli.append("c.cidade=?"); params_cli.append(cidade_sel)
 
     clientes = query(f"""
-        SELECT c.cliente_id, c.nome_fantasia, c.perfil, c.cidade, c.estado,
-               COALESCE(c.fone,''), COALESCE(c.email,'')
+        SELECT c.cliente_id, c.nome_fantasia,
+               COALESCE(c.perfil,'—'), COALESCE(c.cidade,'—'), COALESCE(c.estado,''),
+               COALESCE(c.fone,''), COALESCE(c.email,''),
+               COALESCE(c.endereco,''), COALESCE(c.bairro,''),
+               COALESCE(c.instagram,''), COALESCE(c.site,'')
         FROM cliente c
         WHERE {' AND '.join(where_cli)}
         ORDER BY c.nome_fantasia
@@ -2033,13 +2109,18 @@ def _prospeccao():
     CANCELADOS    = []
 
     for cli in clientes:
-        cli_id = cli[0]
-        nome   = cli[1]
-        perfil = cli[2] or "—"
-        cidade = cli[3] or "—"
-        estado = cli[4] or ""
-        fone   = cli[5]
-        email  = cli[6]
+        cli_id  = cli[0]
+        nome    = cli[1]
+        perfil  = cli[2]
+        cidade  = cli[3]
+        estado  = cli[4]
+        fone    = cli[5]
+        email   = cli[6]
+        endereco= cli[7]
+        bairro  = cli[8]
+        insta   = cli[9]
+        site    = cli[10]
+        cidade_uf = f"{cidade}/{estado}" if estado else cidade
 
         topicos_cli = contatos_por_cli.get(cli_id, [])
 
@@ -2051,7 +2132,7 @@ def _prospeccao():
             # Nunca contatado para este fornecedor
             NUNCA.append({
                 'Cliente': nome, 'Perfil': perfil,
-                'Cidade': f"{cidade}/{estado}", 'Fone': fone, 'E-mail': email,
+                'Cidade': cidade_uf, 'Endereço': f"{endereco}, {bairro}" if endereco else bairro, 'Fone': fone, 'E-mail': email, 'Instagram': insta,
                 'Situação': '🔵 Nunca contatado', 'Última interação': '—', 'Status': '—'
             })
         elif not ativos and cancelados:
@@ -2059,7 +2140,7 @@ def _prospeccao():
             _ult = max((t['ultima_int'] or t['data_contato'] or '') for t in cancelados)
             CANCELADOS.append({
                 'Cliente': nome, 'Perfil': perfil,
-                'Cidade': f"{cidade}/{estado}", 'Fone': fone, 'E-mail': email,
+                'Cidade': cidade_uf, 'Endereço': f"{endereco}, {bairro}" if endereco else bairro, 'Fone': fone, 'E-mail': email, 'Instagram': insta,
                 'Situação': '⚪ Cancelado', 'Última interação': _ult or '—', 'Status': 'Cancelado'
             })
         else:
@@ -2072,7 +2153,7 @@ def _prospeccao():
             if not _ult_str:
                 NUNCA.append({
                     'Cliente': nome, 'Perfil': perfil,
-                    'Cidade': f"{cidade}/{estado}", 'Fone': fone, 'E-mail': email,
+                    'Cidade': cidade_uf, 'Endereço': f"{endereco}, {bairro}" if endereco else bairro, 'Fone': fone, 'E-mail': email, 'Instagram': insta,
                     'Situação': '🔵 Nunca contatado', 'Última interação': '—', 'Status': '—'
                 })
                 continue
@@ -2086,7 +2167,7 @@ def _prospeccao():
             _status_ult = ativos[0]['status'] if ativos else '—'
             _row = {
                 'Cliente': nome, 'Perfil': perfil,
-                'Cidade': f"{cidade}/{estado}", 'Fone': fone, 'E-mail': email,
+                'Cidade': cidade_uf, 'Endereço': f"{endereco}, {bairro}" if endereco else bairro, 'Fone': fone, 'E-mail': email, 'Instagram': insta,
                 'Última interação': _ult_str[:10], 'Status': _status_ult,
                 '_dias': _dias
             }
@@ -2152,8 +2233,14 @@ def _prospeccao():
     st.markdown(f"**{len(resultado)} cliente(s) encontrado(s)**")
 
     # ── Tabela de resultados ──────────────────────────────────────────────
-    cols_show = ['Cliente','Perfil','Cidade','Situação','Última interação','Status','Fone','E-mail']
-    df_res = pd.DataFrame(resultado)[cols_show]
+    cols_show = ['Cliente','Perfil','Cidade','Endereço','Situação',
+                 'Última interação','Status','Fone','E-mail','Instagram']
+    df_res = pd.DataFrame(resultado)
+    # Garante que todas as colunas existem
+    for c in cols_show:
+        if c not in df_res.columns:
+            df_res[c] = "—"
+    df_res = df_res[cols_show]
     st.dataframe(df_res, use_container_width=True, hide_index=True,
                  column_config={
                      "Cliente":           st.column_config.TextColumn(width="medium"),
@@ -2162,20 +2249,42 @@ def _prospeccao():
                      "Status":            st.column_config.TextColumn(width="small"),
                  })
 
+    _forn_nm = forn_sel[1].replace(" ","_")[:15] if forn_id else "geral"
+    _hoje_str = hoje.strftime('%Y%m%d')
+
+    col_xl, col_pdf = st.columns(2)
+
     # ── Export Excel ──────────────────────────────────────────────────────
-    try:
-        buf_pr = io.BytesIO()
-        with pd.ExcelWriter(buf_pr, engine='openpyxl') as w:
-            df_res.to_excel(w, index=False, sheet_name="Prospecção")
-        _forn_nm = forn_sel[1].replace(" ","_")[:15] if forn_id else "geral"
-        st.download_button(
-            "⬇️ Exportar Excel",
-            data=buf_pr.getvalue(),
-            file_name=f"prospeccao_{_forn_nm}_{hoje.strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True)
-    except Exception as _ex:
-        st.error(f"Erro ao exportar: {_ex}")
+    with col_xl:
+        try:
+            buf_pr = io.BytesIO()
+            with pd.ExcelWriter(buf_pr, engine='openpyxl') as w:
+                df_res.to_excel(w, index=False, sheet_name="Prospecção")
+            st.download_button(
+                "⬇️ Exportar Excel",
+                data=buf_pr.getvalue(),
+                file_name=f"prospeccao_{_forn_nm}_{_hoje_str}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True)
+        except Exception as _ex:
+            st.error(f"Erro Excel: {_ex}")
+
+    # ── Export PDF ────────────────────────────────────────────────────────
+    with col_pdf:
+        _pdf_key = f"prosp_pdf_{hash(str(list(df_res['Cliente'])))}"
+        if _pdf_key not in st.session_state:
+            if st.button("📄 Gerar PDF", key="pr_pdf_btn", use_container_width=True):
+                with st.spinner("Gerando PDF..."):
+                    st.session_state[_pdf_key] = _gerar_pdf_prospeccao(
+                        df_res, forn_sel[1] if forn_id else "Todos",
+                        perfil_sel, cidade_sel, situacao_sel, hoje)
+        if _pdf_key in st.session_state:
+            st.download_button(
+                "📥 Baixar PDF",
+                data=st.session_state[_pdf_key],
+                file_name=f"prospeccao_{_forn_nm}_{_hoje_str}.pdf",
+                mime="application/pdf",
+                use_container_width=True)
 
 
 def _por_fornecedor():
