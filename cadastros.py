@@ -341,18 +341,23 @@ def _lista_produtos():
 
     # ── EXPORTAÇÃO — gera antes do botão para 1 clique ───────────────────
     # Renomeia para nomes do template de importação
+    # Reordena e renomeia para espelhar template de importação
+    _cols_ordem = ["fornecedor_nome","marca_nome","categoria_nome","linha_nome",
+                   "sub_categoria","grupo","codigo_produto","descricao","descricao_curta",
+                   "unidade_medida","peso_unidade","peso_caixa","unidades_caixa",
+                   "validade_dias","ean","dun","ncm","cest","observacao","ativo"]
     _mapa_cols = {
-        "ID": "ID", "Fornecedor": "fornecedor_nome", "Marca": "marca_nome",
-        "Categoria": "categoria_nome", "Linha": "linha_nome",
-        "Codigo": "codigo_produto", "Descricao": "descricao",
-        "Descricao curta": "descricao_curta", "UM": "unidade_medida",
-        "Un/Cx": "unidades_caixa", "Peso un.": "peso_unidade",
-        "Peso cx.": "peso_caixa", "Sub-categoria": "sub_categoria",
-        "Grupo": "grupo", "Validade (d)": "validade_dias",
-        "EAN": "ean", "DUN": "dun", "NCM": "ncm", "CEST": "cest",
-        "Observacao": "observacao", "Ativo": "ativo"
+        "Fornecedor":"fornecedor_nome","Marca":"marca_nome","Categoria":"categoria_nome",
+        "Linha":"linha_nome","Sub-categoria":"sub_categoria","Grupo":"grupo",
+        "Codigo":"codigo_produto","Descricao":"descricao","Descricao curta":"descricao_curta",
+        "UM":"unidade_medida","Peso un.":"peso_unidade","Peso cx.":"peso_caixa",
+        "Un/Cx":"unidades_caixa","Validade (d)":"validade_dias",
+        "EAN":"ean","DUN":"dun","NCM":"ncm","CEST":"cest","Observacao":"observacao","Ativo":"ativo"
     }
-    df_exp_prod = df.copy().replace("—", "").rename(columns=_mapa_cols)
+    df_exp_prod = df.copy().replace("—","").rename(columns=_mapa_cols)
+    # Mantém só as colunas do template na ordem correta (sem ID)
+    _cols_disp = [c for c in _cols_ordem if c in df_exp_prod.columns]
+    df_exp_prod = df_exp_prod[_cols_disp]
     _buf_prod_xl = io.BytesIO()
     with pd.ExcelWriter(_buf_prod_xl, engine='openpyxl') as _w:
         df_exp_prod.to_excel(_w, index=False, sheet_name="Produtos")
@@ -3388,10 +3393,10 @@ def _baixar_templates():
         buf = io.BytesIO()
         with pd.ExcelWriter(buf, engine='openpyxl') as w:
             df_cli.to_excel(w, index=False, sheet_name="Clientes")
-        st.download_button("Baixar template Clientes", data=buf.getvalue(),
+        st.download_button("⬇️ Baixar template Clientes", data=buf.getvalue(),
                            file_name="template_importacao_clientes.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                           use_container_width=True, key="tpl_cli_dl_old")
 
     with col2:
         st.markdown("**Template de PDVs**")
@@ -3417,13 +3422,13 @@ def _baixar_templates():
             "longitude":           "",
             "observacao":          "",
         }])
-        buf = io.BytesIO()
-        df_pdv.to_excel(buf, index=False, sheet_name="PDVs")
-        buf.seek(0)
-        st.download_button("Baixar template PDVs", data=buf,
+        _buf_pdv_old = io.BytesIO()
+        with pd.ExcelWriter(_buf_pdv_old, engine="openpyxl") as _w:
+            df_pdv.to_excel(_w, index=False, sheet_name="PDVs")
+        st.download_button("⬇️ Baixar template PDVs", data=_buf_pdv_old.getvalue(),
                            file_name="template_importacao_pdvs.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                           use_container_width=True, key="tpl_pdv_dl_old")
 
 
 def _importar_clientes_excel():
