@@ -257,10 +257,10 @@ def _lista_produtos():
         st.info("Nenhum produto cadastrado.")
         return
 
-    colunas_exp = ["ID","fornecedor_nome","marca_nome","categoria_nome","linha_nome",
-                   "codigo_produto","descricao","descricao_curta","unidade_medida",
-                   "unidades_caixa","peso_unidade","peso_caixa","sub_categoria","grupo",
-                   "validade_dias","ean","dun","ncm","cest","observacao","ativo"]
+    colunas_exp = ["ID","Fornecedor","Marca","Categoria","Linha","Codigo",
+                   "Descricao","Descricao curta","UM","Un/Cx",
+                   "Peso un.","Peso cx.","Sub-categoria","Grupo",
+                   "Validade (d)","EAN","DUN","NCM","CEST","Observacao","Ativo"]
     df_full = pd.DataFrame(dados, columns=colunas_exp)
 
     # ── BLOCO DE FILTROS ─────────────────────────────────────────────────
@@ -339,28 +339,38 @@ def _lista_produtos():
     contexto = f" — {' | '.join(filtros_ativos)}" if filtros_ativos else ""
     st.caption(f"**{len(df)}** produto(s){contexto}  |  Total no banco: {len(df_full)}")
 
-    # ── EXPORTAÇÃO — 1 clique, download direto ───────────────────────────
+    # ── EXPORTAÇÃO — gera antes do botão para 1 clique ───────────────────
+    # Renomeia para nomes do template de importação
+    _mapa_cols = {
+        "ID": "ID", "Fornecedor": "fornecedor_nome", "Marca": "marca_nome",
+        "Categoria": "categoria_nome", "Linha": "linha_nome",
+        "Codigo": "codigo_produto", "Descricao": "descricao",
+        "Descricao curta": "descricao_curta", "UM": "unidade_medida",
+        "Un/Cx": "unidades_caixa", "Peso un.": "peso_unidade",
+        "Peso cx.": "peso_caixa", "Sub-categoria": "sub_categoria",
+        "Grupo": "grupo", "Validade (d)": "validade_dias",
+        "EAN": "ean", "DUN": "dun", "NCM": "ncm", "CEST": "cest",
+        "Observacao": "observacao", "Ativo": "ativo"
+    }
+    df_exp_prod = df.copy().replace("—", "").rename(columns=_mapa_cols)
+    _buf_prod_xl = io.BytesIO()
+    with pd.ExcelWriter(_buf_prod_xl, engine='openpyxl') as _w:
+        df_exp_prod.to_excel(_w, index=False, sheet_name="Produtos")
+    _nome_prod = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}"
+
     trigger = st.session_state.pop("exp_prod_trigger", None)
     if trigger == "excel":
-        buf = io.BytesIO()
-        df_exp = df.copy()
-        # Remove "—" substituindo por vazio
-        df_exp = df_exp.replace("—", "")
-        df_exp.to_excel(buf, index=False, sheet_name="Produtos")
-        buf.seek(0)
-        nome_arq = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}.xlsx"
         st.download_button(
-            "📥 Clique aqui para baixar o Excel",
-            data=buf.read(), file_name=nome_arq,
+            "📥 Baixar Excel",
+            data=_buf_prod_xl.getvalue(), file_name=f"{_nome_prod}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True, key="dl_xlsx_prod_now")
     elif trigger == "pdf":
         with st.spinner("Gerando PDF..."):
             pdf_bytes = _exportar_produtos_pdf(df, sel_forn)
-        nome_arq = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}.pdf"
         st.download_button(
-            "📥 Clique aqui para baixar o PDF",
-            data=pdf_bytes, file_name=nome_arq,
+            "📥 Baixar PDF",
+            data=pdf_bytes, file_name=f"{_nome_prod}.pdf",
             mime="application/pdf",
             use_container_width=True, key="dl_pdf_prod_now")
 
@@ -2661,16 +2671,16 @@ def _tela_pdvs():
             # Exportação respeita os filtros ativos
             dados_pdv_exp = query(f"""
                 SELECT p.pdv_id, c.nome_fantasia AS cliente,
-                       COALESCE(p.numero_loja,'—'), p.nome_loja,
-                       COALESCE(p.tipo_pdv,'—'), COALESCE(p.setor,'—'),
-                       COALESCE(p.endereco,'—'), COALESCE(p.bairro,'—'),
-                       COALESCE(p.cidade,'—'), COALESCE(p.estado,'—'),
-                       COALESCE(p.cnpj,'—'), COALESCE(p.gerente,'—'),
-                       COALESCE(p.fone_gerente,'—'),
-                       COALESCE(p.horario_recebimento,'—'),
+                       COALESCE(p.numero_loja,''), p.nome_loja,
+                       COALESCE(p.tipo_pdv,''), COALESCE(p.setor,''),
+                       COALESCE(p.endereco,''), COALESCE(p.bairro,''),
+                       COALESCE(p.cidade,''), COALESCE(p.estado,''),
+                       COALESCE(p.cnpj,''), COALESCE(p.gerente,''),
+                       COALESCE(p.fone_gerente,''),
+                       COALESCE(p.horario_recebimento,''),
                        COALESCE(p.status,'Ativo'),
-                       COALESCE(p.observacao,''),
-                       COALESCE(p.latitude,''), COALESCE(p.longitude,'')
+                       COALESCE(p.latitude,''), COALESCE(p.longitude,''),
+                       COALESCE(p.observacao,'')
                 FROM pdv p
                 JOIN cliente c ON p.cliente_id=c.cliente_id
                 WHERE {' AND '.join(where_p)}
@@ -2679,7 +2689,7 @@ def _tela_pdvs():
             df_pdv_exp = pd.DataFrame(dados_pdv_exp, columns=[
                 "ID","cliente_nome","numero_loja","nome_loja","tipo_pdv","setor",
                 "endereco","bairro","cidade","estado","cnpj","gerente","fone_gerente",
-                "horario_recebimento","status","observacao","latitude","longitude"])
+                "horario_recebimento","status","latitude","longitude","observacao"])
             buf_pdv = io.BytesIO()
             df_pdv_exp.to_excel(buf_pdv, index=False, sheet_name="PDVs")
             buf_pdv.seek(0)
@@ -3423,30 +3433,21 @@ def _importar_clientes_excel():
     with st.expander("📥 Baixar template de Clientes", expanded=False):
         st.caption("Colunas: nome_fantasia*, razao_social, perfil, status, fone, email, cnpj, "
                    "endereco, bairro, cidade, estado, site, instagram, associacao_nome, observacao")
-        df_cli = pd.DataFrame([{
-            "nome_fantasia":   "Empório Exemplo",
-            "razao_social":    "",
-            "perfil":          "Empório",
-            "status":          "Ativo",
-            "fone":            "13988776655",
-            "email":           "compras@emporio.com.br",
-            "cnpj":            "",
-            "endereco":        "Av. Ana Costa 123",
-            "bairro":          "Gonzaga",
-            "cidade":          "Santos",
-            "estado":          "SP",
-            "site":            "",
-            "instagram":       "@emporio_exemplo",
-            "associacao_nome": "",
-            "observacao":      "",
+        _df_tpl_cli = pd.DataFrame([{
+            "nome_fantasia": "Empório Exemplo", "razao_social": "",
+            "perfil": "Empório", "status": "Ativo",
+            "fone": "13988776655", "email": "compras@emporio.com.br",
+            "cnpj": "", "endereco": "Av. Ana Costa 123", "bairro": "Gonzaga",
+            "cidade": "Santos", "estado": "SP", "site": "",
+            "instagram": "@emporio_exemplo", "associacao_nome": "", "observacao": "",
         }])
-        buf_tpl = io.BytesIO()
-        with pd.ExcelWriter(buf_tpl, engine='openpyxl') as w:
-            df_cli.to_excel(w, index=False, sheet_name="Clientes")
-        st.download_button("⬇️ Baixar template Clientes", data=buf_tpl.getvalue(),
+        _buf_tpl_cli = io.BytesIO()
+        with pd.ExcelWriter(_buf_tpl_cli, engine='openpyxl') as _w:
+            _df_tpl_cli.to_excel(_w, index=False, sheet_name="Clientes")
+        st.download_button("⬇️ Baixar template Clientes", data=_buf_tpl_cli.getvalue(),
                            file_name="template_importacao_clientes.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                           use_container_width=True, key="tpl_cli_dl_imp")
 
     resultado = st.session_state.pop("imp_cli_resultado", None)
     if resultado:
@@ -3549,34 +3550,24 @@ def _importar_pdvs_excel():
 
     with st.expander("📥 Baixar template de PDVs", expanded=False):
         st.caption("Colunas: cliente_nome*, numero_loja, nome_loja*, tipo_pdv, setor, "
-                   "endereco, bairro, cidade, estado, gerente, fone_gerente, "
-                   "horario_recebimento, latitude, longitude, observacao")
-        df_pdv = pd.DataFrame([{
-            "cliente_nome":        "Supermercado Exemplo",
-            "numero_loja":         "01",
-            "nome_loja":           "Loja Centro",
-            "tipo_pdv":            "Supermercado",
-            "setor":               "Setor Centro",
-            "endereco":            "Rua XV de Novembro 100",
-            "bairro":              "Centro",
-            "cidade":              "Santos",
-            "estado":              "SP",
-            "cnpj":                "",
-            "gerente":             "Joao Silva",
-            "fone_gerente":        "13977665544",
-            "horario_recebimento": "Seg-Sex 08h-17h",
-            "status":              "Ativo",
-            "latitude":            "",
-            "longitude":           "",
-            "observacao":          "",
+                   "endereco, bairro, cidade, estado, cnpj, gerente, fone_gerente, "
+                   "horario_recebimento, status, latitude, longitude, observacao")
+        _df_tpl_pdv = pd.DataFrame([{
+            "cliente_nome": "Supermercado Exemplo", "numero_loja": "01",
+            "nome_loja": "Loja Centro", "tipo_pdv": "Supermercado",
+            "setor": "Setor Centro", "endereco": "Rua XV de Novembro 100",
+            "bairro": "Centro", "cidade": "Santos", "estado": "SP",
+            "cnpj": "", "gerente": "Joao Silva", "fone_gerente": "13977665544",
+            "horario_recebimento": "Seg-Sex 08h-17h", "status": "Ativo",
+            "latitude": "", "longitude": "", "observacao": "",
         }])
-        buf_pdv = io.BytesIO()
-        with pd.ExcelWriter(buf_pdv, engine='openpyxl') as w:
-            df_pdv.to_excel(w, index=False, sheet_name="PDVs")
-        st.download_button("⬇️ Baixar template PDVs", data=buf_pdv.getvalue(),
+        _buf_tpl_pdv = io.BytesIO()
+        with pd.ExcelWriter(_buf_tpl_pdv, engine='openpyxl') as _w:
+            _df_tpl_pdv.to_excel(_w, index=False, sheet_name="PDVs")
+        st.download_button("⬇️ Baixar template PDVs", data=_buf_tpl_pdv.getvalue(),
                            file_name="template_importacao_pdvs.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                           use_container_width=True, key="tpl_pdv_dl_imp")
 
     resultado = st.session_state.pop("imp_pdv_resultado", None)
     if resultado:
