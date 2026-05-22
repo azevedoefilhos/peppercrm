@@ -2044,7 +2044,7 @@ def _prospeccao():
     hoje = date.today()
 
     # ── Busca todos os clientes ativos com filtros ────────────────────────
-    where_cli = ["(c.ativo = true OR c.ativo = 1)"]
+    where_cli = ["1=1"]  # Prospecção mostra todos os clientes cadastrados
     params_cli = []
     if perfil_sel != "Todos":
         where_cli.append("LOWER(c.perfil) LIKE LOWER(?)")
