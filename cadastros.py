@@ -2548,6 +2548,8 @@ def _tela_vinculos_cliente():
 def _tela_pdvs():
     msg_pdv = st.session_state.pop("_massa_pdv_msg", None)
     if msg_pdv: st.success(msg_pdv)
+    msg_pdv_ok = st.session_state.pop("_pdv_msg_ok", None)
+    if msg_pdv_ok: st.success(msg_pdv_ok)
 
     st.subheader("PDVs (lojas)")
     st.caption("Cadastre as lojas de cada cliente. Clientes sem PDV recebem os pedidos diretamente.")
@@ -2849,7 +2851,7 @@ def _form_novo_pdv(cli_id):
               obs or None,
               status_pdv))
         conn.commit(); conn.close()
-        _sucesso(f"PDV '{nome_loja}' cadastrado!")
+        st.session_state["_pdv_msg_ok"] = f"✅ PDV '{nome_loja}' cadastrado com sucesso!"
         st.rerun()
 
 
@@ -4289,29 +4291,56 @@ def _tela_pdvs_por_setor():
                     f"Gerado em {_dt.now().strftime('%d/%m/%Y %H:%M')}", s_s))
                 el.append(HRFlowable(width="100%", thickness=2, color=VERDE, spaceAfter=6))
 
-                # Sem Horario, com Endereco — largura total ~27.6cm
-                PDF_COLS = ["Setor","Cliente","PDV","Tipo","Endereço","Bairro",
+                # Agrupado por setor — sem coluna Setor, com cabeçalho por grupo
+                PDF_COLS = ["Cliente","PDV","Tipo","Endereço","Bairro",
                             "Cidade","Gerente","Fone","Clust.","Tam."]
-                PDF_IDX  = [0, 1, 3, 4, 5, 6, 7, 8, 9, 15, 16]
-                PDF_CW   = [3.2*cm, 3.2*cm, 2.8*cm, 2.0*cm, 4.5*cm, 2.5*cm,
-                            2.2*cm, 2.5*cm, 2.2*cm, 1.2*cm, 1.3*cm]
-                rows_pdf = [[Paragraph(c, s_h) for c in PDF_COLS]]
+                PDF_IDX  = [1, 3, 4, 5, 6, 7, 8, 9, 15, 16]
+                PDF_CW   = [3.5*cm, 3.0*cm, 2.2*cm, 5.0*cm, 2.8*cm,
+                            2.5*cm, 2.8*cm, 2.5*cm, 1.2*cm, 1.3*cm]
+
+                s_setor = ParagraphStyle("ps_setor", parent=sty["Normal"], fontSize=9,
+                                         fontName="Helvetica-Bold", textColor=colors.white)
+
+                # Agrupa por setor
+                from collections import OrderedDict
+                grupos = OrderedDict()
                 for r in pdvs_setor:
-                    rows_pdf.append([Paragraph(str(r[i] or "—")[:50], s_c)
-                                     for i in PDF_IDX])
-                t_pdf = Table(rows_pdf, colWidths=PDF_CW, repeatRows=1)
-                t_pdf.setStyle(TableStyle([
-                    ("BACKGROUND",    (0,0), (-1,0),  VERDE),
-                    ("TEXTCOLOR",     (0,0), (-1,0),  colors.white),
-                    ("FONTSIZE",      (0,0), (-1,-1), 7),
-                    ("TOPPADDING",    (0,0), (-1,-1), 3),
-                    ("BOTTOMPADDING", (0,0), (-1,-1), 3),
-                    ("LEFTPADDING",   (0,0), (-1,-1), 3),
-                    ("GRID",          (0,0), (-1,-1), 0.3, colors.HexColor("#cccccc")),
-                    ("ROWBACKGROUNDS",(0,1), (-1,-1), [colors.white, CINZAC]),
-                    ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-                ]))
-                el.append(t_pdf)
+                    s = r[0] or "Sem setor"
+                    grupos.setdefault(s, []).append(r)
+
+                for setor_nome, rows_s in grupos.items():
+                    # Cabeçalho do setor
+                    cab_setor = Table(
+                        [[Paragraph(f"📍  {setor_nome}  —  {len(rows_s)} PDV(s)", s_setor)]],
+                        colWidths=[sum(PDF_CW)])
+                    cab_setor.setStyle(TableStyle([
+                        ("BACKGROUND", (0,0), (-1,-1), VERDE),
+                        ("TOPPADDING", (0,0), (-1,-1), 5),
+                        ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+                        ("LEFTPADDING", (0,0), (-1,-1), 6),
+                    ]))
+                    el.append(cab_setor)
+
+                    # Cabeçalho das colunas
+                    rows_tbl = [[Paragraph(c, s_h) for c in PDF_COLS]]
+                    for r in rows_s:
+                        rows_tbl.append([Paragraph(str(r[i] or "—")[:55], s_c)
+                                        for i in PDF_IDX])
+
+                    t_s = Table(rows_tbl, colWidths=PDF_CW, repeatRows=1)
+                    t_s.setStyle(TableStyle([
+                        ("BACKGROUND",    (0,0), (-1,0),  colors.HexColor("#4a9e6e")),
+                        ("TEXTCOLOR",     (0,0), (-1,0),  colors.white),
+                        ("FONTSIZE",      (0,0), (-1,-1), 7),
+                        ("TOPPADDING",    (0,0), (-1,-1), 3),
+                        ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+                        ("LEFTPADDING",   (0,0), (-1,-1), 3),
+                        ("GRID",          (0,0), (-1,-1), 0.3, colors.HexColor("#cccccc")),
+                        ("ROWBACKGROUNDS",(0,1), (-1,-1), [colors.white, CINZAC]),
+                        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+                    ]))
+                    el.append(t_s)
+                    el.append(Spacer(1, 0.4*cm))
                 el.append(Spacer(1, 0.3*cm))
                 el.append(Paragraph("PepperCRM", s_r))
                 doc.build(el)
