@@ -257,10 +257,10 @@ def _lista_produtos():
         st.info("Nenhum produto cadastrado.")
         return
 
-    colunas_exp = ["ID","Fornecedor","Marca","Categoria","Linha","Codigo",
-                   "Descricao","Descricao curta","UM","Un/Cx",
-                   "Peso un.","Peso cx.","Sub-categoria","Grupo",
-                   "Validade (d)","EAN","DUN","NCM","CEST","Observacao","Ativo"]
+    colunas_exp = ["ID","fornecedor_nome","marca_nome","categoria_nome","linha_nome",
+                   "codigo_produto","descricao","descricao_curta","unidade_medida",
+                   "unidades_caixa","peso_unidade","peso_caixa","sub_categoria","grupo",
+                   "validade_dias","ean","dun","ncm","cest","observacao","ativo"]
     df_full = pd.DataFrame(dados, columns=colunas_exp)
 
     # ── BLOCO DE FILTROS ─────────────────────────────────────────────────
@@ -856,12 +856,13 @@ def _importar_produtos_excel():
         "peso_unidade":     3.0,
         "peso_caixa":       6.0,
         "unidades_caixa":   2,
+        "validade_dias":    30,
         "ean":              "",
         "dun":              "",
-        "validade_dias":    30,
         "ncm":              "",
         "cest":             "",
         "observacao":       "",
+        "ativo":            1,
     }])
     buf_tpl = io.BytesIO()
     df_tpl.to_excel(buf_tpl, index=False, sheet_name="Produtos")
@@ -2121,30 +2122,33 @@ def _lista_clientes():
         """, tuple(params_q))
         extras_map = {r[0]: r for r in extras}
 
-        cols_exp = ["ID","Nome fantasia","Razao social","Perfil/Tipo","Fone","E-mail",
-                    "CNPJ","Endereco","Bairro","Cidade","UF","Site","Instagram",
-                    "Status","Observacao","Fornecedores","PDVs"]
+        # Colunas espelho do template de importação + ID para referência
+        cols_exp = ["ID", "nome_fantasia", "razao_social", "perfil", "status",
+                    "fone", "email", "cnpj", "endereco", "bairro", "cidade",
+                    "estado", "site", "instagram", "associacao_nome", "observacao"]
         linhas = []
         for r in dados:
             ex = extras_map.get(r[0], [r[0],'','','','','','','','','',''])
+            # Busca associacao
+            assoc = query("SELECT nome FROM associacao WHERE associacao_id=(SELECT associacao_id FROM cliente WHERE cliente_id=?)", (r[0],))
+            assoc_nome = assoc[0][0] if assoc and assoc[0][0] else ''
             linhas.append([
-                r[0],   # ID
-                r[1],   # Nome fantasia
-                ex[1],  # Razao social
-                ex[2],  # Perfil/Tipo
-                ex[3],  # Fone
-                ex[4],  # Email
-                ex[5],  # CNPJ
-                ex[6],  # Endereco
-                ex[7],  # Bairro
-                r[2],   # Cidade (vem do dados principal)
-                r[3],   # UF
-                ex[8],  # Site
-                ex[9],  # Instagram
-                r[5],   # Status
-                ex[10], # Observacao
-                r[6],   # Fornecedores
-                r[7],   # PDVs
+                r[0],    # ID (referência, não importado)
+                r[1],    # nome_fantasia
+                ex[1],   # razao_social
+                ex[2],   # perfil
+                r[5],    # status
+                ex[3],   # fone
+                ex[4],   # email
+                ex[5],   # cnpj
+                ex[6],   # endereco
+                ex[7],   # bairro
+                r[2],    # cidade
+                r[3],    # estado
+                ex[8],   # site
+                ex[9],   # instagram
+                assoc_nome, # associacao_nome
+                ex[10],  # observacao
             ])
         df_exp = pd.DataFrame(linhas, columns=cols_exp)
         buf_exp = io.BytesIO()
@@ -2673,9 +2677,9 @@ def _tela_pdvs():
                 ORDER BY c.nome_fantasia, p.nome_loja
             """, tuple(params_p))
             df_pdv_exp = pd.DataFrame(dados_pdv_exp, columns=[
-                "ID","Cliente","Nr. Loja","Nome loja","Tipo PDV","Setor",
-                "Endereco","Bairro","Cidade","UF","CNPJ","Gerente","Fone gerente",
-                "Horario recebimento","Status","Observacao","Latitude","Longitude"])
+                "ID","cliente_nome","numero_loja","nome_loja","tipo_pdv","setor",
+                "endereco","bairro","cidade","estado","cnpj","gerente","fone_gerente",
+                "horario_recebimento","status","observacao","latitude","longitude"])
             buf_pdv = io.BytesIO()
             df_pdv_exp.to_excel(buf_pdv, index=False, sheet_name="PDVs")
             buf_pdv.seek(0)
@@ -3328,9 +3332,9 @@ def _tela_importar_clientes_pdvs():
     st.subheader("Importacao em massa — Clientes e PDVs")
 
     ABAS_IMP = {"cli":"Importar Clientes","pdv":"Importar PDVs",
-                "gps":"Atualizar GPS","ia":"Setores (IA)","tpl":"Templates"}
+                "gps":"Atualizar GPS","ia":"Setores (IA)"}
     if "imp_aba" not in st.session_state: st.session_state["imp_aba"] = "cli"
-    cols = st.columns(5)
+    cols = st.columns(4)
     for col,(k,v) in zip(cols, ABAS_IMP.items()):
         ativa = st.session_state["imp_aba"] == k
         if col.button(v, key=f"impnav_{k}", use_container_width=True,
@@ -3342,7 +3346,6 @@ def _tela_importar_clientes_pdvs():
     elif a=="pdv":_importar_pdvs_excel()
     elif a=="gps":_atualizar_gps_massa()
     elif a=="ia": _tela_sugestao_setores_ia()
-    elif a=="tpl":_baixar_templates()
 
 
 def _baixar_templates():
@@ -3353,18 +3356,20 @@ def _baixar_templates():
 
     with col1:
         st.markdown("**Template de Clientes**")
-        st.caption("Colunas: nome_fantasia*, perfil, fone, email, cidade, estado, bairro, "
-                   "endereco, cnpj, site, instagram, associacao_nome, observacao")
+        st.caption("Colunas: nome_fantasia*, razao_social, perfil, status, fone, email, cnpj, "
+                   "endereco, bairro, cidade, estado, site, instagram, associacao_nome, observacao")
         df_cli = pd.DataFrame([{
             "nome_fantasia":   "Empório Exemplo",
+            "razao_social":    "",
             "perfil":          "Empório",
+            "status":          "Ativo",
             "fone":            "13988776655",
             "email":           "compras@emporio.com.br",
+            "cnpj":            "",
+            "endereco":        "Av. Ana Costa 123",
+            "bairro":          "Gonzaga",
             "cidade":          "Santos",
             "estado":          "SP",
-            "bairro":          "Gonzaga",
-            "endereco":        "Av. Ana Costa 123",
-            "cnpj":            "",
             "site":            "",
             "instagram":       "@emporio_exemplo",
             "associacao_nome": "",
@@ -3393,9 +3398,11 @@ def _baixar_templates():
             "bairro":              "Centro",
             "cidade":              "Santos",
             "estado":              "SP",
+            "cnpj":                "",
             "gerente":             "Joao Silva",
             "fone_gerente":        "13977665544",
             "horario_recebimento": "Seg-Sex 08h-17h",
+            "status":              "Ativo",
             "latitude":            "",
             "longitude":           "",
             "observacao":          "",
@@ -3411,7 +3418,35 @@ def _baixar_templates():
 
 def _importar_clientes_excel():
     st.subheader("Importar clientes via Excel")
-    st.info("Baixe o template na aba 'Baixar templates', preencha e importe aqui.")
+
+    # Template disponível direto na aba
+    with st.expander("📥 Baixar template de Clientes", expanded=False):
+        st.caption("Colunas: nome_fantasia*, razao_social, perfil, status, fone, email, cnpj, "
+                   "endereco, bairro, cidade, estado, site, instagram, associacao_nome, observacao")
+        df_cli = pd.DataFrame([{
+            "nome_fantasia":   "Empório Exemplo",
+            "razao_social":    "",
+            "perfil":          "Empório",
+            "status":          "Ativo",
+            "fone":            "13988776655",
+            "email":           "compras@emporio.com.br",
+            "cnpj":            "",
+            "endereco":        "Av. Ana Costa 123",
+            "bairro":          "Gonzaga",
+            "cidade":          "Santos",
+            "estado":          "SP",
+            "site":            "",
+            "instagram":       "@emporio_exemplo",
+            "associacao_nome": "",
+            "observacao":      "",
+        }])
+        buf_tpl = io.BytesIO()
+        with pd.ExcelWriter(buf_tpl, engine='openpyxl') as w:
+            df_cli.to_excel(w, index=False, sheet_name="Clientes")
+        st.download_button("⬇️ Baixar template Clientes", data=buf_tpl.getvalue(),
+                           file_name="template_importacao_clientes.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           use_container_width=True)
 
     resultado = st.session_state.pop("imp_cli_resultado", None)
     if resultado:
@@ -3511,6 +3546,37 @@ def _importar_clientes_excel():
 def _importar_pdvs_excel():
     st.subheader("Importar PDVs via Excel")
     st.info("O cliente ja deve estar cadastrado. Use o nome_fantasia exatamente como cadastrado.")
+
+    with st.expander("📥 Baixar template de PDVs", expanded=False):
+        st.caption("Colunas: cliente_nome*, numero_loja, nome_loja*, tipo_pdv, setor, "
+                   "endereco, bairro, cidade, estado, gerente, fone_gerente, "
+                   "horario_recebimento, latitude, longitude, observacao")
+        df_pdv = pd.DataFrame([{
+            "cliente_nome":        "Supermercado Exemplo",
+            "numero_loja":         "01",
+            "nome_loja":           "Loja Centro",
+            "tipo_pdv":            "Supermercado",
+            "setor":               "Setor Centro",
+            "endereco":            "Rua XV de Novembro 100",
+            "bairro":              "Centro",
+            "cidade":              "Santos",
+            "estado":              "SP",
+            "cnpj":                "",
+            "gerente":             "Joao Silva",
+            "fone_gerente":        "13977665544",
+            "horario_recebimento": "Seg-Sex 08h-17h",
+            "status":              "Ativo",
+            "latitude":            "",
+            "longitude":           "",
+            "observacao":          "",
+        }])
+        buf_pdv = io.BytesIO()
+        with pd.ExcelWriter(buf_pdv, engine='openpyxl') as w:
+            df_pdv.to_excel(w, index=False, sheet_name="PDVs")
+        st.download_button("⬇️ Baixar template PDVs", data=buf_pdv.getvalue(),
+                           file_name="template_importacao_pdvs.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           use_container_width=True)
 
     resultado = st.session_state.pop("imp_pdv_resultado", None)
     if resultado:
