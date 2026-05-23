@@ -238,33 +238,35 @@ def _dashboard():
 
     if total_venc:
         st.error(f"🔴 **{total_venc} follow-up(s) vencido(s)** — ação necessária agora!")
-        for row in fups_venc:
-            cid_fw, entidade, assunto, data_fw, prioridade = row
-            try:
-                dias = (hoje - _date.fromisoformat(str(data_fw)[:10])).days
-            except: dias = 0
-            col_e, col_a, col_d, col_btn = st.columns([2.5, 3, 1.2, 1])
-            col_e.write(f"**{entidade}**")
-            col_a.caption(assunto[:55])
-            col_d.caption(f"⏰ {dias}d")
-            if col_btn.button("Abrir", key=f"dfv_{cid_fw}",
-                              use_container_width=True, type="primary"):
-                st.session_state["ct_aba"]           = "lista"
-                st.session_state["ct_topico_aberto"] = cid_fw
-                ir("contatos")
+        with st.expander("👁️ Ver lista", expanded=False):
+            for row in fups_venc:
+                cid_fw, entidade, assunto, data_fw, prioridade = row
+                try:
+                    dias = (hoje - _date.fromisoformat(str(data_fw)[:10])).days
+                except: dias = 0
+                col_e, col_a, col_d, col_btn = st.columns([2.5, 3, 1.2, 1])
+                col_e.write(f"**{entidade}**")
+                col_a.caption(assunto[:55])
+                col_d.caption(f"⏰ {dias}d")
+                if col_btn.button("Abrir", key=f"dfv_{cid_fw}",
+                                  use_container_width=True, type="primary"):
+                    st.session_state["ct_aba"]           = "lista"
+                    st.session_state["ct_topico_aberto"] = cid_fw
+                    ir("contatos")
 
     if total_hoje:
         st.warning(f"📌 **{total_hoje} follow-up(s) para hoje**")
-        for row in fups_hoje:
-            cid_fh, entidade, assunto, prioridade = row
-            col_e, col_a, col_btn = st.columns([2.5, 3.5, 1])
-            col_e.write(f"**{entidade}**")
-            col_a.caption(assunto[:55])
-            if col_btn.button("Abrir", key=f"dfh_{cid_fh}",
-                              use_container_width=True):
-                st.session_state["ct_aba"]           = "lista"
-                st.session_state["ct_topico_aberto"] = cid_fh
-                ir("contatos")
+        with st.expander("👁️ Ver lista", expanded=False):
+            for row in fups_hoje:
+                cid_fh, entidade, assunto, prioridade = row
+                col_e, col_a, col_btn = st.columns([2.5, 3.5, 1])
+                col_e.write(f"**{entidade}**")
+                col_a.caption(assunto[:55])
+                if col_btn.button("Abrir", key=f"dfh_{cid_fh}",
+                                  use_container_width=True):
+                    st.session_state["ct_aba"]           = "lista"
+                    st.session_state["ct_topico_aberto"] = cid_fh
+                    ir("contatos")
 
     if qtd_entregas:
         st.warning(f"🚚 **{qtd_entregas} entrega(s) prevista(s) nos próximos 7 dias**")
