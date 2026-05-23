@@ -2399,7 +2399,8 @@ def _form_editar_cliente(cli_id):
                   status_e, ativo_novo, cli_id))
             st.warning("⚠️ E-mail não foi salvo — coluna ainda não existe no banco. Aguarde migration.")
         conn.commit(); conn.close()
-        _sucesso("Cliente atualizado!")
+        st.session_state["_cli_msg_ok"] = "✅ Cliente atualizado com sucesso!"
+        st.rerun()
 
 
 def _tela_vinculos_cliente():

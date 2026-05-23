@@ -89,7 +89,7 @@ def _dados_dashboard_cache():
                cr.data_followup, cr.prioridade
         FROM contato_registro cr
         LEFT JOIN cliente cli ON cr.cliente_id=cli.cliente_id
-        WHERE cr.ativo=1 AND cr.data_followup IS NOT NULL
+        WHERE cr.ativo!=0 AND cr.data_followup IS NOT NULL
           AND cr.status NOT IN ('Concluído','Cancelado','Proposta enviada')
           AND cr.data_followup < ?
         ORDER BY cr.data_followup""", (hoje,))
@@ -99,7 +99,7 @@ def _dados_dashboard_cache():
                cr.assunto, cr.data_followup
         FROM contato_registro cr
         LEFT JOIN cliente cli ON cr.cliente_id=cli.cliente_id
-        WHERE cr.ativo=1 AND cr.data_followup IS NOT NULL
+        WHERE cr.ativo!=0 AND cr.data_followup IS NOT NULL
           AND cr.status NOT IN ('Concluído','Cancelado','Proposta enviada')
           AND cr.data_followup = ?
         ORDER BY cr.data_followup""", (hoje,))
@@ -124,8 +124,8 @@ def _dados_dashboard_cache():
                        COALESCE(MAX(ci.data_interacao), cr.data_contato)
                    ) AS INTEGER) AS dias
             FROM contato_registro cr
-            LEFT JOIN contato_interacao ci ON ci.contato_id=cr.contato_id AND ci.ativo=1
-            WHERE cr.ativo=1 AND cr.tipo_topico='Negociação'
+            LEFT JOIN contato_interacao ci ON ci.contato_id=cr.contato_id AND ci.ativo!=0
+            WHERE cr.ativo!=0 AND cr.tipo_topico='Negociação'
               AND cr.status NOT IN ('Concluído','Cancelado')
             GROUP BY cr.contato_id
             HAVING CAST(julianday('now') - julianday(
@@ -140,10 +140,10 @@ def _dados_dashboard_cache():
 
     sem_contato = query("""
         SELECT COUNT(*) FROM cliente c
-        WHERE c.ativo=1 AND c.status IN ('Visitado','Ativo')
+        WHERE c.ativo!=0 AND c.status IN ('Visitado','Ativo')
           AND c.cliente_id NOT IN (
               SELECT DISTINCT cliente_id FROM contato_registro
-              WHERE ativo=1 AND cliente_id IS NOT NULL)""")
+              WHERE ativo!=0 AND cliente_id IS NOT NULL)""")
     if sem_contato and sem_contato[0][0]:
         alertas.append(("info",
             f"📋 **{sem_contato[0][0]} cliente(s) visitado(s)/ativo(s)** "
@@ -158,7 +158,7 @@ def _dados_dashboard_cache():
 
     prox_fups = query("""
         SELECT COUNT(*) FROM contato_registro
-        WHERE ativo=1
+        WHERE ativo!=0
           AND data_followup BETWEEN ? AND ?
           AND status NOT IN ('Concluído','Cancelado')""", (amanha, depois))
     if prox_fups and prox_fups[0][0]:
@@ -181,11 +181,11 @@ def _dados_dashboard_cache():
         "total_mes":             total_mes,
         "comissao_mes":          float(r2[0][0]) if r2 and r2[0][0] else 0.0,
         "qtd_entregas":          q1("SELECT COUNT(*) FROM pedido WHERE data_entrega BETWEEN ? AND ? AND status_pedido NOT IN ('CANCELADO','RECUSADO','ENTREGUE','DEVOLVIDO')", (hoje, sete_dias)),
-        "qtd_sem_pedido":        q1("SELECT COUNT(*) FROM cliente c WHERE c.ativo=1 AND NOT EXISTS (SELECT 1 FROM pedido p WHERE p.cliente_id=c.cliente_id AND p.data_pedido >= ? AND p.status_pedido NOT IN ('CANCELADO','RECUSADO'))", (trinta_dias,)),
+        "qtd_sem_pedido":        q1("SELECT COUNT(*) FROM cliente c WHERE c.ativo!=0 AND NOT EXISTS (SELECT 1 FROM pedido p WHERE p.cliente_id=c.cliente_id AND p.data_pedido >= ? AND p.status_pedido NOT IN ('CANCELADO','RECUSADO'))", (trinta_dias,)),
         "qtd_rupturas":          q1("SELECT COUNT(*) FROM pesquisa_preco_item pi JOIN pesquisa_preco pp ON pi.pesquisa_id=pp.pesquisa_id WHERE pi.ruptura=1 AND pp.data_pesquisa >= ?", (trinta_dias,)),
-        "qtd_contatos_mes":      q1("SELECT COUNT(*) FROM contato_registro cr WHERE ativo=1 AND cr.data_contato >= ?", (mes_ini,)),
-        "qtd_negoc_abertas":     q1("SELECT COUNT(*) FROM contato_registro WHERE ativo=1 AND tipo_topico='Negociação' AND status NOT IN ('Concluído','Cancelado')"),
-        "qtd_clientes_contatados": q1("SELECT COUNT(DISTINCT cliente_id) FROM contato_registro WHERE ativo=1 AND data_contato >= ? AND cliente_id IS NOT NULL", (trinta_dias,)),
+        "qtd_contatos_mes":      q1("SELECT COUNT(*) FROM contato_registro cr WHERE ativo!=0 AND cr.data_contato >= ?", (mes_ini,)),
+        "qtd_negoc_abertas":     q1("SELECT COUNT(*) FROM contato_registro WHERE ativo!=0 AND tipo_topico='Negociação' AND status NOT IN ('Concluído','Cancelado')"),
+        "qtd_clientes_contatados": q1("SELECT COUNT(DISTINCT cliente_id) FROM contato_registro WHERE ativo!=0 AND data_contato >= ? AND cliente_id IS NOT NULL", (trinta_dias,)),
         "qtd_pesquisas_mes":     q1("SELECT COUNT(*) FROM pesquisa_preco WHERE data_pesquisa >= ?", (mes_ini,)),
         "qtd_visitas_mes":       q1("SELECT COUNT(*) FROM visita_cliente WHERE data_visita >= ?", (mes_ini,)),
         "qtd_clientes_ativos":   q1("SELECT COUNT(*) FROM cliente WHERE status NOT IN ('Encerrado','Cancelado')"),
@@ -473,7 +473,7 @@ def _tela_busca_global():
         FROM contato_registro cr
         LEFT JOIN cliente    c ON cr.cliente_id    = c.cliente_id
         LEFT JOIN fornecedor f ON cr.fornecedor_id = f.fornecedor_id
-        WHERE cr.ativo=1
+        WHERE cr.ativo!=0
           AND (cr.assunto LIKE ? OR cr.descricao LIKE ?
                OR c.nome_fantasia LIKE ? OR f.nome_fantasia LIKE ?)
         ORDER BY cr.data_contato DESC LIMIT 10""", (b, b, b, b))
