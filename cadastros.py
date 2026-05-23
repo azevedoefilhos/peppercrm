@@ -1950,6 +1950,8 @@ def _importar_tabela_excel():
 
 def tela_clientes():
     st.header("Clientes")
+    _msg_cli = st.session_state.pop("_cli_msg_ok", None)
+    if _msg_cli: st.success(_msg_cli)
     if st.button("⬅ Voltar"):
         _ir("home")
     ABAS_CLI = {
@@ -2316,7 +2318,8 @@ def _form_novo_cliente():
               site or None, insta or None, assoc_sel[0], obs or None,
               status_n, ativo_n))
         conn.commit(); conn.close()
-        _sucesso(f"Cliente '{fantasia}' cadastrado como {status_n}!")
+        st.session_state["_cli_msg_ok"] = f"✅ Cliente '{fantasia}' cadastrado como {status_n}!"
+        st.rerun()
 
 
 def _form_editar_cliente(cli_id):
