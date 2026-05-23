@@ -1917,9 +1917,20 @@ def _por_entidade():
                     st.session_state["ct_topico_aberto"] = cid
                 st.rerun()
             if aberto:
+                forns_top = query("""SELECT fn.fornecedor_id, fn.nome_fantasia
+                    FROM contato_x_fornecedor cxf
+                    JOIN fornecedor fn ON cxf.fornecedor_id=fn.fornecedor_id
+                    WHERE cxf.contato_id=? ORDER BY fn.nome_fantasia""", (cid,))
+                _forn_int = None
+                if forns_top and len(forns_top) > 1:
+                    _opts_fi = [(None,"Ver todos")] + [(f[0],f[1]) for f in forns_top]
+                    _fi = st.selectbox("Ver interações de:", _opts_fi,
+                        format_func=lambda x: x[1], key=f"pf_fi_{cid}")
+                    _forn_int = _fi[0] if _fi else None
                 _painel_topico(cid, status,
                                query("SELECT prioridade FROM contato_registro WHERE contato_id=?",
-                                     (cid,))[0][0], tipo)
+                                     (cid,))[0][0], tipo,
+                               fornecedor_id=_forn_int)
 
 
 # ═══════════════════════════════════════════════════════
@@ -2364,7 +2375,9 @@ def _por_fornecedor():
 # HELPERS PARA O DASHBOARD
 # ═══════════════════════════════════════════════════════
 def get_followups_vencidos():
-    return query("""
+    from datetime import date
+    hoje = date.today().isoformat()
+    return query(f"""
         SELECT cr.contato_id,
                COALESCE(c.nome_fantasia, f.nome_fantasia,'—'),
                cr.assunto, cr.data_followup, cr.prioridade
@@ -2372,13 +2385,15 @@ def get_followups_vencidos():
         LEFT JOIN cliente    c ON cr.cliente_id    = c.cliente_id
         LEFT JOIN fornecedor f ON cr.fornecedor_id = f.fornecedor_id
         WHERE cr.ativo!=0
-          AND cr.data_followup < '2026-05-13'
+          AND cr.data_followup < '{hoje}'
           AND cr.status NOT IN ('Concluído','Cancelado')
         ORDER BY cr.data_followup ASC
     """) or []
 
 def get_followups_hoje():
-    return query("""
+    from datetime import date
+    hoje = date.today().isoformat()
+    return query(f"""
         SELECT cr.contato_id,
                COALESCE(c.nome_fantasia, f.nome_fantasia,'—'),
                cr.assunto, cr.prioridade
@@ -2386,12 +2401,14 @@ def get_followups_hoje():
         LEFT JOIN cliente    c ON cr.cliente_id    = c.cliente_id
         LEFT JOIN fornecedor f ON cr.fornecedor_id = f.fornecedor_id
         WHERE cr.ativo!=0
-          AND cr.data_followup = '2026-05-13'
+          AND cr.data_followup = '{hoje}'
           AND cr.status NOT IN ('Concluído','Cancelado')
     """) or []
 
 def get_negociacoes_urgentes():
-    return query("""
+    from datetime import date
+    hoje = date.today().isoformat()
+    return query(f"""
         SELECT cr.contato_id,
                COALESCE(c.nome_fantasia,'—'),
                cr.assunto, cr.data_followup
@@ -2399,7 +2416,7 @@ def get_negociacoes_urgentes():
         LEFT JOIN cliente c ON cr.cliente_id=c.cliente_id
         WHERE cr.ativo!=0
           AND cr.tipo_topico='Negociação'
-          AND cr.data_followup < '2026-05-13'
+          AND cr.data_followup < '{hoje}'
           AND cr.status NOT IN ('Concluído','Cancelado')
         ORDER BY cr.data_followup ASC
         LIMIT 5
