@@ -2017,12 +2017,18 @@ def _prospeccao():
                                 format_func=lambda x: x[1], key="pr_forn")
 
     with col2:
-        PERFIS = ["Todos","Empório","Supermercado","Hipermercado","Atacadista",
+        PERFIS = ["Empório","Supermercado","Hipermercado","Atacadista",
                   "Mini Mercado","Mercearia","Sacolão","Hortifruti","Açougue",
                   "Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen",
                   "Hamburgueria","Restaurante","Lanchonete","Bar / Boteco",
                   "Clube / Associação","Outro"]
-        perfil_sel = st.selectbox("Tipo de estabelecimento", PERFIS, key="pr_perfil")
+        perfis_sel = st.multiselect(
+            "Tipo de estabelecimento (vazio = todos)",
+            options=PERFIS,
+            default=[],
+            key="pr_perfil",
+            help="Selecione um ou mais tipos. Ex: Hipermercado + Supermercado + Mini Mercado"
+        )
 
     with col3:
         cidades = query("""SELECT DISTINCT cidade FROM cliente
@@ -2044,11 +2050,12 @@ def _prospeccao():
     hoje = date.today()
 
     # ── Busca todos os clientes ativos com filtros ────────────────────────
-    where_cli = ["1=1"]  # Prospecção mostra todos os clientes cadastrados
+    where_cli = ["1=1"]
     params_cli = []
-    if perfil_sel != "Todos":
-        where_cli.append("LOWER(c.perfil) LIKE LOWER(?)")
-        params_cli.append(f"%{perfil_sel}%")
+    if perfis_sel:
+        _ph = ",".join("?" * len(perfis_sel))
+        where_cli.append(f"c.perfil IN ({_ph})")
+        params_cli.extend(perfis_sel)
     if cidade_sel != "Todas":
         where_cli.append("c.cidade=?"); params_cli.append(cidade_sel)
 
@@ -2277,7 +2284,8 @@ def _prospeccao():
                 with st.spinner("Gerando PDF..."):
                     st.session_state[_pdf_key] = _gerar_pdf_prospeccao(
                         df_res, forn_sel[1] if forn_id else "Todos",
-                        perfil_sel, cidade_sel, situacao_sel, hoje)
+                        ", ".join(perfis_sel) if perfis_sel else "Todos",
+                        cidade_sel, situacao_sel, hoje)
         if _pdf_key in st.session_state:
             st.download_button(
                 "📥 Baixar PDF",
