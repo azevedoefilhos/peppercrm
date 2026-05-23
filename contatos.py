@@ -1208,7 +1208,7 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
     contatos_cli = []
     if cli_id:
         contatos_cli = query("""SELECT contato_cliente_id, nome_contato, departamento, whatsapp
-            FROM contato_cliente WHERE cliente_id=? AND ativo=1 ORDER BY nome_contato""",
+            FROM contato_cliente WHERE cliente_id=? AND ativo!=0 ORDER BY nome_contato""",
             (cli_id,))
 
     def _pd(v):
@@ -1623,7 +1623,7 @@ def _form_novo_topico():
     contatos_cli = []
     if cli_id:
         contatos_cli = query("""SELECT contato_cliente_id, nome_contato, departamento
-            FROM contato_cliente WHERE cliente_id=? AND ativo=1 ORDER BY nome_contato""",
+            FROM contato_cliente WHERE cliente_id=? AND ativo!=0 ORDER BY nome_contato""",
             (cli_id,))
 
     _mk = "nn_pessoa_modo"
@@ -1807,7 +1807,7 @@ def _agenda():
         FROM contato_registro cr
         LEFT JOIN cliente    c ON cr.cliente_id    = c.cliente_id
         LEFT JOIN fornecedor f ON cr.fornecedor_id = f.fornecedor_id
-        WHERE cr.ativo=1
+        WHERE cr.ativo!=0
           AND cr.data_followup IS NOT NULL
           AND cr.status NOT IN ('Concluído','Cancelado')
         ORDER BY cr.data_followup ASC
@@ -1861,11 +1861,11 @@ def _por_entidade():
         if tipo_h == "Cliente":
             ents = query("""SELECT DISTINCT c.cliente_id, c.nome_fantasia
                 FROM cliente c JOIN contato_registro cr ON cr.cliente_id=c.cliente_id
-                WHERE cr.ativo=1 ORDER BY c.nome_fantasia""")
+                WHERE cr.ativo!=0 ORDER BY c.nome_fantasia""")
         else:
             ents = query("""SELECT DISTINCT f.fornecedor_id, f.nome_fantasia
                 FROM fornecedor f JOIN contato_registro cr ON cr.fornecedor_id=f.fornecedor_id
-                WHERE cr.ativo=1 ORDER BY f.nome_fantasia""")
+                WHERE cr.ativo!=0 ORDER BY f.nome_fantasia""")
         if not ents:
             st.info("Nenhum registro para este tipo ainda.")
             return
@@ -2011,7 +2011,7 @@ def _prospeccao():
 
     with col1:
         forns = query("""SELECT fornecedor_id, nome_fantasia FROM fornecedor
-            WHERE ativo=1 ORDER BY nome_fantasia""")
+            WHERE ativo!=0 ORDER BY nome_fantasia""")
         forn_opts = [(0, "Todos os fornecedores")] + [(f[0], f[1]) for f in forns]
         forn_sel = st.selectbox("Fornecedor", forn_opts,
                                 format_func=lambda x: x[1], key="pr_forn")
@@ -2371,7 +2371,7 @@ def get_followups_vencidos():
         FROM contato_registro cr
         LEFT JOIN cliente    c ON cr.cliente_id    = c.cliente_id
         LEFT JOIN fornecedor f ON cr.fornecedor_id = f.fornecedor_id
-        WHERE cr.ativo=1
+        WHERE cr.ativo!=0
           AND cr.data_followup < '2026-05-13'
           AND cr.status NOT IN ('Concluído','Cancelado')
         ORDER BY cr.data_followup ASC
@@ -2385,7 +2385,7 @@ def get_followups_hoje():
         FROM contato_registro cr
         LEFT JOIN cliente    c ON cr.cliente_id    = c.cliente_id
         LEFT JOIN fornecedor f ON cr.fornecedor_id = f.fornecedor_id
-        WHERE cr.ativo=1
+        WHERE cr.ativo!=0
           AND cr.data_followup = '2026-05-13'
           AND cr.status NOT IN ('Concluído','Cancelado')
     """) or []
@@ -2397,7 +2397,7 @@ def get_negociacoes_urgentes():
                cr.assunto, cr.data_followup
         FROM contato_registro cr
         LEFT JOIN cliente c ON cr.cliente_id=c.cliente_id
-        WHERE cr.ativo=1
+        WHERE cr.ativo!=0
           AND cr.tipo_topico='Negociação'
           AND cr.data_followup < '2026-05-13'
           AND cr.status NOT IN ('Concluído','Cancelado')
