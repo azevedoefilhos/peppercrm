@@ -183,19 +183,19 @@ def _lista_topicos():
                cr.status, cr.prioridade,
                cr.data_contato,
                cr.data_followup,
-               COALESCE(
-                   (SELECT GROUP_CONCAT(fn.nome_fantasia,' / ')
-                    FROM contato_x_fornecedor cxf
-                    JOIN fornecedor fn ON cxf.fornecedor_id=fn.fornecedor_id
-                    WHERE cxf.contato_id=cr.contato_id),'—') AS fornecedores,
-               (SELECT COUNT(*) FROM contato_interacao ci
-                WHERE ci.contato_id=cr.contato_id AND ci.ativo!=0) AS n_int,
-               (SELECT MAX(ci.data_interacao) FROM contato_interacao ci
-                WHERE ci.contato_id=cr.contato_id AND ci.ativo!=0) AS ultima_int
+               COALESCE(STRING_AGG(DISTINCT fn.nome_fantasia, ' / ' ORDER BY fn.nome_fantasia),'—') AS fornecedores,
+               COUNT(DISTINCT ci.interacao_id) AS n_int,
+               MAX(ci.data_interacao) AS ultima_int
         FROM contato_registro cr
-        LEFT JOIN cliente    c ON cr.cliente_id    = c.cliente_id
-        LEFT JOIN fornecedor f ON cr.fornecedor_id = f.fornecedor_id
+        LEFT JOIN cliente    c   ON cr.cliente_id    = c.cliente_id
+        LEFT JOIN fornecedor f   ON cr.fornecedor_id = f.fornecedor_id
+        LEFT JOIN contato_x_fornecedor cxf ON cxf.contato_id = cr.contato_id
+        LEFT JOIN fornecedor fn  ON fn.fornecedor_id = cxf.fornecedor_id
+        LEFT JOIN contato_interacao ci ON ci.contato_id = cr.contato_id AND ci.ativo!=0
         WHERE {' AND '.join(where)}
+        GROUP BY cr.contato_id, cr.tipo_topico, cr.assunto,
+                 c.nome_fantasia, f.nome_fantasia, cr.tipo_entidade,
+                 cr.status, cr.prioridade, cr.data_contato, cr.data_followup
         ORDER BY
             CASE WHEN ? = 'Mais recentes' THEN cr.data_contato END DESC,
             CASE WHEN ? = 'Mais antigos' THEN cr.data_contato END ASC,
