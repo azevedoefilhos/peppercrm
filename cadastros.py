@@ -2107,10 +2107,10 @@ def _lista_clientes():
                COUNT(DISTINCT cf.cliente_fornecedor_id) AS fornecedores,
                COUNT(DISTINCT p.pdv_id) AS pdvs
         FROM cliente c
-        LEFT JOIN cliente_fornecedor cf ON c.cliente_id=cf.cliente_id AND cf.ativo=1
-        LEFT JOIN pdv p ON c.cliente_id=p.cliente_id AND p.ativo=1
+        LEFT JOIN cliente_fornecedor cf ON c.cliente_id=cf.cliente_id AND cf.ativo!=0
+        LEFT JOIN pdv p ON c.cliente_id=p.cliente_id AND p.ativo!=0
         {where_sql}
-        GROUP BY c.cliente_id
+        GROUP BY c.cliente_id, c.nome_fantasia, c.cidade, c.estado, c.ativo, c.status
         ORDER BY c.nome_fantasia
     """, tuple(params_q))
 
@@ -2118,39 +2118,31 @@ def _lista_clientes():
         st.info("Nenhum cliente encontrado.")
         return
 
-    # Gera Excel com todos os campos
+    # Gera Excel com todos os campos — uma única query consolidada
     try:
-        _tem_email = True
-        try:
-            query("SELECT email FROM cliente LIMIT 1")
-        except Exception:
-            _tem_email = False
-        _ec = "COALESCE(c.email,'')" if _tem_email else "''"
-
         extras = query(f"""
             SELECT c.cliente_id, COALESCE(c.razao_social,''),
-                   COALESCE(c.perfil,''), COALESCE(c.fone,''), {_ec},
+                   COALESCE(c.perfil,''), COALESCE(c.fone,''),
+                   COALESCE(c.email,''),
                    COALESCE(c.cnpj,''), COALESCE(c.endereco,''),
                    COALESCE(c.bairro,''), COALESCE(c.site,''),
-                   COALESCE(c.instagram,''), COALESCE(c.observacao,'')
+                   COALESCE(c.instagram,''), COALESCE(c.observacao,''),
+                   COALESCE(a.nome,'')
             FROM cliente c
+            LEFT JOIN associacao a ON a.associacao_id = c.associacao_id
             {where_sql}
             ORDER BY c.nome_fantasia
         """, tuple(params_q))
         extras_map = {r[0]: r for r in extras}
 
-        # Colunas espelho do template de importação + ID para referência
         cols_exp = ["ID", "nome_fantasia", "razao_social", "perfil", "status",
                     "fone", "email", "cnpj", "endereco", "bairro", "cidade",
                     "estado", "site", "instagram", "associacao_nome", "observacao"]
         linhas = []
         for r in dados:
-            ex = extras_map.get(r[0], [r[0],'','','','','','','','','',''])
-            # Busca associacao
-            assoc = query("SELECT nome FROM associacao WHERE associacao_id=(SELECT associacao_id FROM cliente WHERE cliente_id=?)", (r[0],))
-            assoc_nome = assoc[0][0] if assoc and assoc[0][0] else ''
+            ex = extras_map.get(r[0], [r[0],'','','','','','','','','','',''])
             linhas.append([
-                r[0],    # ID (referência, não importado)
+                r[0],    # ID
                 r[1],    # nome_fantasia
                 ex[1],   # razao_social
                 ex[2],   # perfil
@@ -2164,7 +2156,7 @@ def _lista_clientes():
                 r[3],    # estado
                 ex[8],   # site
                 ex[9],   # instagram
-                assoc_nome, # associacao_nome
+                ex[11],  # associacao_nome (do JOIN)
                 ex[10],  # observacao
             ])
         df_exp = pd.DataFrame(linhas, columns=cols_exp)
