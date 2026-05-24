@@ -279,7 +279,7 @@ def _tela_editar_pedido():
             forn_fone = query("""
                 SELECT cf.fone FROM contato_fornecedor cf
                 JOIN fornecedor f ON cf.fornecedor_id=f.fornecedor_id
-                WHERE f.nome_fantasia=? AND cf.ativo=1 AND cf.fone IS NOT NULL
+                WHERE f.nome_fantasia=? AND cf.ativo!=0 AND cf.fone IS NOT NULL
                 ORDER BY cf.contato_fornecedor_id LIMIT 1
             """, (ped["forn_nome"],))
             numero_wa = ""
@@ -339,7 +339,7 @@ def _tela_editar_pedido():
 
 def _gerar_mensagem_whatsapp(ped, itens):
     """Monta o texto do pedido para enviar pelo WhatsApp."""
-    rep = query("SELECT nome_fantasia, fone, email FROM representante WHERE ativo=1 LIMIT 1")
+    rep = query("SELECT nome_fantasia, fone, email FROM representante WHERE ativo!=0 LIMIT 1")
     rep_nome  = rep[0][0] if rep else "Representante"
     rep_fone  = rep[0][1] if rep else ""
 
@@ -396,7 +396,7 @@ def _gerar_mensagem_whatsapp(ped, itens):
 
 def _romaneio_excel(ped, itens):
     """Gera Excel formatado de romaneio do pedido."""
-    rep = query("SELECT nome_fantasia, fone, email FROM representante WHERE ativo=1 LIMIT 1")
+    rep = query("SELECT nome_fantasia, fone, email FROM representante WHERE ativo!=0 LIMIT 1")
     rep_nome = rep[0][0] if rep else "Representante"
 
     buf = io.BytesIO()
@@ -477,7 +477,7 @@ def _romaneio_pdf(ped, itens):
     """Gera PDF formatado de romaneio do pedido."""
     rep = query("""SELECT nome_fantasia, fone, email, cnpj,
                           cidade, estado, endereco
-                   FROM representante WHERE ativo=1 LIMIT 1""")
+                   FROM representante WHERE ativo!=0 LIMIT 1""")
     rep_nome  = rep[0][0] if rep else "Representante"
     rep_fone  = rep[0][1] if rep else ""
     rep_email = rep[0][2] if rep else ""
@@ -868,7 +868,7 @@ def _form_adicionar_item(ped_id, ped):
             FROM produto p
             LEFT JOIN tabela_preco_item tpi
                    ON tpi.produto_id=p.produto_id AND tpi.tabela_preco_id=?
-            WHERE p.fornecedor_id=? AND p.ativo=1
+            WHERE p.fornecedor_id=? AND p.ativo!=0
               AND (p.codigo_produto LIKE ? OR p.descricao LIKE ? OR p.descricao_curta LIKE ?)
             ORDER BY p.descricao_curta LIMIT 20
         """, (tab_id, forn_id, f"%{busca}%", f"%{busca}%", f"%{busca}%"))

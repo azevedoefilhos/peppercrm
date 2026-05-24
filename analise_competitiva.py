@@ -26,7 +26,7 @@ def tela_analise_competitiva():
 
     # Verifica se ha dados suficientes
     n_pesq = query("SELECT COUNT(*) FROM pesquisa_preco WHERE status='finalizado'")[0][0]
-    n_conc = query("SELECT COUNT(*) FROM produto_concorrente WHERE ativo=1")[0][0]
+    n_conc = query("SELECT COUNT(*) FROM produto_concorrente WHERE ativo!=0")[0][0]
 
     if n_pesq == 0 and n_conc == 0:
         st.warning("Nenhuma pesquisa finalizada e nenhum produto concorrente cadastrado ainda.")
@@ -87,7 +87,7 @@ def _marcas_categorias():
         JOIN concorrente conc        ON pc.concorrente_id=conc.concorrente_id
         JOIN produto p               ON rel.produto_id=p.produto_id
         LEFT JOIN categoria cat      ON pc.categoria_id=cat.categoria_id
-        WHERE p.fornecedor_id=? AND conc.ativo=1 AND pc.ativo=1
+        WHERE p.fornecedor_id=? AND conc.ativo!=0 AND pc.ativo!=0
         GROUP BY conc.marca_concorrente, cat.nome_categoria
         ORDER BY total_produtos DESC, conc.marca_concorrente
     """, (forn_id,))
@@ -326,7 +326,7 @@ def _meu_produto_vs():
         COUNT(rel.relacao_id) AS n_conc
         FROM produto p
         LEFT JOIN produto_concorrente_relacao rel ON rel.produto_id=p.produto_id
-        WHERE p.fornecedor_id=? AND p.ativo=1
+        WHERE p.fornecedor_id=? AND p.ativo!=0
         GROUP BY p.produto_id ORDER BY p.descricao_curta""", (forn_id,))
 
     if not meus:
@@ -596,7 +596,7 @@ def _oportunidades():
                COALESCE(cat.nome_categoria, 'Sem categoria') AS categoria
         FROM produto p
         LEFT JOIN categoria cat ON p.categoria_id=cat.categoria_id
-        WHERE p.fornecedor_id=? AND p.ativo=1
+        WHERE p.fornecedor_id=? AND p.ativo!=0
           AND NOT EXISTS (
               SELECT 1 FROM produto_concorrente_relacao rel WHERE rel.produto_id=p.produto_id)
         ORDER BY p.descricao_curta

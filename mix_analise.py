@@ -69,7 +69,7 @@ def _analise_pdv():
             SELECT f.fornecedor_id, f.nome_fantasia
             FROM cliente_fornecedor cf
             JOIN fornecedor f ON cf.fornecedor_id = f.fornecedor_id
-            WHERE cf.cliente_id=? AND cf.ativo=1 AND f.ativo=1
+            WHERE cf.cliente_id=? AND cf.ativo!=0 AND f.ativo!=0
             ORDER BY f.nome_fantasia
         """, (cli_sel[0],))
 
@@ -89,7 +89,7 @@ def _analise_pdv():
     # PDVs do cliente
     pdvs = query("""
         SELECT pdv_id, numero_loja, nome_loja
-        FROM pdv WHERE cliente_id=? AND ativo=1
+        FROM pdv WHERE cliente_id=? AND ativo!=0
         ORDER BY numero_loja, nome_loja
     """, (cli_id,))
 
@@ -136,7 +136,7 @@ def _executar_analise(cli_id, forn_id, pdv_id, data_corte, pdv_label):
                    ON cf.cliente_id=mc.cliente_id AND cf.fornecedor_id=mc.fornecedor_id
             LEFT JOIN tabela_preco_item tpi
                    ON tpi.tabela_preco_id=cf.tabela_preco_id AND tpi.produto_id=p.produto_id
-            WHERE mc.cliente_id=? AND mc.fornecedor_id=? AND mc.pdv_id=? AND mc.ativo=1
+            WHERE mc.cliente_id=? AND mc.fornecedor_id=? AND mc.pdv_id=? AND mc.ativo!=0
             ORDER BY p.descricao_curta
         """, (cli_id, forn_id, pdv_id))
     else:
@@ -149,7 +149,7 @@ def _executar_analise(cli_id, forn_id, pdv_id, data_corte, pdv_label):
                    ON cf.cliente_id=mc.cliente_id AND cf.fornecedor_id=mc.fornecedor_id
             LEFT JOIN tabela_preco_item tpi
                    ON tpi.tabela_preco_id=cf.tabela_preco_id AND tpi.produto_id=p.produto_id
-            WHERE mc.cliente_id=? AND mc.fornecedor_id=? AND mc.pdv_id IS NULL AND mc.ativo=1
+            WHERE mc.cliente_id=? AND mc.fornecedor_id=? AND mc.pdv_id IS NULL AND mc.ativo!=0
             ORDER BY p.descricao_curta
         """, (cli_id, forn_id))
 
@@ -289,7 +289,7 @@ def _visao_geral():
     st.subheader("Cobertura de mix — todos os clientes")
 
     forns = query(
-        "SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia"
+        "SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo!=0 ORDER BY nome_fantasia"
     )
     if not forns:
         st.info("Nenhum fornecedor cadastrado.")
@@ -329,7 +329,7 @@ def _visao_geral():
         FROM mix_cliente mc
         JOIN cliente c ON mc.cliente_id=c.cliente_id
         LEFT JOIN pdv  ON mc.pdv_id=pdv.pdv_id
-        WHERE mc.fornecedor_id=? AND mc.ativo=1 AND c.ativo=1
+        WHERE mc.fornecedor_id=? AND mc.ativo!=0 AND c.ativo!=0
         GROUP BY mc.cliente_id, mc.pdv_id, c.nome_fantasia, pdv.nome_loja
         ORDER BY c.nome_fantasia, pdv.nome_loja
     """, (forn_id,))

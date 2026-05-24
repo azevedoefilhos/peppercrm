@@ -499,10 +499,10 @@ def _tela_roteiro():
     with col3:
         clientes = [(None,"Todos os clientes")] + [
             (r[0],r[1]) for r in query(
-                "SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo=1 ORDER BY nome_fantasia")]
+                "SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo!=0 ORDER BY nome_fantasia")]
         fil_cli  = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="rot_cli")
 
-    where, params = ["p.ativo=1"], []
+    where, params = ["p.ativo!=0"], []
     if fil_dia != "Todos":
         where.append("p.dia_visita=?"); params.append(fil_dia)
     if fil_freq != "Todas":
@@ -763,7 +763,7 @@ def _tela_att_promotor():
     st.subheader("Atendimento de Promotores por PDV")
     st.caption("Defina quais PDVs cada promotor atende, com dias da semana e frequencia.")
 
-    proms = query("SELECT promotor_id, nome FROM promotor WHERE ativo=1 ORDER BY nome")
+    proms = query("SELECT promotor_id, nome FROM promotor WHERE ativo!=0 ORDER BY nome")
     if not proms:
         st.info("Cadastre um promotor primeiro."); return
 
@@ -849,13 +849,13 @@ def _tela_att_promotor():
     st.divider()
     with st.expander("Adicionar PDV ao roteiro do promotor"):
         ids_ja  = {a[11] for a in atts} if atts else set()
-        clientes = query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo=1 ORDER BY nome_fantasia")
+        clientes = query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo!=0 ORDER BY nome_fantasia")
         if not clientes:
             st.caption("Nenhum cliente cadastrado."); return
 
         cli_add = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="att_p_cli")
         pdvs_add = query("""SELECT pdv_id, nome_loja, cidade, setor
-            FROM pdv WHERE cliente_id=? AND ativo=1 AND pdv_id NOT IN ({})
+            FROM pdv WHERE cliente_id=? AND ativo!=0 AND pdv_id NOT IN ({})
             ORDER BY nome_loja""".format(",".join("?" * len(ids_ja)) if ids_ja else "0"),
             (cli_add[0], *ids_ja) if ids_ja else (cli_add[0],))
 
@@ -890,7 +890,7 @@ def _tela_att_vendedor():
     st.subheader("Atendimento de Vendedor por PDV")
     st.caption("Defina quais PDVs o vendedor visita e com qual frequencia.")
 
-    vends = query("SELECT vendedor_id, nome FROM vendedor WHERE ativo=1 ORDER BY nome")
+    vends = query("SELECT vendedor_id, nome FROM vendedor WHERE ativo!=0 ORDER BY nome")
     if not vends:
         st.info("Nenhum vendedor cadastrado. Va em Configuracoes > Vendedores."); return
 
@@ -935,11 +935,11 @@ def _tela_att_vendedor():
     st.divider()
     with st.expander("Adicionar PDV a carteira do vendedor"):
         ids_ja_v = {a[8] for a in atts_v} if atts_v else set()
-        clientes = query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo=1 ORDER BY nome_fantasia")
+        clientes = query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo!=0 ORDER BY nome_fantasia")
         if clientes:
             cli_add_v = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="att_v_cli")
             pdvs_add_v = query("""SELECT pdv_id, nome_loja, cidade, setor
-                FROM pdv WHERE cliente_id=? AND ativo=1 AND pdv_id NOT IN ({})
+                FROM pdv WHERE cliente_id=? AND ativo!=0 AND pdv_id NOT IN ({})
                 ORDER BY nome_loja""".format(",".join("?" * len(ids_ja_v)) if ids_ja_v else "0"),
                 (cli_add_v[0], *ids_ja_v) if ids_ja_v else (cli_add_v[0],))
             if not pdvs_add_v:
@@ -969,7 +969,7 @@ def _tela_roteiro_promotor():
     st.subheader("Roteiro por Promotor")
     st.caption("Visualize o roteiro semanal de cada promotor organizado por dia.")
 
-    proms = query("SELECT promotor_id, nome FROM promotor WHERE ativo=1 ORDER BY nome")
+    proms = query("SELECT promotor_id, nome FROM promotor WHERE ativo!=0 ORDER BY nome")
     if not proms:
         st.info("Nenhum promotor cadastrado."); return
 
@@ -993,7 +993,7 @@ def _tela_roteiro_promotor():
         FROM att_promotor ap
         JOIN pdv     ON ap.pdv_id=pdv.pdv_id
         JOIN cliente c ON pdv.cliente_id=c.cliente_id
-        WHERE ap.promotor_id=? AND ap.ativo=1
+        WHERE ap.promotor_id=? AND ap.ativo!=0
         ORDER BY ap.dias_visita, c.nome_fantasia
     """, (prom_sel[0],))
 

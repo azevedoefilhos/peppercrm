@@ -550,7 +550,7 @@ def _rel_sem_pedido():
         LEFT JOIN pedido p2 ON p2.cliente_id=c.cliente_id
             AND p2.status_pedido NOT IN ('CANCELADO','RECUSADO')
             {where_forn}
-        WHERE c.ativo=1
+        WHERE c.ativo!=0
           {where_tipo_pdv}
           AND NOT EXISTS (
               SELECT 1 FROM pedido p3
@@ -674,7 +674,7 @@ def _rel_cluster():
     col1, col2, col3 = st.columns(3)
     with col1:
         forns = query(
-            "SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+            "SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo!=0 ORDER BY nome_fantasia")
         forn_opts = [("todos", "Todos os fornecedores")] + [(f[0], f[1]) for f in forns]
         forn_sel  = st.selectbox("Fornecedor", forn_opts,
                                  format_func=lambda x: x[1], key="rc_forn")
@@ -823,7 +823,7 @@ def _rel_nao_apresentados():
     )
 
     forns = query(
-        "SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+        "SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo!=0 ORDER BY nome_fantasia")
     if not forns:
         st.info("Nenhum fornecedor cadastrado.")
         return
@@ -963,7 +963,7 @@ def _rel_cobertura():
     )
 
     forns = query(
-        "SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+        "SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo!=0 ORDER BY nome_fantasia")
     if not forns:
         st.info("Nenhum fornecedor cadastrado.")
         return
@@ -989,7 +989,7 @@ def _rel_cobertura():
 
     fid = forn_sel[0]
 
-    # ── WHERE dinâmico — usa status (campo correto) sem c.ativo=1 ──────────
+    # ── WHERE dinâmico — usa status (campo correto) sem c.ativo!=0 ──────────
     # Filtra por perfil do cliente (campo do cadastro) + cidade + status
     # LEFT JOIN pdv mantido para quem já tem PDV, mas não exclui quem não tem
     where = []
@@ -1268,7 +1268,7 @@ def _rel_competitivo():
     with col2:
         cats = query("""SELECT DISTINCT cat.categoria_id, cat.nome_categoria
             FROM produto p JOIN categoria cat ON p.categoria_id=cat.categoria_id
-            WHERE p.fornecedor_id=? AND p.ativo=1
+            WHERE p.fornecedor_id=? AND p.ativo!=0
             ORDER BY cat.nome_categoria""", (forn_sel[0],))
         cat_opts = [(None,"Todas as categorias")] + list(cats)
         cat_sel  = st.selectbox("Categoria", cat_opts,
@@ -1286,7 +1286,7 @@ def _rel_competitivo():
                                format_func=lambda x: x[1], key="rc_per")
 
     # Lista de produtos com concorrentes cadastrados
-    where_p = ["p.fornecedor_id=?", "p.ativo=1"]
+    where_p = ["p.fornecedor_id=?", "p.ativo!=0"]
     params_p = [forn_sel[0]]
     if cat_sel[0]:
         where_p.append("p.categoria_id=?"); params_p.append(cat_sel[0])
@@ -1405,7 +1405,7 @@ def _rel_competitivo():
         FROM produto_concorrente_relacao pcr
         JOIN produto_concorrente pc ON pcr.produto_concorrente_id=pc.produto_concorrente_id
         JOIN concorrente conc       ON pc.concorrente_id=conc.concorrente_id
-        WHERE pcr.produto_id=? AND pc.ativo=1
+        WHERE pcr.produto_id=? AND pc.ativo!=0
         ORDER BY pcr.tipo_relacao ASC,
                  CASE WHEN (SELECT ppi2.preco FROM pesquisa_preco_item ppi2
                             JOIN pesquisa_preco pp2 ON ppi2.pesquisa_id=pp2.pesquisa_id

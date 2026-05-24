@@ -91,17 +91,17 @@ def _painel_unificado():
                        FROM pedido p JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
                        WHERE p.fornecedor_id=? AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
                          AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO')
-                         AND strftime('%Y',p.data_pedido)=?
-                         AND strftime('%m',p.data_pedido)=?
+                         AND EXTRACT(YEAR FROM p.data_pedido)=?
+                         AND EXTRACT(MONTH FROM p.data_pedido)=?
                    ),0) AS realizado,
                    COALESCE((
                        SELECT COUNT(*) FROM pedido p
                        WHERE p.fornecedor_id=? AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
-                         AND strftime('%Y',p.data_pedido)=?
-                         AND strftime('%m',p.data_pedido)=?
+                         AND EXTRACT(YEAR FROM p.data_pedido)=?
+                         AND EXTRACT(MONTH FROM p.data_pedido)=?
                    ),0) AS pedidos_feitos
             FROM meta_fornecedor m
-            WHERE m.fornecedor_id=? AND m.ano=? AND m.mes=? AND m.ativo=1
+            WHERE m.fornecedor_id=? AND m.ano=? AND m.mes=? AND m.ativo!=0
         """, (fid_, str(ano_), f"{mes_:02d}",
               fid_, str(ano_), f"{mes_:02d}",
               fid_, ano_, mes_))
@@ -112,7 +112,7 @@ def _painel_unificado():
             SELECT meta_mix_id, tipo, referencia_id, descricao,
                    meta_qtd, meta_clientes, observacao
             FROM meta_mix
-            WHERE fornecedor_id=? AND ano=? AND mes=? AND ativo=1
+            WHERE fornecedor_id=? AND ano=? AND mes=? AND ativo!=0
             ORDER BY tipo, descricao
         """, (fid_, ano_, mes_))
 
@@ -129,17 +129,17 @@ def _painel_unificado():
                        FROM pedido p JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
                        WHERE p.fornecedor_id=? AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
                          AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO')
-                         AND strftime('%Y',p.data_pedido)=?
-                         AND strftime('%m',p.data_pedido)=?
+                         AND EXTRACT(YEAR FROM p.data_pedido)=?
+                         AND EXTRACT(MONTH FROM p.data_pedido)=?
                    ),0) AS realizado,
                    COALESCE((
                        SELECT COUNT(*) FROM pedido p
                        WHERE p.fornecedor_id=? AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
-                         AND strftime('%Y',p.data_pedido)=?
-                         AND strftime('%m',p.data_pedido)=?
+                         AND EXTRACT(YEAR FROM p.data_pedido)=?
+                         AND EXTRACT(MONTH FROM p.data_pedido)=?
                    ),0) AS pedidos_feitos
             FROM meta_fornecedor m
-            WHERE m.fornecedor_id=? AND m.ano=? AND m.mes=? AND m.ativo=1
+            WHERE m.fornecedor_id=? AND m.ano=? AND m.mes=? AND m.ativo!=0
         """, (fid, str(ano_sel), f"{mes_sel:02d}",
               fid, str(ano_sel), f"{mes_sel:02d}",
               fid, ano_sel, mes_sel))
@@ -181,8 +181,8 @@ def _painel_unificado():
                                     COALESCE(SUM(pi.quantidade),0)
                                  FROM pedido p JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
                                  WHERE pi.produto_id=?
-                                   AND strftime('%Y',p.data_pedido)=?
-                                   AND strftime('%m',p.data_pedido)=?
+                                   AND EXTRACT(YEAR FROM p.data_pedido)=?
+                                   AND EXTRACT(MONTH FROM p.data_pedido)=?
                                    AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')""",
                               (ref_id,str(ano_sel),f"{mes_sel:02d}"))
                     if r: real_cli,real_qtd=r[0][0],int(r[0][1] or 0)
@@ -192,8 +192,8 @@ def _painel_unificado():
                                  FROM pedido p JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
                                  JOIN produto pr ON pi.produto_id=pr.produto_id
                                  WHERE pr.categoria_id=? AND p.fornecedor_id=?
-                                   AND strftime('%Y',p.data_pedido)=?
-                                   AND strftime('%m',p.data_pedido)=?
+                                   AND EXTRACT(YEAR FROM p.data_pedido)=?
+                                   AND EXTRACT(MONTH FROM p.data_pedido)=?
                                    AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')""",
                               (ref_id,fid,str(ano_sel),f"{mes_sel:02d}"))
                     if r: real_cli,real_qtd=r[0][0],int(r[0][1] or 0)
@@ -203,8 +203,8 @@ def _painel_unificado():
                                  FROM pedido p JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
                                  JOIN produto pr ON pi.produto_id=pr.produto_id
                                  WHERE pr.linha_id=? AND p.fornecedor_id=?
-                                   AND strftime('%Y',p.data_pedido)=?
-                                   AND strftime('%m',p.data_pedido)=?
+                                   AND EXTRACT(YEAR FROM p.data_pedido)=?
+                                   AND EXTRACT(MONTH FROM p.data_pedido)=?
                                    AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')""",
                               (ref_id,fid,str(ano_sel),f"{mes_sel:02d}"))
                     if r: real_cli,real_qtd=r[0][0],int(r[0][1] or 0)
@@ -313,8 +313,8 @@ def _painel_metas():
                    FROM pedido p
                    JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
                    WHERE p.fornecedor_id=f.fornecedor_id
-                     AND strftime('%Y',p.data_pedido)=?
-                     AND strftime('%m',p.data_pedido)=?
+                     AND EXTRACT(YEAR FROM p.data_pedido)=?
+                     AND EXTRACT(MONTH FROM p.data_pedido)=?
                      AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
                      AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO')
                ),0) AS realizado,
@@ -322,13 +322,13 @@ def _painel_metas():
                    SELECT COUNT(*)
                    FROM pedido p
                    WHERE p.fornecedor_id=f.fornecedor_id
-                     AND strftime('%Y',p.data_pedido)=?
-                     AND strftime('%m',p.data_pedido)=?
+                     AND EXTRACT(YEAR FROM p.data_pedido)=?
+                     AND EXTRACT(MONTH FROM p.data_pedido)=?
                      AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
                ),0) AS pedidos_feitos
         FROM meta_fornecedor m
         JOIN fornecedor f ON m.fornecedor_id=f.fornecedor_id
-        WHERE m.ano=? AND m.mes=? AND m.ativo=1
+        WHERE m.ano=? AND m.mes=? AND m.ativo!=0
         ORDER BY f.nome_fantasia
     """, (str(ano_sel), f"{mes_sel:02d}",
           str(ano_sel), f"{mes_sel:02d}",
@@ -387,7 +387,7 @@ def _form_meta():
     msg = st.session_state.pop("mt_msg", None)
     if msg: st.success(msg)
 
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo!=0 ORDER BY nome_fantasia")
     if not forns:
         st.info("Nenhum fornecedor cadastrado.")
         return
@@ -411,7 +411,7 @@ def _form_meta():
     # Verifica se já existe meta
     existe = query("""SELECT meta_id, meta_valor, meta_pedidos, observacao
                       FROM meta_fornecedor
-                      WHERE fornecedor_id=? AND ano=? AND mes=? AND ativo=1""",
+                      WHERE fornecedor_id=? AND ano=? AND mes=? AND ativo!=0""",
                    (forn_sel[0], ano_f, mes_f))
 
     if existe:
@@ -479,7 +479,7 @@ def _form_meta():
 def _historico_metas():
     _garantir_tabela()
 
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo!=0 ORDER BY nome_fantasia")
     forn_opts = [(0,"Todos os fornecedores")] + list(forns)
     forn_h = st.selectbox("Fornecedor", forn_opts,
                           format_func=lambda x: x[1], key="mt_hist_forn")
@@ -491,14 +491,14 @@ def _historico_metas():
                           * (1-COALESCE(p.desconto_geral,0)/100.0)),2)
                    FROM pedido p JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
                    WHERE p.fornecedor_id=f.fornecedor_id
-                     AND strftime('%Y',p.data_pedido)=CAST(m.ano AS TEXT)
-                     AND strftime('%m',p.data_pedido)=printf('%02d',m.mes)
+                     AND EXTRACT(YEAR FROM p.data_pedido)=m.ano
+                     AND EXTRACT(MONTH FROM p.data_pedido)=m.mes
                      AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
                      AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO')
                ),0) AS realizado
         FROM meta_fornecedor m
         JOIN fornecedor f ON m.fornecedor_id=f.fornecedor_id
-        WHERE m.ativo=1
+        WHERE m.ativo!=0
           AND (? = 0 OR m.fornecedor_id=?)
         ORDER BY m.ano DESC, m.mes DESC, f.nome_fantasia
     """, (forn_h[0], forn_h[0]))
@@ -572,7 +572,7 @@ def _tela_meta_mix():
     err = st.session_state.pop("mm_err", None)
     if err: st.error(err)
 
-    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo!=0 ORDER BY nome_fantasia")
     hoje  = date.today()
     meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
              "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
@@ -595,7 +595,7 @@ def _tela_meta_mix():
         SELECT mm.meta_mix_id, mm.tipo, mm.referencia_id,
                mm.descricao, mm.meta_qtd, mm.meta_clientes, mm.observacao
         FROM meta_mix mm
-        WHERE mm.fornecedor_id=? AND mm.ano=? AND mm.mes=? AND mm.ativo=1
+        WHERE mm.fornecedor_id=? AND mm.ano=? AND mm.mes=? AND mm.ativo!=0
         ORDER BY mm.tipo, mm.descricao
     """, (forn_v[0], ano_v, mes_v))
 
@@ -615,8 +615,8 @@ def _tela_meta_mix():
                                 COALESCE(SUM(pi.quantidade),0)
                              FROM pedido p JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
                              WHERE pi.produto_id=?
-                               AND strftime('%Y',p.data_pedido)=?
-                               AND strftime('%m',p.data_pedido)=?
+                               AND EXTRACT(YEAR FROM p.data_pedido)=?
+                               AND EXTRACT(MONTH FROM p.data_pedido)=?
                                AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')""",
                           (ref_id, str(ano_v), f"{mes_v:02d}"))
                 if r: real_cli, real_qtd = r[0][0], int(r[0][1] or 0)
@@ -627,8 +627,8 @@ def _tela_meta_mix():
                              JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
                              JOIN produto pr ON pi.produto_id=pr.produto_id
                              WHERE pr.categoria_id=? AND p.fornecedor_id=?
-                               AND strftime('%Y',p.data_pedido)=?
-                               AND strftime('%m',p.data_pedido)=?
+                               AND EXTRACT(YEAR FROM p.data_pedido)=?
+                               AND EXTRACT(MONTH FROM p.data_pedido)=?
                                AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')""",
                           (ref_id, forn_v[0], str(ano_v), f"{mes_v:02d}"))
                 if r: real_cli, real_qtd = r[0][0], int(r[0][1] or 0)
@@ -639,8 +639,8 @@ def _tela_meta_mix():
                              JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
                              JOIN produto pr ON pi.produto_id=pr.produto_id
                              WHERE pr.linha_id=? AND p.fornecedor_id=?
-                               AND strftime('%Y',p.data_pedido)=?
-                               AND strftime('%m',p.data_pedido)=?
+                               AND EXTRACT(YEAR FROM p.data_pedido)=?
+                               AND EXTRACT(MONTH FROM p.data_pedido)=?
                                AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')""",
                           (ref_id, forn_v[0], str(ano_v), f"{mes_v:02d}"))
                 if r: real_cli, real_qtd = r[0][0], int(r[0][1] or 0)
@@ -757,7 +757,7 @@ def _tela_meta_mix():
     if tipo_m == "Produto específico":
         prods = query("""SELECT p.produto_id,
                            p.descricao_curta || ' (' || p.codigo_produto || ')'
-                         FROM produto p WHERE p.fornecedor_id=? AND p.ativo=1
+                         FROM produto p WHERE p.fornecedor_id=? AND p.ativo!=0
                          ORDER BY p.descricao_curta""", (forn_s[0],))
         if prods:
             prod_s = st.selectbox("Produto", prods,
@@ -794,7 +794,7 @@ def _tela_meta_mix():
                    "Linha":"linha","Livre":"livre"}.get(tipo_m,"livre")
         duplic = query("""SELECT meta_mix_id, meta_clientes, meta_qtd FROM meta_mix
             WHERE fornecedor_id=? AND tipo=? AND referencia_id IS ?
-              AND descricao=? AND ano=? AND mes=? AND ativo=1""",
+              AND descricao=? AND ano=? AND mes=? AND ativo!=0""",
             (forn_s[0], tipo_db,
              ref_id,  # IS ? aceita None
              ref_desc.strip(), ano_m, mes_m))

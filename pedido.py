@@ -62,10 +62,10 @@ def tela_novo_pedido():
 
         # ── Vínculo inline ────────────────────────────────────────────────
         forns_todos = query("""SELECT fornecedor_id, nome_fantasia FROM fornecedor
-            WHERE ativo=1 ORDER BY nome_fantasia""")
+            WHERE ativo!=0 ORDER BY nome_fantasia""")
         tabelas_ativas = query("""SELECT tabela_preco_id, fornecedor_id, nome_tabela,
             tipo_tabela, prazo_pagamento FROM tabela_preco
-            WHERE ativo=1 ORDER BY nome_tabela""")
+            WHERE ativo!=0 ORDER BY nome_tabela""")
 
         if not forns_todos:
             st.error("Nenhum fornecedor cadastrado.")
@@ -96,7 +96,7 @@ def tela_novo_pedido():
                 if ja_existe:
                     # Reativa e atualiza tabela/prazo
                     conn.execute("""UPDATE cliente_fornecedor SET
-                        ativo=1, tabela_preco_id=?, prazo_pagamento=?
+                        ativo!=0, tabela_preco_id=?, prazo_pagamento=?
                         WHERE cliente_id=? AND fornecedor_id=?""",
                         (tab_id_vinc, prazo_vinc or None, cli_id, forn_vinc[0]))
                 else:
@@ -131,7 +131,7 @@ def tela_novo_pedido():
         col4.warning(f"Mín: **{_brl(pedido_minimo)}**")
 
     # PASSO 3: PDV — mostra todos se cliente ainda não é ativo
-    _pdv_status_filtro = "AND ativo=1" if cli_status == "Ativo" else ""
+    _pdv_status_filtro = "AND ativo!=0" if cli_status == "Ativo" else ""
     pdvs = query(f"""SELECT pdv_id, numero_loja, nome_loja, cidade, estado, gerente, horario_recebimento
         FROM pdv WHERE cliente_id=? {_pdv_status_filtro} ORDER BY numero_loja, nome_loja""", (cli_id,))
 
@@ -156,7 +156,7 @@ def tela_novo_pedido():
     central_cc = query("""SELECT nome_central, tipo_entrega, contato, fone, email,
                                endereco_cd, cidade_cd
                         FROM central_compras
-                        WHERE cliente_id=? AND ativo=1 LIMIT 1""", (cli_id,))
+                        WHERE cliente_id=? AND ativo!=0 LIMIT 1""", (cli_id,))
     if central_cc:
         cc = central_cc[0]
         st.info(
@@ -407,7 +407,7 @@ def _bloco_busca_produto(cli_id, forn_id, pdv_id, tab_id, grade_key):
                 FROM produto p
                 LEFT JOIN tabela_preco_item tpi
                        ON tpi.produto_id=p.produto_id AND tpi.tabela_preco_id=?
-                WHERE p.fornecedor_id=? AND p.ativo=1
+                WHERE p.fornecedor_id=? AND p.ativo!=0
                   AND (p.codigo_produto LIKE ? OR p.descricao LIKE ? OR p.descricao_curta LIKE ?)
                 ORDER BY p.descricao_curta LIMIT 20
             """, (tab_id, forn_id, f"%{_termo}%", f"%{_termo}%", f"%{_termo}%"))
@@ -516,11 +516,11 @@ def _salvar_pedido(cli_id, forn_id, pdv_id, tab_id, prazo, frete,
             if _status_at != "Ativo" or not _ativo_at:
                 conn2 = _con()
                 conn2.execute(
-                    "UPDATE cliente SET status='Ativo', ativo=1 WHERE cliente_id=?",
+                    "UPDATE cliente SET status='Ativo', ativo!=0 WHERE cliente_id=?",
                     (cli_id,))
                 if pdv_id:
                     conn2.execute(
-                        "UPDATE pdv SET ativo=1 WHERE pdv_id=?",
+                        "UPDATE pdv SET ativo!=0 WHERE pdv_id=?",
                         (pdv_id,))
                 conn2.commit(); conn2.close()
 
