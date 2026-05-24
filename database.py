@@ -10,10 +10,14 @@ TIPOS_PONTO_EXTRA = ["Ponta de gondola","Ilha","Check-stand","Clip strip","Displ
 _USE_SUPABASE = None  # None = ainda nao verificado
 
 def _check_supabase():
-    """Verifica se deve usar Supabase. Chamado apenas quando necessario."""
+    """Verifica se deve usar PostgreSQL (Supabase ou Railway). Chamado apenas quando necessario."""
     global _USE_SUPABASE
     if _USE_SUPABASE is not None:
         return _USE_SUPABASE
+    # Railway PostgreSQL via DATABASE_URL
+    if os.environ.get("DATABASE_URL"):
+        _USE_SUPABASE = True
+        return True
     if os.environ.get("SUPABASE_URL"):
         _USE_SUPABASE = True
         return True
@@ -207,6 +211,19 @@ def _traduzir_sql_pg(sql):
 
 def _pg_connect():
     import psycopg2
+    # Usa DATABASE_URL se disponível (Railway PostgreSQL interno)
+    db_url = os.environ.get("DATABASE_URL", "")
+    if db_url:
+        return psycopg2.connect(
+            db_url,
+            sslmode="prefer",
+            connect_timeout=8,
+            keepalives=1,
+            keepalives_idle=30,
+            keepalives_interval=10,
+            keepalives_count=3,
+        )
+    # Fallback: Supabase
     return psycopg2.connect(
         host="aws-1-sa-east-1.pooler.supabase.com",
         port=5432,
