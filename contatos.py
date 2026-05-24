@@ -349,6 +349,41 @@ def _lista_topicos():
                 key="pdf_con_dl",
                 use_container_width=True)
 
+    # Pré-carrega fornecedores de todos os tópicos de uma vez — elimina N+1
+    _ids_topicos = [row[0] for row in topicos]
+    _forns_map = {}
+    if _ids_topicos:
+        _ph = ",".join(["%s"] * len(_ids_topicos))
+        # Tenta contato_fornecedor_topico primeiro
+        _forns_all = query(f"""
+            SELECT cft.contato_id, cft.cft_id, cft.fornecedor_id, f.nome_fantasia,
+                   cft.status, cft.tipo_topico, cft.prioridade, cft.data_followup
+            FROM contato_fornecedor_topico cft
+            JOIN fornecedor f ON f.fornecedor_id=cft.fornecedor_id
+            WHERE cft.contato_id IN ({_ph}) AND cft.ativo!=0
+            ORDER BY f.nome_fantasia
+        """, tuple(_ids_topicos))
+        for r in _forns_all:
+            _forns_map.setdefault(r[0], []).append(r[1:])
+
+        # Fallback para tópicos sem registro em contato_fornecedor_topico
+        _missing = [cid for cid in _ids_topicos if cid not in _forns_map]
+        if _missing:
+            _ph2 = ",".join(["%s"] * len(_missing))
+            _forns_fb = query(f"""
+                SELECT cxf.contato_id, cxf.fornecedor_id, f.nome_fantasia
+                FROM contato_x_fornecedor cxf
+                JOIN fornecedor f ON f.fornecedor_id=cxf.fornecedor_id
+                WHERE cxf.contato_id IN ({_ph2})
+            """, tuple(_missing))
+            for r in _forns_fb:
+                _cid_fb = r[0]
+                # Busca status/prioridade do tópico para fallback
+                _row_t = next((t for t in topicos if t[0] == _cid_fb), None)
+                if _row_t:
+                    _forns_map.setdefault(_cid_fb, []).append(
+                        (None, r[1], r[2], _row_t[5], _row_t[1], _row_t[6], _row_t[8]))
+
     for row in topicos:
         (cid, tipo, assunto, entidade, tipo_ent,
          status, prioridade, data_c, followup,
@@ -357,25 +392,8 @@ def _lista_topicos():
         aberto = st.session_state.get("ct_topico_aberto") == cid
         vencido = followup and followup < hoje and status not in ("Concluído","Cancelado")
 
-        # Busca fornecedores do tópico com status individual
-        _forns_topico = query("""
-            SELECT cft.cft_id, cft.fornecedor_id, f.nome_fantasia,
-                   cft.status, cft.tipo_topico, cft.prioridade, cft.data_followup
-            FROM contato_fornecedor_topico cft
-            JOIN fornecedor f ON f.fornecedor_id=cft.fornecedor_id
-            WHERE cft.contato_id=? AND cft.ativo!=0
-            ORDER BY f.nome_fantasia
-        """, (cid,))
-
-        # Fallback: se ainda não migrou, usa contato_x_fornecedor
-        if not _forns_topico:
-            _forns_topico_raw = query("""
-                SELECT cxf.fornecedor_id, f.nome_fantasia
-                FROM contato_x_fornecedor cxf
-                JOIN fornecedor f ON f.fornecedor_id=cxf.fornecedor_id
-                WHERE cxf.contato_id=?""", (cid,))
-            _forns_topico = [(None, r[0], r[1], status, tipo, prioridade, followup)
-                             for r in _forns_topico_raw]
+        # Usa dados pré-carregados
+        _forns_topico = _forns_map.get(cid, [])
 
         with st.container(border=True):
             c1, c2, c3, c4, c5 = st.columns([3.0, 4.8, 1.6, 0.35, 0.35])
