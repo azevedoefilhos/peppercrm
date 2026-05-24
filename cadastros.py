@@ -2105,12 +2105,13 @@ def _lista_clientes():
         SELECT c.cliente_id, c.nome_fantasia, c.cidade, c.estado,
                c.ativo, COALESCE(c.status,'Ativo') AS status,
                COUNT(DISTINCT cf.cliente_fornecedor_id) AS fornecedores,
-               COUNT(DISTINCT p.pdv_id) AS pdvs
+               COUNT(DISTINCT p.pdv_id) AS pdvs,
+               COALESCE(c.perfil,'—') AS perfil
         FROM cliente c
         LEFT JOIN cliente_fornecedor cf ON c.cliente_id=cf.cliente_id AND cf.ativo!=0
         LEFT JOIN pdv p ON c.cliente_id=p.cliente_id AND p.ativo!=0
         {where_sql}
-        GROUP BY c.cliente_id, c.nome_fantasia, c.cidade, c.estado, c.ativo, c.status
+        GROUP BY c.cliente_id, c.nome_fantasia, c.cidade, c.estado, c.ativo, c.status, c.perfil
         ORDER BY c.nome_fantasia
     """, tuple(params_q))
 
@@ -2118,19 +2119,20 @@ def _lista_clientes():
         st.info("Nenhum cliente encontrado.")
         return
 
-    col_ct, col_exp = st.columns([3,1])
-    col_ct.caption(f"{len(dados)} cliente(s)")
+    # Lista compacta tabulada
+    total = len(dados)
+    col_ct, col_exp = st.columns([3, 1])
+    col_ct.caption(f"{total} cliente(s)")
     with col_exp:
         if st.button("⬇️ Exportar Excel", key="btn_exp_cli", use_container_width=True):
             try:
                 extras = query(f"""
                     SELECT c.cliente_id, COALESCE(c.razao_social,''),
                            COALESCE(c.perfil,''), COALESCE(c.fone,''),
-                           COALESCE(c.email,''),
-                           COALESCE(c.cnpj,''), COALESCE(c.endereco,''),
-                           COALESCE(c.bairro,''), COALESCE(c.site,''),
-                           COALESCE(c.instagram,''), COALESCE(c.observacao,''),
-                           COALESCE(a.nome,'')
+                           COALESCE(c.email,''), COALESCE(c.cnpj,''),
+                           COALESCE(c.endereco,''), COALESCE(c.bairro,''),
+                           COALESCE(c.site,''), COALESCE(c.instagram,''),
+                           COALESCE(c.observacao,''), COALESCE(a.nome,'')
                     FROM cliente c
                     LEFT JOIN associacao a ON a.associacao_id = c.associacao_id
                     {where_sql}
@@ -2160,39 +2162,47 @@ def _lista_clientes():
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                            key="dl_cli_xlsx")
 
-    h1,h2,h3,h4,h5,h6 = st.columns([0.4,2.8,1.2,0.6,1.5,1.2])
-    for col, txt in zip([h1,h2,h3,h4,h5,h6],
-                        ["ID","Cliente","Cidade","UF","Status",""]):
+    # Cabeçalho da tabela
+    h1,h2,h3,h4,h5 = st.columns([3.5, 2.0, 1.5, 1.2, 1.0])
+    for col, txt in zip([h1,h2,h3,h4,h5],
+                        ["Cliente","Perfil","Cidade","Status","Fornec./PDVs"]):
         col.markdown(f"<small><b>{txt}</b></small>", unsafe_allow_html=True)
+    st.divider()
 
+    # Linha clicável por cliente
+    _aberto = st.session_state.get("cli_aberto_id")
     for row in dados:
-        cid, nome, cidade, uf, ativo, status, fornec, pdvs = row
+        cid, nome, cidade, uf, ativo, status, fornec, pdvs, perfil = row
 
-        c1,c2,c3,c4,c5,c6 = st.columns([0.4,2.8,1.2,0.6,1.5,1.2])
-        c1.caption(str(cid))
-        c2.write(nome)
-        c3.caption(cidade or "—")
-        c4.caption(uf or "—")
-        c5.caption(_status_icone(status))
-        with c6:
-            b1, b2 = st.columns(2)
-            with b1:
-                if st.button("✏️", key=f"ed_cli_{cid}", help="Editar",
-                             use_container_width=True):
-                    st.session_state["cli_editar_id"] = cid
-                    st.session_state.pop("cli_excluir_id", None)
-                    st.rerun()
-            with b2:
-                if st.button("🗑️", key=f"ex_cli_{cid}", help="Excluir",
-                             use_container_width=True):
-                    st.session_state["cli_excluir_id"] = cid
-                    st.session_state.pop("cli_editar_id", None)
-                    st.rerun()
+        # Linha da tabela
+        c1,c2,c3,c4,c5 = st.columns([3.5, 2.0, 1.5, 1.2, 1.0])
+        c1.markdown(f"**{nome}**")
+        c2.caption(perfil)
+        c3.caption(f"{cidade or '—'}/{uf or ''}")
+        c4.caption(_status_icone(status))
+        c5.caption(f"🏭{int(fornec or 0)} 📍{int(pdvs or 0)}")
 
-        if st.session_state.get("cli_editar_id") == cid:
-            _form_editar_cliente(cid)
-        if st.session_state.get("cli_excluir_id") == cid:
-            _confirmacao_excluir_cliente(cid, nome)
+        # Botão toggle — abre/fecha card
+        _btn_label = "▲ Fechar" if _aberto == cid else "▼ Ver"
+        if st.button(_btn_label, key=f"tog_cli_{cid}", use_container_width=True):
+            if _aberto == cid:
+                st.session_state.pop("cli_aberto_id", None)
+                st.session_state.pop("cli_excluir_id", None)
+            else:
+                st.session_state["cli_aberto_id"] = cid
+                st.session_state.pop("cli_excluir_id", None)
+            st.rerun()
+
+        # Card expandido com edição e exclusão
+        if _aberto == cid:
+            with st.container(border=True):
+                tab_edit, tab_del = st.tabs(["✏️ Editar dados", "🗑️ Excluir cliente"])
+                with tab_edit:
+                    _form_editar_cliente(cid)
+                with tab_del:
+                    _confirmacao_excluir_cliente(cid, nome)
+
+        st.divider()
 
 
 
