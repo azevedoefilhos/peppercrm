@@ -2118,66 +2118,47 @@ def _lista_clientes():
         st.info("Nenhum cliente encontrado.")
         return
 
-    # Gera Excel com todos os campos — uma única query consolidada
-    try:
-        extras = query(f"""
-            SELECT c.cliente_id, COALESCE(c.razao_social,''),
-                   COALESCE(c.perfil,''), COALESCE(c.fone,''),
-                   COALESCE(c.email,''),
-                   COALESCE(c.cnpj,''), COALESCE(c.endereco,''),
-                   COALESCE(c.bairro,''), COALESCE(c.site,''),
-                   COALESCE(c.instagram,''), COALESCE(c.observacao,''),
-                   COALESCE(a.nome,'')
-            FROM cliente c
-            LEFT JOIN associacao a ON a.associacao_id = c.associacao_id
-            {where_sql}
-            ORDER BY c.nome_fantasia
-        """, tuple(params_q))
-        extras_map = {r[0]: r for r in extras}
-
-        cols_exp = ["ID", "nome_fantasia", "razao_social", "perfil", "status",
-                    "fone", "email", "cnpj", "endereco", "bairro", "cidade",
-                    "estado", "site", "instagram", "associacao_nome", "observacao"]
-        linhas = []
-        for r in dados:
-            ex = extras_map.get(r[0], [r[0],'','','','','','','','','','',''])
-            linhas.append([
-                r[0],    # ID
-                r[1],    # nome_fantasia
-                ex[1],   # razao_social
-                ex[2],   # perfil
-                r[5],    # status
-                ex[3],   # fone
-                ex[4],   # email
-                ex[5],   # cnpj
-                ex[6],   # endereco
-                ex[7],   # bairro
-                r[2],    # cidade
-                r[3],    # estado
-                ex[8],   # site
-                ex[9],   # instagram
-                ex[11],  # associacao_nome (do JOIN)
-                ex[10],  # observacao
-            ])
-        df_exp = pd.DataFrame(linhas, columns=cols_exp)
-        buf_exp = io.BytesIO()
-        with pd.ExcelWriter(buf_exp, engine='openpyxl') as writer:
-            df_exp.to_excel(writer, index=False, sheet_name="Clientes")
-        _xlsx_pronto = buf_exp.getvalue()
-    except Exception as _ex_xlsx:
-        _xlsx_pronto = None
-        st.error(f"Erro export: {_ex_xlsx}")
-
     col_ct, col_exp = st.columns([3,1])
     col_ct.caption(f"{len(dados)} cliente(s)")
     with col_exp:
-        if _xlsx_pronto:
-            st.download_button("⬇️ Exportar Excel",
-                               data=_xlsx_pronto,
-                               file_name="clientes_peppercrm.xlsx",
-                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                               use_container_width=True,
-                               key="dl_cli_xlsx")
+        if st.button("⬇️ Exportar Excel", key="btn_exp_cli", use_container_width=True):
+            try:
+                extras = query(f"""
+                    SELECT c.cliente_id, COALESCE(c.razao_social,''),
+                           COALESCE(c.perfil,''), COALESCE(c.fone,''),
+                           COALESCE(c.email,''),
+                           COALESCE(c.cnpj,''), COALESCE(c.endereco,''),
+                           COALESCE(c.bairro,''), COALESCE(c.site,''),
+                           COALESCE(c.instagram,''), COALESCE(c.observacao,''),
+                           COALESCE(a.nome,'')
+                    FROM cliente c
+                    LEFT JOIN associacao a ON a.associacao_id = c.associacao_id
+                    {where_sql}
+                    ORDER BY c.nome_fantasia
+                """, tuple(params_q))
+                extras_map = {r[0]: r for r in extras}
+                cols_exp = ["ID","nome_fantasia","razao_social","perfil","status",
+                            "fone","email","cnpj","endereco","bairro","cidade",
+                            "estado","site","instagram","associacao_nome","observacao"]
+                linhas = []
+                for r in dados:
+                    ex = extras_map.get(r[0],[r[0],'','','','','','','','','','',''])
+                    linhas.append([r[0],r[1],ex[1],ex[2],r[5],ex[3],ex[4],ex[5],
+                                   ex[6],ex[7],r[2],r[3],ex[8],ex[9],ex[11],ex[10]])
+                df_exp = pd.DataFrame(linhas, columns=cols_exp)
+                buf_exp = io.BytesIO()
+                with pd.ExcelWriter(buf_exp, engine='openpyxl') as writer:
+                    df_exp.to_excel(writer, index=False, sheet_name="Clientes")
+                st.session_state["_cli_xlsx"] = buf_exp.getvalue()
+            except Exception as _ex:
+                st.error(f"Erro: {_ex}")
+
+    if "_cli_xlsx" in st.session_state:
+        st.download_button("📥 Baixar Excel",
+                           data=st.session_state.pop("_cli_xlsx"),
+                           file_name="clientes_peppercrm.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           key="dl_cli_xlsx")
 
     h1,h2,h3,h4,h5,h6 = st.columns([0.4,2.8,1.2,0.6,1.5,1.2])
     for col, txt in zip([h1,h2,h3,h4,h5,h6],
