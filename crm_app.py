@@ -11,7 +11,7 @@ def _nome_empresa():
 st.set_page_config(page_title="PepperCRM", layout="wide")
 
 # Scroll para topo a cada rerun
-st.components.v1.html("<script>window.parent.document.querySelector('section.main').scrollTo(0,0);</script>", height=0)
+st.markdown("<script>window.parent.document.querySelector('section.main') && window.parent.document.querySelector('section.main').scrollTo(0,0);</script>", unsafe_allow_html=True)
 
 if "pagina"         not in st.session_state: st.session_state["pagina"]         = "home"
 if "id_selecionado" not in st.session_state: st.session_state["id_selecionado"] = None

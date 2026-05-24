@@ -603,15 +603,10 @@ def _migrar_todos():
 
 
 # ── Auto-migration ao importar ───────────────────────────────────────────────
-# Migration desativada do startup — roda manualmente via admin ou primeira sessão
-import os as _os
-if _os.environ.get("RAILWAY_ENVIRONMENT") or _os.environ.get("RAILWAY_PROJECT_ID"):
-    try:
-        _migrar_email_cliente()
-        _migrar_pedido_minimo()
-    except Exception:
-        pass
-    # _migrar_contato_por_fornecedor() — desativado: causa timeout no startup
+# Migrations desativadas — já aplicadas no banco via backup do Supabase
+# _migrar_email_cliente()        — coluna email já existe
+# _migrar_pedido_minimo()        — já aplicada
+# _migrar_contato_por_fornecedor() — já aplicada
 
 
 def get_nome_empresa():
