@@ -159,38 +159,45 @@ def _executar_analise(cli_id, forn_id, pdv_id, data_corte, pdv_label):
         return
 
     total_mix = len(mix)
+    prod_ids = [p[0] for p in mix]
+    _ph = ",".join(["?"] * len(prod_ids))
+    _pdv_filter = "AND p.pdv_id=?" if pdv_id else "AND p.pdv_id IS NULL"
+    _params_base = (cli_id, forn_id) + ((pdv_id,) if pdv_id else ())
 
-    # Para cada produto do mix, verifica se foi pedido no período
+    # Pré-carrega último pedido de todos os produtos de uma vez
+    _ult_rows = query(f"""
+        SELECT DISTINCT ON (pi.produto_id)
+               pi.produto_id, p.data_pedido, pi.quantidade, pi.preco_final
+        FROM pedido_item pi
+        JOIN pedido p ON pi.pedido_id = p.pedido_id
+        WHERE p.cliente_id=? AND p.fornecedor_id=? {_pdv_filter}
+          AND pi.produto_id IN ({_ph})
+          AND p.status_pedido NOT IN ('CANCELADO')
+          AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO','CANCELADO')
+          AND p.data_pedido >= ?
+        ORDER BY pi.produto_id, p.data_pedido DESC
+    """, _params_base + tuple(prod_ids) + (data_ini,))
+    _ult_map = {r[0]: r[1:] for r in _ult_rows}
+
+    # Pré-carrega histórico total de todos os produtos
+    _hist_rows = query(f"""
+        SELECT pi.produto_id, COUNT(*) as total
+        FROM pedido_item pi
+        JOIN pedido p ON pi.pedido_id=p.pedido_id
+        WHERE p.cliente_id=? AND p.fornecedor_id=? {_pdv_filter}
+          AND pi.produto_id IN ({_ph})
+          AND p.status_pedido NOT IN ('CANCELADO')
+        GROUP BY pi.produto_id
+    """, _params_base + tuple(prod_ids))
+    _hist_map = {r[0]: r[1] for r in _hist_rows}
+
+    # Monta resultado sem queries adicionais
     resultado = []
     for prod in mix:
         prod_id = prod[0]
-
-        ultimo_pedido = query(f"""
-            SELECT p.data_pedido, pi.quantidade, pi.preco_final
-            FROM pedido_item pi
-            JOIN pedido p ON pi.pedido_id = p.pedido_id
-            WHERE pi.produto_id=?
-              AND p.cliente_id=?
-              AND p.fornecedor_id=?
-              AND {'p.pdv_id=?' if pdv_id else 'p.pdv_id IS NULL'}
-              AND p.status_pedido NOT IN ('CANCELADO')
-              AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO','CANCELADO')
-              AND p.data_pedido >= ?
-            ORDER BY p.data_pedido DESC LIMIT 1
-        """, (prod_id, cli_id, forn_id, pdv_id) if pdv_id else (prod_id, cli_id, forn_id))
-
-        nunca_pedido = query(f"""
-            SELECT COUNT(*) FROM pedido_item pi
-            JOIN pedido p ON pi.pedido_id=p.pedido_id
-            WHERE pi.produto_id=?
-              AND p.cliente_id=?
-              AND p.fornecedor_id=?
-              AND {'p.pdv_id=?' if pdv_id else 'p.pdv_id IS NULL'}
-              AND p.status_pedido NOT IN ('CANCELADO')
-        """, (prod_id, cli_id, forn_id, pdv_id) if pdv_id else (prod_id, cli_id, forn_id))
-
-        foi_pedido_periodo = len(ultimo_pedido) > 0
-        total_historico    = nunca_pedido[0][0] if nunca_pedido else 0
+        ultimo_pedido = _ult_map.get(prod_id)
+        foi_pedido_periodo = ultimo_pedido is not None
+        total_historico = _hist_map.get(prod_id, 0)
 
         resultado.append({
             "produto_id":    prod_id,
@@ -199,8 +206,8 @@ def _executar_analise(cli_id, forn_id, pdv_id, data_corte, pdv_label):
             "un_cx":         prod[3] or 1,
             "preco":         prod[4],
             "pedido_period": foi_pedido_periodo,
-            "ultima_data":   ultimo_pedido[0][0] if ultimo_pedido else None,
-            "ultima_qtd":    ultimo_pedido[0][1] if ultimo_pedido else None,
+            "ultima_data":   ultimo_pedido[0] if ultimo_pedido else None,
+            "ultima_qtd":    ultimo_pedido[1] if ultimo_pedido else None,
             "nunca_pedido":  total_historico == 0,
         })
 
