@@ -2119,10 +2119,9 @@ def _lista_clientes():
         st.info("Nenhum cliente encontrado.")
         return
 
-    # Lista compacta tabulada
     total = len(dados)
     col_ct, col_exp = st.columns([3, 1])
-    col_ct.caption(f"{total} cliente(s)")
+    col_ct.caption(f"{total} cliente(s) — clique em uma linha para editar")
     with col_exp:
         if st.button("⬇️ Exportar Excel", key="btn_exp_cli", use_container_width=True):
             try:
@@ -2162,47 +2161,48 @@ def _lista_clientes():
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                            key="dl_cli_xlsx")
 
-    # Cabeçalho da tabela
-    h1,h2,h3,h4,h5 = st.columns([3.5, 2.0, 1.5, 1.2, 1.0])
-    for col, txt in zip([h1,h2,h3,h4,h5],
-                        ["Cliente","Perfil","Cidade","Status","Fornec./PDVs"]):
-        col.markdown(f"<small><b>{txt}</b></small>", unsafe_allow_html=True)
-    st.divider()
+    # Tabela interativa — leve e rápida
+    df_lista = pd.DataFrame([{
+        "ID":        r[0],
+        "Cliente":   r[1],
+        "Perfil":    r[8],
+        "Cidade":    f"{r[2] or '—'}/{r[3] or ''}",
+        "Status":    r[5],
+        "Fornec.":   int(r[6] or 0),
+        "PDVs":      int(r[7] or 0),
+    } for r in dados])
 
-    # Linha clicável por cliente
-    _aberto = st.session_state.get("cli_aberto_id")
-    for row in dados:
-        cid, nome, cidade, uf, ativo, status, fornec, pdvs, perfil = row
+    sel = st.dataframe(
+        df_lista,
+        use_container_width=True,
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        column_config={
+            "ID":      st.column_config.NumberColumn(width="small"),
+            "Cliente": st.column_config.TextColumn(width="large"),
+            "Perfil":  st.column_config.TextColumn(width="medium"),
+            "Cidade":  st.column_config.TextColumn(width="medium"),
+            "Status":  st.column_config.TextColumn(width="medium"),
+            "Fornec.": st.column_config.NumberColumn(width="small"),
+            "PDVs":    st.column_config.NumberColumn(width="small"),
+        },
+        key="df_clientes"
+    )
 
-        # Linha da tabela
-        c1,c2,c3,c4,c5 = st.columns([3.5, 2.0, 1.5, 1.2, 1.0])
-        c1.markdown(f"**{nome}**")
-        c2.caption(perfil)
-        c3.caption(f"{cidade or '—'}/{uf or ''}")
-        c4.caption(_status_icone(status))
-        c5.caption(f"🏭{int(fornec or 0)} 📍{int(pdvs or 0)}")
-
-        # Botão toggle — abre/fecha card
-        _btn_label = "▲ Fechar" if _aberto == cid else "▼ Ver"
-        if st.button(_btn_label, key=f"tog_cli_{cid}", use_container_width=True):
-            if _aberto == cid:
-                st.session_state.pop("cli_aberto_id", None)
-                st.session_state.pop("cli_excluir_id", None)
-            else:
-                st.session_state["cli_aberto_id"] = cid
-                st.session_state.pop("cli_excluir_id", None)
-            st.rerun()
-
-        # Card expandido com edição e exclusão
-        if _aberto == cid:
-            with st.container(border=True):
-                tab_edit, tab_del = st.tabs(["✏️ Editar dados", "🗑️ Excluir cliente"])
-                with tab_edit:
-                    _form_editar_cliente(cid)
-                with tab_del:
-                    _confirmacao_excluir_cliente(cid, nome)
-
+    # Card de edição/exclusão ao selecionar linha
+    rows_sel = sel.selection.rows if sel and sel.selection else []
+    if rows_sel:
+        idx = rows_sel[0]
+        cid  = dados[idx][0]
+        nome = dados[idx][1]
         st.divider()
+        st.markdown(f"#### ✏️ {nome}")
+        tab_edit, tab_del = st.tabs(["✏️ Editar dados", "🗑️ Excluir cliente"])
+        with tab_edit:
+            _form_editar_cliente(cid)
+        with tab_del:
+            _confirmacao_excluir_cliente(cid, nome)
 
 
 
