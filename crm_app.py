@@ -546,6 +546,7 @@ if pagina == "home":
         if st.button("📊 Ver Pedidos",    use_container_width=True): ir("ver_pedidos")
         if st.button("📈 Relatórios",     use_container_width=True): ir("relatorios")
         if st.button("💰 Comissões",      use_container_width=True): ir("comissoes")
+        if st.button("💸 Despesas",       use_container_width=True): ir("despesas")
         if st.button("📋 Visitas",        use_container_width=True): ir("visitas")
         if st.button("🎯 Mix / Oferta",   use_container_width=True): ir("mix_analise")
         if st.button("🔍 Pesquisa PDV",   use_container_width=True):
@@ -566,6 +567,7 @@ elif pagina == "ver_pedidos":   from ver_pedidos import tela_ver_pedidos; tela_v
 elif pagina == "relatorios":    from relatorios import tela_relatorios; tela_relatorios()
 elif pagina == "comissoes":     from comissoes import tela_comissoes; tela_comissoes()
 elif pagina == "visitas":       from visitas import tela_visitas; tela_visitas()
+elif pagina == "despesas":      from despesas import tela_despesas; tela_despesas()
 elif pagina == "mix_analise":   from mix_analise import tela_mix_analise; tela_mix_analise()
 elif pagina == "pesquisa":      from pesquisa import tela_pesquisa; tela_pesquisa()
 elif pagina == "concorrentes":        from concorrentes import tela_concorrentes; tela_concorrentes()
