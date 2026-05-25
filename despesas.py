@@ -88,6 +88,20 @@ def _criar_tabela():
 def _form_nova_despesa():
     st.subheader("➕ Registrar despesa")
 
+    # Inicializa session_state para todos os campos — evita perda ao pressionar Enter
+    _defaults = {
+        "nd_data": date.today(), "nd_cat": CATEGORIAS[0],
+        "nd_tipo": "— Não se aplica —", "nd_forma": FORMAS_PGTO[0],
+        "nd_reimb": False, "nd_desc": "", "nd_obs": "",
+        "nd_comb_tipo": COMBUSTIVEL_TIPO[0],
+        "nd_km_ini": 0.0, "nd_km_fim": 0.0,
+        "nd_preco_l": 0.0, "nd_media": 12.0,
+        "nd_valor": 0.0,
+    }
+    for k, v in _defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
     clientes  = query("SELECT cliente_id, nome_fantasia FROM cliente ORDER BY nome_fantasia")
     fornecs   = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo!=0 ORDER BY nome_fantasia")
     cli_opts  = [(None, "— Nenhum cliente específico —")] + [(c[0], c[1]) for c in clientes]
@@ -95,7 +109,7 @@ def _form_nova_despesa():
 
     col1, col2 = st.columns(2)
     with col1:
-        data_d    = st.date_input("Data", value=date.today(), key="nd_data")
+        data_d    = st.date_input("Data", key="nd_data")
         categoria = st.selectbox("Categoria", CATEGORIAS, key="nd_cat")
         cli_sel   = st.selectbox("Cliente visitado / motivo",
                                  cli_opts, format_func=lambda x: x[1], key="nd_cli")
@@ -112,7 +126,7 @@ def _form_nova_despesa():
     descricao = st.text_input("Descrição / Justificativa", key="nd_desc",
                               placeholder="Ex: Visita ao Empório Lapilli — apresentação Diet House")
 
-    # ── Combustível — cálculo dinâmico ────────────────────────────────────────
+    # ── Combustível — campos sempre presentes quando categoria = Combustível ──
     is_comb = categoria == "Combustível"
     valor_calculado = None
     comb_tipo = km_ini = km_fim = preco_l = media_km = None
@@ -123,37 +137,45 @@ def _form_nova_despesa():
         comb_tipo = cc1.selectbox("Tipo", COMBUSTIVEL_TIPO, key="nd_comb_tipo")
         km_ini    = cc2.number_input("KM inicial", min_value=0.0, step=1.0,
                                      format="%.0f", key="nd_km_ini")
-        km_fim    = cc3.number_input("KM final",   min_value=0.0, step=1.0,
+        km_fim    = cc3.number_input("KM final", min_value=0.0, step=1.0,
                                      format="%.0f", key="nd_km_fim")
-        preco_l   = cc4.number_input("R$/litro", min_value=0.0, step=0.01,
+        preco_l   = cc4.number_input("R$/litro", min_value=0.0, step=0.001,
                                      format="%.3f", key="nd_preco_l")
         media_km  = st.number_input("Média do veículo (km/litro)",
-                                    min_value=0.1, value=12.0, step=0.1, key="nd_media")
+                                    min_value=0.1, step=0.1, key="nd_media")
 
-        km_total = (km_fim or 0) - (km_ini or 0)
-        if km_total > 0 and (media_km or 0) > 0 and (preco_l or 0) > 0:
-            litros = km_total / media_km
-            valor_calculado = round(litros * preco_l, 2)
-            st.success(f"⛽ **{km_total:.0f} km** ÷ {media_km} km/l "
-                       f"= **{litros:.2f} litros** × R$ {preco_l:.3f}/l "
-                       f"= **R$ {valor_calculado:.2f}**")
-            st.session_state["nd_valor_auto"] = valor_calculado
+        # Calcula sempre que os valores mudarem
+        km_total = (st.session_state.get("nd_km_fim", 0) or 0) - \
+                   (st.session_state.get("nd_km_ini", 0) or 0)
+        _preco   = st.session_state.get("nd_preco_l", 0) or 0
+        _media   = st.session_state.get("nd_media", 12) or 12
+
+        if km_total > 0 and _preco > 0 and _media > 0:
+            litros = km_total / _media
+            valor_calculado = round(litros * _preco, 2)
+            st.success(
+                f"⛽ **{km_total:.0f} km** ÷ **{_media} km/l** "
+                f"= **{litros:.2f} litros** × **R$ {_preco:.3f}/l** "
+                f"= 💰 **R$ {valor_calculado:.2f}**")
         elif km_total > 0:
-            st.info("Preencha R$/litro e média do veículo para calcular.")
+            st.info("Preencha R$/litro e média do veículo para calcular o valor.")
 
-    # ── Valor e observação ────────────────────────────────────────────────────
-    _val_default = float(st.session_state.get("nd_valor_auto", 0.0))
-    if not is_comb:
-        st.session_state.pop("nd_valor_auto", None)
-        _val_default = 0.0
-
+    # ── Valor ─────────────────────────────────────────────────────────────────
     col_v, col_o = st.columns(2)
+    if is_comb and valor_calculado:
+        # Atualiza o campo valor com o calculado
+        st.session_state["nd_valor"] = valor_calculado
+    elif not is_comb and st.session_state.get("nd_valor") == st.session_state.get("nd_valor_auto_ant"):
+        # Limpa valor se mudou de combustível para outra categoria
+        st.session_state["nd_valor"] = 0.0
+
     valor = col_v.number_input("Valor (R$)", min_value=0.0, step=0.01,
-                               format="%.2f", value=_val_default, key="nd_valor")
+                               format="%.2f", key="nd_valor",
+                               help="Preenchido automaticamente para combustível")
     obs   = col_o.text_input("Observação", key="nd_obs")
 
     if is_comb and valor_calculado:
-        st.caption(f"💡 Valor calculado automaticamente: R$ {valor_calculado:.2f}")
+        st.session_state["nd_valor_auto_ant"] = valor_calculado
 
     # ── Upload foto ────────────────────────────────────────────────────────────
     foto_b64  = None
@@ -171,8 +193,7 @@ def _form_nova_despesa():
         img.save(buf_img, format="JPEG", quality=70, optimize=True)
         foto_b64 = base64.b64encode(buf_img.getvalue()).decode()
         st.image(buf_img.getvalue(), width=300, caption="Pré-visualização")
-        kb = len(buf_img.getvalue()) // 1024
-        st.caption(f"✅ {kb} KB processados")
+        st.caption(f"✅ {len(buf_img.getvalue())//1024} KB")
 
     st.divider()
     salvar = st.button("💾 Salvar despesa", type="primary",
@@ -180,10 +201,10 @@ def _form_nova_despesa():
 
     if salvar:
         _valor_final = valor_calculado if (is_comb and valor_calculado) else valor
-        if _valor_final <= 0:
+        if (_valor_final or 0) <= 0:
             st.warning("⚠️ Informe o valor da despesa.")
             return
-        if not descricao.strip() and cli_sel[0] is None:
+        if not descricao.strip() and (not cli_sel or cli_sel[0] is None):
             st.warning("⚠️ Informe uma descrição ou selecione o cliente.")
             return
 
@@ -196,7 +217,8 @@ def _form_nova_despesa():
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
         """, (
             data_d.isoformat(), categoria, descricao.strip() or None,
-            cli_sel[0], forn_sel[0],
+            cli_sel[0] if cli_sel else None,
+            forn_sel[0] if forn_sel else None,
             None if tipo_visita == "— Não se aplica —" else tipo_visita,
             _valor_final, forma_pgto,
             comb_tipo, km_ini or None, km_fim or None,
@@ -204,9 +226,8 @@ def _form_nova_despesa():
             bool(reembolsavel),
             foto_b64, obs.strip() or None
         ))
-        # Limpa campos de combustível
-        for k in ["nd_valor_auto","nd_km_ini","nd_km_fim","nd_preco_l","nd_media",
-                  "nd_valor","nd_desc","nd_obs","nd_foto"]:
+        # Limpa todos os campos após salvar
+        for k in list(_defaults.keys()) + ["nd_cli","nd_forn","nd_valor_auto_ant","nd_foto"]:
             st.session_state.pop(k, None)
         st.session_state["_desp_msg_ok"] = f"✅ Despesa de R$ {_valor_final:.2f} registrada!"
         st.rerun()
