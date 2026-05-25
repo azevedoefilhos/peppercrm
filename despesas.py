@@ -445,16 +445,49 @@ def _form_editar_despesa(did, row):
         descricao = st.text_input("Descrição", value=row[3] if row[3] != "—" else "")
         obs       = st.text_input("Observação", value=row[14] or "")
 
+        # Upload de foto — fora do form pois file_uploader não funciona bem dentro de form
+        _tem_foto = bool(row[15]) if len(row) > 15 else False
+        if _tem_foto:
+            st.caption("✅ Comprovante já anexado — envie novo para substituir")
+        foto_file = st.file_uploader(
+            "📷 Foto do comprovante (NF/Recibo)",
+            type=["jpg","jpeg","png","webp"],
+            key=f"edit_foto_{did}",
+            help="Deixe em branco para manter o comprovante atual")
+
         if st.form_submit_button("💾 Salvar alterações", type="primary",
                                  use_container_width=True):
-            execute_write("""
-                UPDATE despesa SET data_despesa=?, categoria=?, descricao=?,
-                    cliente_id=?, fornecedor_id=?, valor=?, forma_pagamento=?,
-                    reembolsavel=?, reembolsado=?, observacao=?
-                WHERE despesa_id=?
-            """, (data_d.isoformat(), categoria, descricao.strip() or None,
-                  cli_sel[0], forn_sel[0], valor, forma_pgto,
-                  reembolsavel, reembolsado, obs.strip() or None, did))
+            # Processa foto se enviada
+            nova_foto = None
+            if foto_file:
+                import base64
+                from PIL import Image
+                import io as _io
+                img = Image.open(foto_file)
+                img.thumbnail((1200, 1200), Image.LANCZOS)
+                buf_img = _io.BytesIO()
+                img.save(buf_img, format="JPEG", quality=70, optimize=True)
+                nova_foto = base64.b64encode(buf_img.getvalue()).decode()
+
+            if nova_foto:
+                execute_write("""
+                    UPDATE despesa SET data_despesa=?, categoria=?, descricao=?,
+                        cliente_id=?, fornecedor_id=?, valor=?, forma_pagamento=?,
+                        reembolsavel=?, reembolsado=?, observacao=?, foto_base64=?
+                    WHERE despesa_id=?
+                """, (data_d.isoformat(), categoria, descricao.strip() or None,
+                      cli_sel[0], forn_sel[0], valor, forma_pgto,
+                      reembolsavel, reembolsado, obs.strip() or None,
+                      nova_foto, did))
+            else:
+                execute_write("""
+                    UPDATE despesa SET data_despesa=?, categoria=?, descricao=?,
+                        cliente_id=?, fornecedor_id=?, valor=?, forma_pagamento=?,
+                        reembolsavel=?, reembolsado=?, observacao=?
+                    WHERE despesa_id=?
+                """, (data_d.isoformat(), categoria, descricao.strip() or None,
+                      cli_sel[0], forn_sel[0], valor, forma_pgto,
+                      reembolsavel, reembolsado, obs.strip() or None, did))
             st.success("✅ Despesa atualizada!")
             st.rerun()
 
