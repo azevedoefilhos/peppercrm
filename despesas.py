@@ -50,6 +50,7 @@ def _criar_tabela():
                 media_km_litro    NUMERIC(10,2),
                 reembolsavel      BOOLEAN DEFAULT FALSE,
                 reembolsado       BOOLEAN DEFAULT FALSE,
+                foto_base64       TEXT,
                 foto_comprovante  TEXT,
                 observacao        TEXT,
                 ativo             BOOLEAN DEFAULT TRUE
@@ -74,6 +75,7 @@ def _criar_tabela():
                 media_km_litro    REAL,
                 reembolsavel      INTEGER DEFAULT 0,
                 reembolsado       INTEGER DEFAULT 0,
+                foto_base64       TEXT,
                 foto_comprovante  TEXT,
                 observacao        TEXT,
                 ativo             INTEGER DEFAULT 1
@@ -151,6 +153,31 @@ def _form_nova_despesa():
         with col_v2:
             obs = col_v2.text_input("Observação", key="nd_obs")
 
+        # Upload de comprovante
+        foto_b64 = None
+        foto_file = st.file_uploader(
+            "📷 Foto do comprovante (NF/Recibo) — opcional",
+            type=["jpg","jpeg","png","webp","pdf"],
+            key="nd_foto",
+            help="Imagem será comprimida automaticamente antes de salvar")
+        if foto_file:
+            import base64
+            from PIL import Image
+            import io as _io
+            if foto_file.type != "application/pdf":
+                img = Image.open(foto_file)
+                # Reduz para max 1200px e converte para JPEG
+                img.thumbnail((1200, 1200), Image.LANCZOS)
+                buf_img = _io.BytesIO()
+                img.save(buf_img, format="JPEG", quality=70, optimize=True)
+                foto_b64 = base64.b64encode(buf_img.getvalue()).decode()
+                kb = len(buf_img.getvalue()) // 1024
+                st.caption(f"✅ Foto processada — {kb} KB")
+            else:
+                foto_b64 = base64.b64encode(foto_file.read()).decode()
+                kb = len(foto_b64) * 3 // 4 // 1024
+                st.caption(f"✅ PDF anexado — ~{kb} KB")
+
         salvar = st.form_submit_button("💾 Salvar despesa", type="primary",
                                        use_container_width=True)
 
@@ -167,8 +194,8 @@ def _form_nova_despesa():
             INSERT INTO despesa (data_despesa, categoria, descricao,
                 cliente_id, fornecedor_id, tipo_visita, valor, forma_pagamento,
                 combustivel_tipo, km_inicial, km_final, preco_litro, media_km_litro,
-                reembolsavel, observacao, ativo)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
+                reembolsavel, foto_base64, observacao, ativo)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
         """, (
             data_d.isoformat(), categoria, descricao.strip() or None,
             cli_sel[0], forn_sel[0],
@@ -177,6 +204,7 @@ def _form_nova_despesa():
             comb_tipo, km_ini or None, km_fim or None,
             preco_l or None, media_km or None,
             1 if reembolsavel else 0,
+            foto_b64,
             obs.strip() or None
         ))
         st.session_state["_desp_msg_ok"] = f"✅ Despesa de R$ {valor:.2f} registrada!"
@@ -253,7 +281,8 @@ def _lista_despesas():
                d.valor, d.forma_pagamento,
                d.reembolsavel, d.reembolsado,
                d.km_inicial, d.km_final, d.combustivel_tipo,
-               COALESCE(d.observacao,'')
+               COALESCE(d.observacao,''),
+               d.foto_base64
         FROM despesa d
         LEFT JOIN cliente c ON d.cliente_id=c.cliente_id
         LEFT JOIN fornecedor f ON d.fornecedor_id=f.fornecedor_id
@@ -339,6 +368,16 @@ def _lista_despesas():
                 c2.markdown(f"**KM rodados:** {km:.1f} km ({row[13]})")
             if row[14]:
                 st.markdown(f"**Observação:** {row[14]}")
+
+            # Exibe foto se existir
+            if row[15]:
+                import base64
+                st.markdown("**📷 Comprovante:**")
+                try:
+                    img_bytes = base64.b64decode(row[15])
+                    st.image(img_bytes, width=400)
+                except Exception:
+                    st.caption("(comprovante PDF — não visualizável inline)")
 
             # Marcar como reembolsado
             if row[9] and not row[10]:
@@ -516,7 +555,7 @@ def _pdf_despesas(d_ini, d_fim, forn_nome, apenas_reimb, mes_ano):
                COALESCE(c.nome_fantasia,'—'), d.tipo_visita,
                d.valor, d.forma_pagamento,
                CASE WHEN d.reembolsavel THEN 'Sim' ELSE 'Não' END,
-               COALESCE(d.observacao,'')
+               COALESCE(d.observacao,''), d.foto_base64
         FROM despesa d
         LEFT JOIN cliente c ON d.cliente_id=c.cliente_id
         LEFT JOIN fornecedor f ON d.fornecedor_id=f.fornecedor_id
@@ -563,6 +602,30 @@ def _pdf_despesas(d_ini, d_fim, forn_nome, apenas_reimb, mes_ano):
     total = sum(r[5] or 0 for r in rows)
     el.append(Spacer(1, 0.3*cm))
     el.append(Paragraph(f"<b>Total: R$ {total:,.2f}</b>", s_s))
+
+    # Anexa fotos dos comprovantes
+    fotos = [(r[1], r[2], r[3], r[9]) for r in rows if r[9]]
+    if fotos:
+        from reportlab.platypus import PageBreak
+        from reportlab.lib.utils import ImageReader
+        import base64 as _b64
+        import io as _io2
+        el.append(PageBreak())
+        el.append(Paragraph("<b>Comprovantes / NFs</b>", s_s))
+        el.append(Spacer(1, 0.3*cm))
+        for cat, desc, cli, foto_b64 in fotos:
+            try:
+                img_bytes = _b64.b64decode(foto_b64)
+                img_buf   = _io2.BytesIO(img_bytes)
+                from reportlab.platypus import Image as RLImage
+                rl_img = RLImage(img_buf, width=14*cm, height=10*cm,
+                                 kind='proportional')
+                el.append(Paragraph(f"<b>{cat}</b> — {desc or '—'} | {cli}", s_td))
+                el.append(rl_img)
+                el.append(Spacer(1, 0.5*cm))
+            except Exception:
+                el.append(Paragraph(f"[Comprovante não disponível — {cat}]", s_td))
+
     el.append(Spacer(1, 0.3*cm))
     el.append(Paragraph(
         f"PepperCRM — {rep_nome} | Gerado em {date.today().strftime('%d/%m/%Y')} | Confidencial",
