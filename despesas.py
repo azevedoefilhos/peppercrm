@@ -90,103 +90,101 @@ def _form_nova_despesa():
 
     clientes  = query("SELECT cliente_id, nome_fantasia FROM cliente ORDER BY nome_fantasia")
     fornecs   = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo!=0 ORDER BY nome_fantasia")
-
     cli_opts  = [(None, "— Nenhum cliente específico —")] + [(c[0], c[1]) for c in clientes]
     forn_opts = [(None, "— Nenhum fornecedor —")] + [(f[0], f[1]) for f in fornecs]
 
-    with st.form("nova_despesa", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            data_d = st.date_input("Data", value=date.today(), key="nd_data")
-            categoria = st.selectbox("Categoria", CATEGORIAS, key="nd_cat")
-            cli_sel = st.selectbox("Cliente visitado / motivo",
-                                   cli_opts, format_func=lambda x: x[1], key="nd_cli")
-            forn_sel = st.selectbox("Fornecedor relacionado",
-                                    forn_opts, format_func=lambda x: x[1], key="nd_forn")
-        with col2:
-            tipo_visita = st.selectbox("Tipo de atividade", [
-                "— Não se aplica —",
-                "Prospecção",
-                "Visita de manutenção",
-                "Entrega de amostras",
-                "Reunião comercial",
-                "Visita técnica",
-                "Cobrança",
-                "Outro",
-            ], key="nd_tipo")
-            forma_pgto = st.selectbox("Forma de pagamento", FORMAS_PGTO, key="nd_forma")
-            reembolsavel = st.checkbox("Despesa reembolsável pela representada", key="nd_reimb")
+    col1, col2 = st.columns(2)
+    with col1:
+        data_d    = st.date_input("Data", value=date.today(), key="nd_data")
+        categoria = st.selectbox("Categoria", CATEGORIAS, key="nd_cat")
+        cli_sel   = st.selectbox("Cliente visitado / motivo",
+                                 cli_opts, format_func=lambda x: x[1], key="nd_cli")
+        forn_sel  = st.selectbox("Fornecedor relacionado",
+                                 forn_opts, format_func=lambda x: x[1], key="nd_forn")
+    with col2:
+        tipo_visita  = st.selectbox("Tipo de atividade", [
+            "— Não se aplica —","Prospecção","Visita de manutenção",
+            "Entrega de amostras","Reunião comercial","Visita técnica","Cobrança","Outro",
+        ], key="nd_tipo")
+        forma_pgto   = st.selectbox("Forma de pagamento", FORMAS_PGTO, key="nd_forma")
+        reembolsavel = st.checkbox("Despesa reembolsável pela representada", key="nd_reimb")
 
-        descricao = st.text_input("Descrição / Justificativa", key="nd_desc",
-                                  placeholder="Ex: Visita ao Empório Lapilli — apresentação Diet House")
+    descricao = st.text_input("Descrição / Justificativa", key="nd_desc",
+                              placeholder="Ex: Visita ao Empório Lapilli — apresentação Diet House")
 
-        # Campos de combustível
-        is_comb = categoria == "Combustível"
-        valor_calculado = None
-        if is_comb:
-            st.markdown("**⛽ Detalhes do combustível**")
-            cc1, cc2, cc3, cc4 = st.columns(4)
-            comb_tipo  = cc1.selectbox("Tipo", COMBUSTIVEL_TIPO, key="nd_comb_tipo")
-            km_ini     = cc2.number_input("KM inicial", min_value=0.0, step=0.1, key="nd_km_ini")
-            km_fim     = cc3.number_input("KM final",   min_value=0.0, step=0.1, key="nd_km_fim")
-            preco_l    = cc4.number_input("R$/litro", min_value=0.0, step=0.01,
-                                          format="%.3f", key="nd_preco_l")
-            media_km   = st.number_input("Média do veículo (km/litro)",
-                                         min_value=0.1, value=12.0, step=0.1, key="nd_media")
-            km_total   = km_fim - km_ini
-            if km_total > 0 and media_km > 0 and preco_l > 0:
-                litros = km_total / media_km
-                valor_calculado = round(litros * preco_l, 2)
-                st.info(f"📏 {km_total:.1f} km rodados → "
-                        f"{litros:.2f} litros × R$ {preco_l:.3f} = "
-                        f"**R$ {valor_calculado:.2f}**")
-        else:
-            comb_tipo = km_ini = km_fim = preco_l = media_km = None
+    # ── Combustível — cálculo dinâmico ────────────────────────────────────────
+    is_comb = categoria == "Combustível"
+    valor_calculado = None
+    comb_tipo = km_ini = km_fim = preco_l = media_km = None
 
-        col_v1, col_v2 = st.columns(2)
-        with col_v1:
-            valor = col_v1.number_input(
-                "Valor (R$)",
-                min_value=0.0, step=0.01, format="%.2f",
-                value=float(valor_calculado) if valor_calculado else 0.0,
-                key="nd_valor")
-        with col_v2:
-            obs = col_v2.text_input("Observação", key="nd_obs")
+    if is_comb:
+        st.markdown("**⛽ Detalhes do combustível**")
+        cc1, cc2, cc3, cc4 = st.columns(4)
+        comb_tipo = cc1.selectbox("Tipo", COMBUSTIVEL_TIPO, key="nd_comb_tipo")
+        km_ini    = cc2.number_input("KM inicial", min_value=0.0, step=1.0,
+                                     format="%.0f", key="nd_km_ini")
+        km_fim    = cc3.number_input("KM final",   min_value=0.0, step=1.0,
+                                     format="%.0f", key="nd_km_fim")
+        preco_l   = cc4.number_input("R$/litro", min_value=0.0, step=0.01,
+                                     format="%.3f", key="nd_preco_l")
+        media_km  = st.number_input("Média do veículo (km/litro)",
+                                    min_value=0.1, value=12.0, step=0.1, key="nd_media")
 
-        # Upload de comprovante
-        foto_b64 = None
-        foto_file = st.file_uploader(
-            "📷 Foto do comprovante (NF/Recibo) — opcional",
-            type=["jpg","jpeg","png","webp","pdf"],
-            key="nd_foto",
-            help="Imagem será comprimida automaticamente antes de salvar")
-        if foto_file:
-            import base64
-            from PIL import Image
-            import io as _io
-            if foto_file.type != "application/pdf":
-                img = Image.open(foto_file)
-                # Reduz para max 1200px e converte para JPEG
-                img.thumbnail((1200, 1200), Image.LANCZOS)
-                buf_img = _io.BytesIO()
-                img.save(buf_img, format="JPEG", quality=70, optimize=True)
-                foto_b64 = base64.b64encode(buf_img.getvalue()).decode()
-                kb = len(buf_img.getvalue()) // 1024
-                st.caption(f"✅ Foto processada — {kb} KB")
-            else:
-                foto_b64 = base64.b64encode(foto_file.read()).decode()
-                kb = len(foto_b64) * 3 // 4 // 1024
-                st.caption(f"✅ PDF anexado — ~{kb} KB")
+        km_total = (km_fim or 0) - (km_ini or 0)
+        if km_total > 0 and (media_km or 0) > 0 and (preco_l or 0) > 0:
+            litros = km_total / media_km
+            valor_calculado = round(litros * preco_l, 2)
+            st.success(f"⛽ **{km_total:.0f} km** ÷ {media_km} km/l "
+                       f"= **{litros:.2f} litros** × R$ {preco_l:.3f}/l "
+                       f"= **R$ {valor_calculado:.2f}**")
+            st.session_state["nd_valor_auto"] = valor_calculado
+        elif km_total > 0:
+            st.info("Preencha R$/litro e média do veículo para calcular.")
 
-        salvar = st.form_submit_button("💾 Salvar despesa", type="primary",
-                                       use_container_width=True)
+    # ── Valor e observação ────────────────────────────────────────────────────
+    _val_default = float(st.session_state.get("nd_valor_auto", 0.0))
+    if not is_comb:
+        st.session_state.pop("nd_valor_auto", None)
+        _val_default = 0.0
+
+    col_v, col_o = st.columns(2)
+    valor = col_v.number_input("Valor (R$)", min_value=0.0, step=0.01,
+                               format="%.2f", value=_val_default, key="nd_valor")
+    obs   = col_o.text_input("Observação", key="nd_obs")
+
+    if is_comb and valor_calculado:
+        st.caption(f"💡 Valor calculado automaticamente: R$ {valor_calculado:.2f}")
+
+    # ── Upload foto ────────────────────────────────────────────────────────────
+    foto_b64  = None
+    foto_file = st.file_uploader(
+        "📷 Foto do comprovante (NF/Recibo) — opcional",
+        type=["jpg","jpeg","png","webp"],
+        key="nd_foto")
+    if foto_file:
+        import base64
+        from PIL import Image
+        import io as _io
+        img = Image.open(foto_file)
+        img.thumbnail((1200, 1200), Image.LANCZOS)
+        buf_img = _io.BytesIO()
+        img.save(buf_img, format="JPEG", quality=70, optimize=True)
+        foto_b64 = base64.b64encode(buf_img.getvalue()).decode()
+        st.image(buf_img.getvalue(), width=300, caption="Pré-visualização")
+        kb = len(buf_img.getvalue()) // 1024
+        st.caption(f"✅ {kb} KB processados")
+
+    st.divider()
+    salvar = st.button("💾 Salvar despesa", type="primary",
+                       use_container_width=True, key="nd_salvar")
 
     if salvar:
-        if valor <= 0 and not is_comb:
-            st.warning("Informe o valor da despesa.")
+        _valor_final = valor_calculado if (is_comb and valor_calculado) else valor
+        if _valor_final <= 0:
+            st.warning("⚠️ Informe o valor da despesa.")
             return
         if not descricao.strip() and cli_sel[0] is None:
-            st.warning("Informe uma descrição ou selecione o cliente.")
+            st.warning("⚠️ Informe uma descrição ou selecione o cliente.")
             return
 
         _criar_tabela()
@@ -200,14 +198,17 @@ def _form_nova_despesa():
             data_d.isoformat(), categoria, descricao.strip() or None,
             cli_sel[0], forn_sel[0],
             None if tipo_visita == "— Não se aplica —" else tipo_visita,
-            valor, forma_pgto,
+            _valor_final, forma_pgto,
             comb_tipo, km_ini or None, km_fim or None,
             preco_l or None, media_km or None,
-            1 if reembolsavel else 0,
-            foto_b64,
-            obs.strip() or None
+            bool(reembolsavel),
+            foto_b64, obs.strip() or None
         ))
-        st.session_state["_desp_msg_ok"] = f"✅ Despesa de R$ {valor:.2f} registrada!"
+        # Limpa campos de combustível
+        for k in ["nd_valor_auto","nd_km_ini","nd_km_fim","nd_preco_l","nd_media",
+                  "nd_valor","nd_desc","nd_obs","nd_foto"]:
+            st.session_state.pop(k, None)
+        st.session_state["_desp_msg_ok"] = f"✅ Despesa de R$ {_valor_final:.2f} registrada!"
         st.rerun()
 
 
