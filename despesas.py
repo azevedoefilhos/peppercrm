@@ -643,6 +643,9 @@ def tela_despesas():
     _criar_tabela()
 
     st.header("💰 Despesas Operacionais")
+    if st.button("⬅ Voltar"):
+        from crm_app import ir
+        ir("home")
 
     _msg = st.session_state.pop("_desp_msg_ok", None)
     if _msg: st.success(_msg)
