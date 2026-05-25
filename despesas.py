@@ -214,7 +214,7 @@ def _form_nova_despesa():
                 cliente_id, fornecedor_id, tipo_visita, valor, forma_pagamento,
                 combustivel_tipo, km_inicial, km_final, preco_litro, media_km_litro,
                 reembolsavel, foto_base64, observacao, ativo)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,True)
         """, (
             data_d.isoformat(), categoria, descricao.strip() or None,
             cli_sel[0] if cli_sel else None,
@@ -418,7 +418,7 @@ def _lista_despesas():
             col_s, col_n = st.columns(2)
             if col_s.button("🗑️ Sim, excluir", key=f"del_desp_{did}",
                             type="primary", use_container_width=True):
-                execute_write("UPDATE despesa SET ativo=false WHERE despesa_id=?", (did,))
+                execute_write("UPDATE despesa SET ativo=False WHERE despesa_id=?", (did,))
                 st.success("Despesa excluída.")
                 st.rerun()
             if col_n.button("Cancelar", key=f"canc_desp_{did}",
