@@ -208,30 +208,32 @@ def _form_nova_despesa():
             st.warning("⚠️ Informe uma descrição ou selecione o cliente.")
             return
 
-        _criar_tabela()
-        execute_write("""
-            INSERT INTO despesa (data_despesa, categoria, descricao,
-                cliente_id, fornecedor_id, tipo_visita, valor, forma_pagamento,
-                combustivel_tipo, km_inicial, km_final, preco_litro, media_km_litro,
-                reembolsavel, foto_base64, observacao, ativo)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,True)
-        """, (
-            data_d.isoformat(), categoria, descricao.strip() or None,
-            cli_sel[0] if cli_sel else None,
-            forn_sel[0] if forn_sel else None,
-            None if tipo_visita == "— Não se aplica —" else tipo_visita,
-            _valor_final, forma_pgto,
-            comb_tipo, km_ini or None, km_fim or None,
-            preco_l or None, media_km or None,
-            bool(reembolsavel),
-            foto_b64, obs.strip() or None
-        ))
-        # Limpa todos os campos após salvar
-        for k in list(_defaults.keys()) + ["nd_cli","nd_forn","nd_valor_auto_ant","nd_foto"]:
-            st.session_state.pop(k, None)
-        st.session_state["_desp_msg_ok"] = f"✅ Despesa de R$ {_valor_final:.2f} registrada com sucesso!"
-        st.session_state["desp_aba"] = "lista"  # redireciona para lista
-        st.rerun()
+        try:
+            _criar_tabela()
+            execute_write("""
+                INSERT INTO despesa (data_despesa, categoria, descricao,
+                    cliente_id, fornecedor_id, tipo_visita, valor, forma_pagamento,
+                    combustivel_tipo, km_inicial, km_final, preco_litro, media_km_litro,
+                    reembolsavel, foto_base64, observacao, ativo)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,True)
+            """, (
+                data_d.isoformat(), categoria, descricao.strip() or None,
+                cli_sel[0] if cli_sel else None,
+                forn_sel[0] if forn_sel else None,
+                None if tipo_visita == "— Não se aplica —" else tipo_visita,
+                _valor_final, forma_pgto,
+                comb_tipo, km_ini or None, km_fim or None,
+                preco_l or None, media_km or None,
+                bool(reembolsavel),
+                foto_b64, obs.strip() or None
+            ))
+            # Limpa campos após salvar
+            for k in list(_defaults.keys()) + ["nd_cli","nd_forn","nd_valor_auto_ant","nd_foto"]:
+                st.session_state.pop(k, None)
+            st.success(f"✅ Despesa de R$ {_valor_final:.2f} registrada com sucesso!")
+            st.balloons()
+        except Exception as _e:
+            st.error(f"❌ Erro ao salvar: {_e}")
 
 
 # ── Lista de despesas ─────────────────────────────────────────────────────────
