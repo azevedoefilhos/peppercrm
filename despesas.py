@@ -229,7 +229,8 @@ def _form_nova_despesa():
         # Limpa todos os campos após salvar
         for k in list(_defaults.keys()) + ["nd_cli","nd_forn","nd_valor_auto_ant","nd_foto"]:
             st.session_state.pop(k, None)
-        st.session_state["_desp_msg_ok"] = f"✅ Despesa de R$ {_valor_final:.2f} registrada!"
+        st.session_state["_desp_msg_ok"] = f"✅ Despesa de R$ {_valor_final:.2f} registrada com sucesso!"
+        st.session_state["desp_aba"] = "lista"  # redireciona para lista
         st.rerun()
 
 
