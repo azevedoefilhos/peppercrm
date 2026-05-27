@@ -8,3 +8,6 @@ openpyxl
 Pillow
 pyzbar
 opencv-python-headless
+
+zxingcpp
+numpy
