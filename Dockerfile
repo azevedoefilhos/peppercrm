@@ -15,4 +15,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 EXPOSE 8080
-CMD python keepalive.py & streamlit run crm_app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true
+CMD ["sh", "-c", "python keepalive.py & streamlit run crm_app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true"]
