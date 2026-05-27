@@ -6,6 +6,5 @@ reportlab
 requests
 openpyxl
 Pillow
-pyzbar
 opencv-python-headless
 numpy
