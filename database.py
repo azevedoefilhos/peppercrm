@@ -3,6 +3,12 @@ database.py -- PepperCRM
 Lazy connection: só conecta ao banco quando query() é chamada pela primeira vez.
 """
 import os
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 
 TIPOS_PONTO_EXTRA = ["Ponta de gondola","Ilha","Check-stand","Clip strip","Display"]
 
@@ -10,14 +16,10 @@ TIPOS_PONTO_EXTRA = ["Ponta de gondola","Ilha","Check-stand","Clip strip","Displ
 _USE_SUPABASE = None  # None = ainda nao verificado
 
 def _check_supabase():
-    """Verifica se deve usar PostgreSQL (Supabase ou Railway). Chamado apenas quando necessario."""
+    """Verifica se deve usar Supabase. Chamado apenas quando necessario."""
     global _USE_SUPABASE
     if _USE_SUPABASE is not None:
         return _USE_SUPABASE
-    # Railway PostgreSQL via DATABASE_URL
-    if os.environ.get("DATABASE_URL"):
-        _USE_SUPABASE = True
-        return True
     if os.environ.get("SUPABASE_URL"):
         _USE_SUPABASE = True
         return True
@@ -150,9 +152,9 @@ def _traduzir_sql_pg(sql):
         lambda m: f"LPAD(CAST({m.group(1).strip()} AS TEXT), 2, '0')", sql)
     sql = _traduzir_julianday(sql)
     sql = re.sub(r"GROUP_CONCAT\(([^,)]+),\s*'([^']+)'\)",
-        lambda m: f"STRING_AGG({m.group(1).strip()}, '{m.group(2)}' ORDER BY {m.group(1).strip()})", sql)
+        lambda m: f"STRING_AGG({m.group(1).strip()}, '{m.group(2)}')", sql)
     sql = re.sub(r"GROUP_CONCAT\(([^)]+)\)",
-        lambda m: f"STRING_AGG({m.group(1).strip()}, ',' ORDER BY {m.group(1).strip()})", sql)
+        lambda m: f"STRING_AGG({m.group(1).strip()}, ',')", sql)
     sql = sql.replace("IFNULL(", "COALESCE(")
     had_or_ignore = bool(re.search(r"INSERT\s+OR\s+IGNORE\s+INTO", sql, re.IGNORECASE))
     sql = re.sub(r"INSERT\s+OR\s+(?:IGNORE|REPLACE)\s+INTO", "INSERT INTO", sql, flags=re.IGNORECASE)
@@ -211,19 +213,6 @@ def _traduzir_sql_pg(sql):
 
 def _pg_connect():
     import psycopg2
-    # Usa DATABASE_URL se disponível (Railway PostgreSQL interno)
-    db_url = os.environ.get("DATABASE_URL", "")
-    if db_url:
-        return psycopg2.connect(
-            db_url,
-            sslmode="prefer",
-            connect_timeout=8,
-            keepalives=1,
-            keepalives_idle=30,
-            keepalives_interval=10,
-            keepalives_count=3,
-        )
-    # Fallback: Supabase
     return psycopg2.connect(
         host="aws-1-sa-east-1.pooler.supabase.com",
         port=5432,
@@ -439,132 +428,6 @@ def registrar_historico(conn, pedido_id, campo, valor_antes, valor_depois, obs=N
                        str(valor_depois) if valor_depois is not None else None, obs))
 
 
-def _migrar_contato_por_fornecedor():
-    """Migration: adiciona fornecedor_id em contato_interacao e cria contato_fornecedor_topico."""
-    try:
-        if _check_supabase():
-            # Usa execute_write que funciona corretamente com o pool
-            execute_write("""
-                CREATE TABLE IF NOT EXISTS contato_fornecedor_topico (
-                    cft_id SERIAL PRIMARY KEY,
-                    contato_id INTEGER NOT NULL,
-                    fornecedor_id INTEGER NOT NULL,
-                    status VARCHAR(50) DEFAULT 'A contatar',
-                    tipo_topico VARCHAR(30) DEFAULT 'Contato',
-                    data_followup DATE,
-                    prioridade VARCHAR(20) DEFAULT 'Média',
-                    observacao TEXT,
-                    ativo INTEGER DEFAULT 1,
-                    UNIQUE(contato_id, fornecedor_id)
-                )
-            """)
-            execute_write("""
-                ALTER TABLE contato_interacao
-                ADD COLUMN IF NOT EXISTS fornecedor_id INTEGER
-            """)
-            execute_write("""
-                INSERT INTO contato_fornecedor_topico
-                    (contato_id, fornecedor_id, status, tipo_topico, prioridade,
-                     data_followup, ativo)
-                SELECT cxf.contato_id, cxf.fornecedor_id,
-                       COALESCE(cr.status, 'A contatar'),
-                       COALESCE(cr.tipo_topico, 'Contato'),
-                       COALESCE(cr.prioridade, 'Média'),
-                       cr.data_followup, 1
-                FROM contato_x_fornecedor cxf
-                JOIN contato_registro cr ON cr.contato_id=cxf.contato_id
-                ON CONFLICT(contato_id, fornecedor_id) DO NOTHING
-            """)
-            execute_write("""
-                UPDATE contato_interacao
-                SET fornecedor_id = (
-                    SELECT MIN(fornecedor_id) FROM contato_x_fornecedor
-                    WHERE contato_id = contato_interacao.contato_id
-                )
-                WHERE fornecedor_id IS NULL
-            """)
-        else:
-            import sqlite3 as _sq
-            _db = os.path.join(os.path.dirname(__file__), "peppercrm.db")
-            if not os.path.exists(_db): return
-            _conn = _sq.connect(_db)
-            _conn.execute("""CREATE TABLE IF NOT EXISTS contato_fornecedor_topico (
-                cft_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                contato_id INTEGER NOT NULL,
-                fornecedor_id INTEGER NOT NULL,
-                status TEXT DEFAULT 'A contatar',
-                tipo_topico TEXT DEFAULT 'Contato',
-                data_followup TEXT,
-                prioridade TEXT DEFAULT 'Média',
-                observacao TEXT,
-                ativo INTEGER DEFAULT 1,
-                UNIQUE(contato_id, fornecedor_id)
-            )""")
-            cols = [r[1] for r in _conn.execute(
-                "PRAGMA table_info(contato_interacao)").fetchall()]
-            if "fornecedor_id" not in cols:
-                _conn.execute(
-                    "ALTER TABLE contato_interacao ADD COLUMN fornecedor_id INTEGER")
-            _conn.execute("""
-                INSERT OR IGNORE INTO contato_fornecedor_topico
-                    (contato_id, fornecedor_id, status, tipo_topico, prioridade,
-                     data_followup, ativo)
-                SELECT cxf.contato_id, cxf.fornecedor_id,
-                       COALESCE(cr.status,'A contatar'),
-                       COALESCE(cr.tipo_topico,'Contato'),
-                       COALESCE(cr.prioridade,'Média'),
-                       cr.data_followup, 1
-                FROM contato_x_fornecedor cxf
-                JOIN contato_registro cr ON cr.contato_id=cxf.contato_id
-            """)
-            _conn.execute("""
-                UPDATE contato_interacao SET fornecedor_id=(
-                    SELECT MIN(fornecedor_id) FROM contato_x_fornecedor
-                    WHERE contato_id=contato_interacao.contato_id
-                ) WHERE fornecedor_id IS NULL
-            """)
-            _conn.commit(); _conn.close()
-    except Exception as e:
-        import traceback; traceback.print_exc()
-
-
-def _migrar_email_cliente():
-    """Adiciona coluna email na tabela cliente se não existir."""
-    try:
-        if _check_supabase():
-            # Tenta com timeout estendido
-            try:
-                import psycopg2
-                conn = psycopg2.connect(
-                    host="aws-1-sa-east-1.pooler.supabase.com",
-                    port=5432,
-                    dbname="postgres",
-                    user="postgres.yunzqndswpwttejlgeaa",
-                    password=os.environ.get("SUPABASE_DB_PASSWORD", ""),
-                    sslmode="require",
-                    connect_timeout=30,
-                    options="-c statement_timeout=60000"
-                )
-                conn.autocommit = True
-                cur = conn.cursor()
-                cur.execute("ALTER TABLE cliente ADD COLUMN IF NOT EXISTS email VARCHAR(255)")
-                cur.close()
-                conn.close()
-            except Exception as e:
-                print(f"[migration] email cliente: {e}")
-        else:
-            import sqlite3 as _sq
-            _db = os.path.join(os.path.dirname(__file__), "peppercrm.db")
-            if not os.path.exists(_db): return
-            _conn = _sq.connect(_db)
-            cols = [r[1] for r in _conn.execute("PRAGMA table_info(cliente)").fetchall()]
-            if "email" not in cols:
-                _conn.execute("ALTER TABLE cliente ADD COLUMN email TEXT")
-            _conn.commit(); _conn.close()
-    except Exception:
-        pass
-
-
 def _migrar_pedido_minimo():
     """
     Adiciona coluna pedido_minimo à tabela fornecedor, se ainda não existir.
@@ -594,19 +457,21 @@ def _migrar_pedido_minimo():
 
 
 def criar_tabelas():
-    _migrar_contato_por_fornecedor()
     _migrar_pedido_minimo()
 
 def _migrar_todos():
-    _migrar_contato_por_fornecedor()
     _migrar_pedido_minimo()
 
 
 # ── Auto-migration ao importar ───────────────────────────────────────────────
-# Migrations desativadas — já aplicadas no banco via backup do Supabase
-# _migrar_email_cliente()        — coluna email já existe
-# _migrar_pedido_minimo()        — já aplicada
-# _migrar_contato_por_fornecedor() — já aplicada
+# Só roda automaticamente no Railway (variável RAILWAY_ENVIRONMENT presente).
+# Localmente: use python -c "from database import _migrar_pedido_minimo; _migrar_pedido_minimo()"
+import os as _os
+if _os.environ.get("RAILWAY_ENVIRONMENT") or _os.environ.get("RAILWAY_PROJECT_ID"):
+    try:
+        _migrar_pedido_minimo()
+    except Exception:
+        pass
 
 
 def get_nome_empresa():
