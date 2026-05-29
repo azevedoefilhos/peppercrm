@@ -455,8 +455,16 @@ def _form_editar_despesa(did, row):
     cli_opts  = [(None,"— Nenhum —")] + [(c[0],c[1]) for c in clientes]
     forn_opts = [(None,"— Nenhum —")] + [(f[0],f[1]) for f in fornecs]
 
-    _cli_idx  = next((i for i,x in enumerate(cli_opts)  if x[0]==row[0]),  0) if row else 0
-    _forn_idx = next((i for i,x in enumerate(forn_opts) if x[0]==row[0]),  0) if row else 0
+    # row[4] = cliente_nome (texto), precisa buscar o ID pelo nome
+    _cli_nome  = row[4] if row[4] != "—" else None
+    _forn_nome = row[5] if row[5] != "—" else None
+
+    # Busca IDs pelo nome
+    _cli_id  = next((c[0] for c in clientes  if c[1] == _cli_nome),  None)
+    _forn_id = next((f[0] for f in fornecs   if f[1] == _forn_nome), None)
+
+    _cli_idx  = next((i for i,x in enumerate(cli_opts)  if x[0] == _cli_id),  0)
+    _forn_idx = next((i for i,x in enumerate(forn_opts) if x[0] == _forn_id), 0)
 
     with st.form(f"edit_desp_{did}"):
         col1, col2 = st.columns(2)
@@ -479,7 +487,6 @@ def _form_editar_despesa(did, row):
         descricao = st.text_input("Descrição", value=row[3] if row[3] != "—" else "")
         obs       = st.text_input("Observação", value=row[14] or "")
 
-        # Upload de foto — fora do form pois file_uploader não funciona bem dentro de form
         _tem_foto = bool(row[15]) if len(row) > 15 else False
         if _tem_foto:
             st.caption("✅ Comprovante já anexado — envie novo para substituir")
@@ -489,8 +496,15 @@ def _form_editar_despesa(did, row):
             key=f"edit_foto_{did}",
             help="Deixe em branco para manter o comprovante atual")
 
-        if st.form_submit_button("💾 Salvar alterações", type="primary",
-                                 use_container_width=True):
+        col_s, col_c = st.columns(2)
+        _salvar   = col_s.form_submit_button("💾 Salvar alterações", type="primary",
+                                              use_container_width=True)
+        _cancelar = col_c.form_submit_button("✖️ Cancelar", use_container_width=True)
+
+        if _cancelar:
+            st.rerun()
+
+        if _salvar:
             # Processa foto se enviada
             nova_foto = None
             if foto_file:
