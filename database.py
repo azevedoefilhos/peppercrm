@@ -16,10 +16,14 @@ TIPOS_PONTO_EXTRA = ["Ponta de gondola","Ilha","Check-stand","Clip strip","Displ
 _USE_SUPABASE = None  # None = ainda nao verificado
 
 def _check_supabase():
-    """Verifica se deve usar Supabase. Chamado apenas quando necessario."""
+    """Verifica se deve usar PostgreSQL (Railway ou Supabase)."""
     global _USE_SUPABASE
     if _USE_SUPABASE is not None:
         return _USE_SUPABASE
+    # Railway PostgreSQL via DATABASE_URL — prioridade máxima
+    if os.environ.get("DATABASE_URL"):
+        _USE_SUPABASE = True
+        return True
     if os.environ.get("SUPABASE_URL"):
         _USE_SUPABASE = True
         return True
