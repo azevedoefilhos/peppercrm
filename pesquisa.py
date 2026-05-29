@@ -1169,10 +1169,8 @@ def _campo_navegacao(pq_id, forn_id):
     _pesq = query("SELECT produto_id, produto_concorrente_id, preco, em_oferta, ponto_extra, ruptura FROM pesquisa_preco_item WHERE pesquisa_id=?", (pq_id,))
     _mp = {}
     for _r in _pesq:
-        # Registro de concorrente (tem produto_concorrente_id)
+        if _r[0]: _mp[("n", int(_r[0]))] = (_r[2], _r[3], _r[4], _r[5])
         if _r[1]: _mp[("c", int(_r[1]))] = (_r[2], _r[3], _r[4], _r[5])
-        # Registro do nosso produto (sem produto_concorrente_id)
-        elif _r[0]: _mp[("n", int(_r[0]))] = (_r[2], _r[3], _r[4], _r[5])
 
     def _lbl(tk, ik, mk, dk):
         base = f"{mk} — {dk}"
@@ -1377,6 +1375,13 @@ def _coleta_ean_produto_encontrado(pq_id, forn_id, resultado, ean):
     """Exibe o produto encontrado e abre direto os campos de coleta."""
     tipo = resultado["tipo"]
 
+    # Botão voltar — permite corrigir produto selecionado por engano
+    if st.button("← Voltar à lista", key=f"btn_volta_prod_{pq_id}",
+                 use_container_width=False):
+        st.session_state.pop(f"nav_produto_pendente_{pq_id}", None)
+        st.rerun()
+    st.divider()
+
     if tipo == "nosso":
         _marca = resultado.get("marca","")
         _desc  = resultado.get("descricao","")
@@ -1564,16 +1569,11 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
                 pc_id_ref = pc_id if tipo in ("conc", "concorrente") else None
 
                 if pc_id_ref:
-                    # Concorrente: filtra por pc_id E produto_id (se vinculado)
-                    # NUNCA usa produto_id do nosso produto junto com pc_id_ref no INSERT
                     where_ex = "pesquisa_id=? AND produto_concorrente_id=?"
                     val_ex   = (pq_id, pc_id_ref)
-                    # Para concorrente, produto_id no registro é NULL (não é nosso produto)
-                    pid_salvar = None
                 else:
                     where_ex = "pesquisa_id=? AND produto_id=? AND produto_concorrente_id IS NULL"
                     val_ex   = (pq_id, pid_ref)
-                    pid_salvar = pid_ref
 
                 existente = conn.execute(
                     f"SELECT pesquisa_item_id FROM pesquisa_preco_item WHERE {where_ex} LIMIT 1",
@@ -1597,7 +1597,7 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
                         "(pesquisa_id, produto_id, produto_concorrente_id, "
                         "preco, frentes, em_oferta, ponto_extra, ruptura, observacao) "
                         "VALUES (?,?,?,?,?,?,?,?,?)",
-                        (pq_id, pid_salvar, pc_id_ref,
+                        (pq_id, pid_ref, pc_id_ref,
                          preco if not _rup_val else None,
                          frentes, 1 if _oferta_val else 0,
                          1 if _pe_val else 0,
