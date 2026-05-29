@@ -197,15 +197,15 @@ def _load_produtos():
     """Cache de produtos - nivel de modulo para persistir entre navegacoes."""
     return query("""
         SELECT p.produto_id, f.nome_fantasia, m.nome_marca,
-               COALESCE(cat.nome_categoria,''), COALESCE(l.nome_linha,''),
+               COALESCE(cat.nome_categoria,'—'), COALESCE(l.nome_linha,'—'),
                p.codigo_produto, p.descricao, p.descricao_curta,
                p.unidade_medida, p.unidades_caixa,
                COALESCE(p.peso,0), COALESCE(p.peso_caixa,0),
-               COALESCE(p.sub_categoria,''), COALESCE(p.grupo,''),
+               COALESCE(p.sub_categoria,'—'), COALESCE(p.grupo,'—'),
                COALESCE(p.validade_dias,0),
-               COALESCE(p.ean,''), COALESCE(p.dun,''),
-               COALESCE(p.ncm,''), COALESCE(p.cest,''),
-               COALESCE(p.observacao,''),
+               COALESCE(p.ean,'—'), COALESCE(p.dun,'—'),
+               COALESCE(p.ncm,'—'), COALESCE(p.cest,'—'),
+               COALESCE(p.observacao,'—'),
                p.ativo
         FROM produto p
         LEFT JOIN fornecedor f   ON p.fornecedor_id = f.fornecedor_id
@@ -247,10 +247,8 @@ def _lista_produtos():
     # Banners de feedback
     msg_del  = st.session_state.pop("prod_excluir_ok", None)
     msg_edit = st.session_state.pop("prod_edit_ok", None)
-    msg_novo = st.session_state.pop("prod_sucesso_msg", None)
     if msg_del:  st.success(msg_del)
     if msg_edit: st.success(msg_edit)
-    if msg_novo: st.success(msg_novo)
 
     dados = _load_produtos()
     if not dados:
@@ -329,6 +327,22 @@ def _lista_produtos():
                 df["Codigo"].str.contains(b, case=False, na=False))
         df = df[mask]
 
+    # ── EXPORTAÇÃO ────────────────────────────────────────────────────────
+    trigger = st.session_state.pop("exp_prod_trigger", None)
+    if trigger == "excel":
+        buf = io.BytesIO()
+        df.to_excel(buf, index=False, sheet_name="Produtos")
+        buf.seek(0)
+        nome_arq = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}.xlsx"
+        st.download_button("📥 Baixar Excel", data=buf, file_name=nome_arq,
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           use_container_width=True)
+    elif trigger == "pdf":
+        buf = _exportar_produtos_pdf(df, sel_forn)
+        nome_arq = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}.pdf"
+        st.download_button("📥 Baixar PDF", data=buf, file_name=nome_arq,
+                           mime="application/pdf", use_container_width=True)
+
     # ── CONTADOR CONTEXTUAL ───────────────────────────────────────────────
     filtros_ativos = []
     if sel_forn != "Todos":    filtros_ativos.append(sel_forn)
@@ -338,102 +352,50 @@ def _lista_produtos():
     if busca.strip():          filtros_ativos.append(f'"{busca.strip()}"')
     contexto = f" — {' | '.join(filtros_ativos)}" if filtros_ativos else ""
     st.caption(f"**{len(df)}** produto(s){contexto}  |  Total no banco: {len(df_full)}")
-
-    # ── EXPORTAÇÃO — gera antes do botão para 1 clique ───────────────────
-    # Renomeia para nomes do template de importação
-    # Reordena e renomeia para espelhar template de importação
-    _cols_ordem = ["fornecedor_nome","marca_nome","categoria_nome","linha_nome",
-                   "sub_categoria","grupo","codigo_produto","descricao","descricao_curta",
-                   "unidade_medida","peso_unidade","peso_caixa","unidades_caixa",
-                   "validade_dias","ean","dun","ncm","cest","observacao","ativo"]
-    _mapa_cols = {
-        "Fornecedor":"fornecedor_nome","Marca":"marca_nome","Categoria":"categoria_nome",
-        "Linha":"linha_nome","Sub-categoria":"sub_categoria","Grupo":"grupo",
-        "Codigo":"codigo_produto","Descricao":"descricao","Descricao curta":"descricao_curta",
-        "UM":"unidade_medida","Peso un.":"peso_unidade","Peso cx.":"peso_caixa",
-        "Un/Cx":"unidades_caixa","Validade (d)":"validade_dias",
-        "EAN":"ean","DUN":"dun","NCM":"ncm","CEST":"cest","Observacao":"observacao","Ativo":"ativo"
-    }
-    df_exp_prod = df.copy().replace("—","").rename(columns=_mapa_cols)
-    # Mantém só as colunas do template na ordem correta (sem ID)
-    _cols_disp = [c for c in _cols_ordem if c in df_exp_prod.columns]
-    df_exp_prod = df_exp_prod[_cols_disp]
-    _buf_prod_xl = io.BytesIO()
-    with pd.ExcelWriter(_buf_prod_xl, engine='openpyxl') as _w:
-        df_exp_prod.to_excel(_w, index=False, sheet_name="Produtos")
-    _nome_prod = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}"
-
-    trigger = st.session_state.pop("exp_prod_trigger", None)
-    if trigger == "excel":
-        st.download_button(
-            "📥 Baixar Excel",
-            data=_buf_prod_xl.getvalue(), file_name=f"{_nome_prod}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True, key="dl_xlsx_prod_now")
-    elif trigger == "pdf":
-        with st.spinner("Gerando PDF..."):
-            pdf_bytes = _exportar_produtos_pdf(df, sel_forn)
-        st.download_button(
-            "📥 Baixar PDF",
-            data=pdf_bytes, file_name=f"{_nome_prod}.pdf",
-            mime="application/pdf",
-            use_container_width=True, key="dl_pdf_prod_now")
-
     st.divider()
 
-    # ── LISTA LEVE — dataframe com seleção para editar ────────────────────
-    df_view = df[["ID","Fornecedor","Marca","Codigo","Descricao curta",
-                  "Un/Cx","UM","Ativo"]].copy()
-    df_view.columns = ["ID","Fornecedor","Marca","Código","Descrição","Un/Cx","UM","Ativo"]
+    # ── CABEÇALHO DA LISTA ────────────────────────────────────────────────
+    h1, h2, h3, h4, h5, h6, h7, h8, h9 = st.columns([0.4, 1.5, 1.3, 1.0, 2.8, 0.6, 0.5, 0.5, 0.5])
+    for col, txt in zip([h1,h2,h3,h4,h5,h6,h7,h8,h9],
+                        ["ID","Fornecedor","Marca","Código","Descrição","Un/Cx","UM","",""]):
+        col.markdown(f"<small><b>{txt}</b></small>", unsafe_allow_html=True)
 
-    st.dataframe(df_view, use_container_width=True, hide_index=True,
-                 column_config={
-                     "ID":        st.column_config.NumberColumn(width="small"),
-                     "Fornecedor":st.column_config.TextColumn(width="medium"),
-                     "Marca":     st.column_config.TextColumn(width="small"),
-                     "Código":    st.column_config.TextColumn(width="small"),
-                     "Descrição": st.column_config.TextColumn(width="large"),
-                     "Un/Cx":     st.column_config.TextColumn(width="small"),
-                     "UM":        st.column_config.TextColumn(width="small"),
-                     "Ativo":     st.column_config.TextColumn(width="small"),
-                 })
+    for _, row in df.iterrows():
+        pid    = row["ID"]
+        forn_n = row["Fornecedor"]
+        marca_n= row["Marca"]
+        codigo = row["Codigo"]
+        desc_c = row["Descricao curta"]
+        un_cx  = row["Un/Cx"]
+        um     = row["UM"]
+        ativo  = row["Ativo"]
 
-    # ── EDITAR / EXCLUIR — seleção por ID ────────────────────────────────
-    st.divider()
-    ids_disp = df["ID"].tolist()
-    col_sel, col_ed, col_del = st.columns([3, 1, 1])
-    with col_sel:
-        pid_sel = st.selectbox("Selecionar produto pelo ID",
-                               [None] + ids_disp,
-                               format_func=lambda x: "— selecione —" if x is None else
-                                   f"#{x} — {df[df['ID']==x]['Descricao curta'].values[0]}",
-                               key="prod_sel_id")
-    with col_ed:
-        st.write("")
-        if st.button("✏️ Editar", key="btn_ed_prod",
-                     use_container_width=True, disabled=pid_sel is None):
-            st.session_state["prod_editar_id"] = pid_sel
-            st.session_state.pop("prod_excluir_id", None)
-            st.rerun()
-    with col_del:
-        st.write("")
-        if st.button("🗑️ Excluir", key="btn_del_prod",
-                     use_container_width=True, disabled=pid_sel is None):
-            st.session_state["prod_excluir_id"] = pid_sel
-            st.session_state.pop("prod_editar_id", None)
-            st.rerun()
+        c1,c2,c3,c4,c5,c6,c7,c8,c9 = st.columns([0.4, 1.5, 1.3, 1.0, 2.8, 0.6, 0.5, 0.5, 0.5])
+        c1.caption(str(pid))
+        c2.write(str(forn_n) if forn_n else "—")
+        c3.caption(str(marca_n) if marca_n else "—")
+        c4.caption(str(codigo) if codigo else "—")
+        c5.write(str(desc_c) if desc_c else "—")
+        c6.caption(str(un_cx) if un_cx else "—")
+        c7.caption(str(um) if um else "—")
+        with c8:
+            if st.button("✏️", key=f"ed_prod_{pid}", help="Editar produto",
+                         use_container_width=True):
+                st.session_state["prod_editar_id"] = pid
+                st.session_state.pop("prod_excluir_id", None)
+                st.rerun()
+        with c9:
+            if st.button("🗑️", key=f"del_prod_{pid}", help="Excluir produto",
+                         use_container_width=True):
+                st.session_state["prod_excluir_id"] = pid
+                st.session_state.pop("prod_editar_id", None)
+                st.rerun()
 
-    # Form editar/excluir renderizado abaixo da lista
-    _eid = st.session_state.get("prod_editar_id")
-    _did = st.session_state.get("prod_excluir_id")
-    if _eid and _eid in ids_disp:
-        row = df[df["ID"] == _eid].iloc[0]
-        st.info(f"Editando: **{row['Descricao curta']}** (#{_eid})")
-        _form_editar_produto(_eid)
-    if _did and _did in ids_disp:
-        row = df[df["ID"] == _did].iloc[0]
-        _confirmacao_excluir_produto(_did,
-            str(row["Descricao curta"]), str(row["Codigo"]))
+        if st.session_state.get("prod_editar_id") == pid:
+            _form_editar_produto(pid)
+
+        if st.session_state.get("prod_excluir_id") == pid:
+            _confirmacao_excluir_produto(pid, str(desc_c), str(codigo))
 
 
 
@@ -825,15 +787,11 @@ def _form_novo_produto():
               sub_cat or None, grupo or None, obs_prod or None))
         conn.commit(); conn.close()
 
-        # Limpa campos e volta para aba lista
+        # Limpa campos de texto após salvar com sucesso
         for k in ["np_codigo","np_desc","np_desc_c","np_subcat","np_grupo",
-                  "np_ean","np_dun","np_ncm","np_cest","np_obs",
-                  "np_marca","np_cat","np_linha","np_unidade",
-                  "np_peso","np_peso_cx","np_uncx","np_validade",
-                  "prod_aba"]:
+                  "np_ean","np_dun","np_ncm","np_cest","np_obs"]:
             st.session_state.pop(k, None)
-        st.session_state["prod_sucesso_msg"] = f"✅ Produto '{descricao_curta.strip()}' cadastrado!"
-        st.session_state["prod_aba"] = "lista"  # volta para a aba lista
+        st.session_state["np_sucesso_msg"] = f"✅ Produto '{descricao_curta.strip()}' cadastrado com sucesso!"
         st.rerun()
 
 
@@ -871,18 +829,17 @@ def _importar_produtos_excel():
         "peso_unidade":     3.0,
         "peso_caixa":       6.0,
         "unidades_caixa":   2,
-        "validade_dias":    30,
         "ean":              "",
         "dun":              "",
+        "validade_dias":    30,
         "ncm":              "",
         "cest":             "",
         "observacao":       "",
-        "ativo":            1,
     }])
     buf_tpl = io.BytesIO()
-    with pd.ExcelWriter(buf_tpl, engine="openpyxl") as _w:
-        df_tpl.to_excel(_w, index=False, sheet_name="Produtos")
-    st.download_button("⬇️ Baixar template de Produtos", data=buf_tpl.getvalue(),
+    df_tpl.to_excel(buf_tpl, index=False, sheet_name="Produtos")
+    buf_tpl.seek(0)
+    st.download_button("Baixar template de produtos", data=buf_tpl,
                        file_name="template_produtos.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     st.caption(
@@ -1087,32 +1044,24 @@ def _lista_tabelas():
 
     df = pd.DataFrame(dados, columns=["ID","Forn.ID","Fornecedor","Tabela","Tipo","Prazo",
                                        "Frete","Inicio","Fim","Ativo","Itens"])
-    df["Fim"] = df["Fim"].fillna("— sem prazo")
+    df["Ativo"] = df["Ativo"].map({1: "✅", 0: "❌"})
+    df["Fim"]   = df["Fim"].fillna("— sem prazo")
 
     # ── FILTROS ──────────────────────────────────────────────────────────
-    col_f1, col_f2, col_f3 = st.columns([2, 2, 1.5])
+    col_f1, col_f2 = st.columns([2, 2])
     with col_f1:
         forns_t = ["Todos"] + sorted(df["Fornecedor"].dropna().unique().tolist())
         sel_t   = st.selectbox("Fornecedor", forns_t, key="lt_forn_filtro")
+
+    # Aplica filtro de fornecedor primeiro para sincronizar tipos
+    df_forn = df if sel_t == "Todos" else df[df["Fornecedor"] == sel_t]
+
     with col_f2:
-        df_forn = df if sel_t == "Todos" else df[df["Fornecedor"] == sel_t]
         tipos_t = ["Todos"] + sorted(df_forn["Tipo"].dropna().unique().tolist())
         sel_tipo = st.selectbox("Tipo de tabela", tipos_t, key="lt_tipo_filtro")
-    with col_f3:
-        sel_status = st.selectbox("Status", ["Ativas", "Inativas", "Todas"],
-                                  key="lt_status_filtro",
-                                  help="Padrão: só tabelas ativas")
 
-    # Aplica filtros
+    # Aplica filtro de tipo sobre o já filtrado por fornecedor
     df_vis = df_forn if sel_tipo == "Todos" else df_forn[df_forn["Tipo"] == sel_tipo]
-    if sel_status == "Ativas":
-        df_vis = df_vis[df_vis["Ativo"] == 1]
-    elif sel_status == "Inativas":
-        df_vis = df_vis[df_vis["Ativo"] == 0]
-    # "Todas" — sem filtro adicional
-
-    df_vis = df_vis.copy()
-    df_vis["Ativo"] = df_vis["Ativo"].map({1: "✅ Ativa", 0: "❌ Inativa"})
 
     col_exp_tx, col_exp_tp = st.columns(2)
     with col_exp_tx:
@@ -1174,61 +1123,19 @@ def _lista_tabelas():
                                    file_name=nome_tp, mime="application/pdf",
                                    use_container_width=True)
 
-    # ── Auto-inativação de tabelas com data_fim expirada ─────────────────
-    from datetime import date as _date
-    _hoje = _date.today().isoformat()
-    _expiradas = query("""
-        SELECT tabela_preco_id FROM tabela_preco
-        WHERE ativo=1 AND data_fim IS NOT NULL AND data_fim < ?
-    """, (_hoje,))
-    if _expiradas:
-        conn = conectar()
-        for _exp in _expiradas:
-            conn.execute("UPDATE tabela_preco SET ativo=0 WHERE tabela_preco_id=?",
-                         (_exp[0],))
-        conn.commit(); conn.close()
-        # Recarrega dados após auto-inativação
-        dados = query("""
-            SELECT tp.tabela_preco_id, f.fornecedor_id, f.nome_fantasia, tp.nome_tabela,
-                   tp.tipo_tabela, tp.prazo_pagamento, tp.frete,
-                   tp.data_inicio, tp.data_fim, tp.ativo,
-                   COUNT(tpi.tabela_preco_item_id) AS qtd_itens
-            FROM tabela_preco tp
-            LEFT JOIN fornecedor f ON tp.fornecedor_id = f.fornecedor_id
-            LEFT JOIN tabela_preco_item tpi ON tp.tabela_preco_id = tpi.tabela_preco_id
-            GROUP BY tp.tabela_preco_id, f.fornecedor_id, f.nome_fantasia, tp.nome_tabela,
-                     tp.tipo_tabela, tp.prazo_pagamento, tp.frete, tp.data_inicio, tp.data_fim, tp.ativo
-            ORDER BY f.nome_fantasia, tp.data_inicio DESC
-        """)
-        df = pd.DataFrame(dados, columns=["ID","Forn.ID","Fornecedor","Tabela","Tipo","Prazo",
-                                           "Frete","Inicio","Fim","Ativo","Itens"])
-        df["Fim"] = df["Fim"].fillna("— sem prazo")
-        df_forn = df if sel_t == "Todos" else df[df["Fornecedor"] == sel_t]
-        df_vis = df_forn if sel_tipo == "Todos" else df_forn[df_forn["Tipo"] == sel_tipo]
-        if sel_status == "Ativas":
-            df_vis = df_vis[df_vis["Ativo"] == 1]
-        elif sel_status == "Inativas":
-            df_vis = df_vis[df_vis["Ativo"] == 0]
-        df_vis = df_vis.copy()
-
-    df_vis["Ativo"] = df_vis["Ativo"].map({1: "✅ Ativa", 0: "❌ Inativa"})
-
     st.dataframe(df_vis[["ID","Fornecedor","Tabela","Tipo","Prazo","Frete","Inicio","Fim","Ativo","Itens"]],
                  use_container_width=True, hide_index=True)
 
     st.divider()
 
-    # ── Seleção da tabela para editar — apenas ativas ─────────────────────
-    dados_ativas = [r for r in dados if r[9] == 1]  # ativo=1
-    if not dados_ativas:
-        st.info("Nenhuma tabela ativa para editar. Use o filtro 'Inativas' para reativar tabelas.")
-        return
+    # ── Seleção da tabela para editar ─────────────────
+    # Usa session_state para fixar a tabela selecionada após salvar (evita pular para próxima)
+    ids     = [(r[0], f"{r[2]} · {r[3]}") for r in dados]
+    ids_map = {r[0]: i for i, r in enumerate(ids)}   # tab_id → índice na lista
 
-    ids     = [(r[0], f"{r[2]} · {r[3]}") for r in dados_ativas]
-    ids_map = {r[0]: i for i, r in enumerate(ids)}
-
+    # Recupera tab_id fixado (salvo após edição) e calcula índice correspondente
     tab_id_fixo = st.session_state.get("tab_editando_id")
-    idx_sel = ids_map.get(tab_id_fixo, 0) if tab_id_fixo and tab_id_fixo in ids_map else 0
+    idx_sel = ids_map.get(tab_id_fixo, 0) if tab_id_fixo else 0
 
     sel = st.selectbox("Selecione a tabela para editar", ids,
                        index=idx_sel,
@@ -1238,9 +1145,10 @@ def _lista_tabelas():
         return
 
     tab_id = sel[0]
+    # Sempre sincroniza a seleção manual do usuário com o session_state
     st.session_state["tab_editando_id"] = tab_id
 
-    tab_row = next(r for r in dados_ativas if r[0] == tab_id)
+    tab_row = next(r for r in dados if r[0] == tab_id)
     (_, forn_id_at, forn_nome_at, nome_at, tipo_at, prazo_at,
      frete_at, ini_at, fim_at, ativo_at, _) = tab_row
 
@@ -1755,15 +1663,14 @@ def _importar_tabela_excel():
         "observacao":       "",
     }])
     buf_tpl_tab = io.BytesIO()
-    with pd.ExcelWriter(buf_tpl_tab, engine="openpyxl") as _w:
-        df_tpl_tab.to_excel(_w, index=False, sheet_name="Tabela")
-    st.download_button("⬇️ Baixar template de Tabela de Preços", data=buf_tpl_tab.getvalue(),
+    df_tpl_tab.to_excel(buf_tpl_tab, index=False, sheet_name="Tabela")
+    buf_tpl_tab.seek(0)
+    st.download_button("Baixar template de tabela de precos", data=buf_tpl_tab,
                        file_name="template_tabela_precos.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     st.caption(
         "Colunas obrigatorias: fornecedor_nome, nome_tabela, codigo_produto, preco_caixa.  "
-        "Opcionais: tipo_tabela, prazo_pagamento, frete, data_inicio, data_fim, preco_kg, desconto_maximo, observacao.  "
-        "preco_kg = Valor por kg/PCT (R$)  |  desconto_maximo = % maximo de desconto"
+        "preco_kg = Valor PCT/kg (R$)  |  desconto_maximo = % maximo de desconto"
     )
     st.divider()
 
@@ -1887,32 +1794,19 @@ def _importar_tabela_excel():
                 if not prod:
                     erros_imp.append(f"Linha {idx+2}: Produto '{codigo}' não encontrado."); continue
 
-                # Upsert compatível SQLite + PostgreSQL
-                existe = conn.execute("""
-                    SELECT 1 FROM tabela_preco_item
-                    WHERE tabela_preco_id=? AND produto_id=?
-                """, (tab_id, prod[0])).fetchone()
-
-                if existe:
-                    conn.execute("""
-                        UPDATE tabela_preco_item
-                        SET preco_caixa=?,
-                            desconto_maximo=?,
-                            preco_kg=COALESCE(?, preco_kg),
-                            observacao=COALESCE(?, observacao)
-                        WHERE tabela_preco_id=? AND produto_id=?
-                    """, (preco, desc_max, preco_kg_t, obs_tab_t, tab_id, prod[0]))
-                else:
-                    conn.execute("""
-                        INSERT INTO tabela_preco_item
-                            (tabela_preco_id, produto_id, preco_caixa, desconto_maximo,
-                             preco_kg, observacao)
-                        VALUES (?,?,?,?,?,?)
-                    """, (tab_id, prod[0], preco, desc_max, preco_kg_t, obs_tab_t))
+                conn.execute("""
+                    INSERT INTO tabela_preco_item
+                        (tabela_preco_id, produto_id, preco_caixa, desconto_maximo,
+                         preco_kg, observacao)
+                    VALUES (?,?,?,?,?,?)
+                    ON CONFLICT(tabela_preco_id, produto_id)
+                    DO UPDATE SET preco_caixa=excluded.preco_caixa,
+                                  desconto_maximo=excluded.desconto_maximo,
+                                  preco_kg=COALESCE(excluded.preco_kg, preco_kg),
+                                  observacao=COALESCE(excluded.observacao, observacao)
+                """, (tab_id, prod[0], preco, desc_max, preco_kg_t, obs_tab_t))
 
                 # Registra no histórico de preços
-                from datetime import date as _date
-                _hoje_str = _date.today().isoformat()
                 preco_ant = conn.execute("""
                     SELECT preco_caixa FROM historico_preco
                     WHERE produto_id=? AND fornecedor_id=?
@@ -1924,9 +1818,9 @@ def _importar_tabela_excel():
                         INSERT INTO historico_preco
                         (produto_id, fornecedor_id, tabela_id, nome_tabela,
                          data_vigencia, preco_caixa, preco_kg, data_registro)
-                        VALUES (?,?,?,?,?,?,?,?)
+                        VALUES (?,?,?,?,?,?,?,date('now'))
                     """, (prod[0], forn_id, tab_id, nome_tab,
-                          data_ini or _hoje_str, preco, preco_kg_t, _hoje_str))
+                          data_ini or str(date.today()), preco, preco_kg_t))
                 importados += 1
 
             except Exception as e:
@@ -1950,8 +1844,6 @@ def _importar_tabela_excel():
 
 def tela_clientes():
     st.header("Clientes")
-    _msg_cli = st.session_state.pop("_cli_msg_ok", None)
-    if _msg_cli: st.success(_msg_cli)
     if st.button("⬅ Voltar"):
         _ir("home")
     ABAS_CLI = {
@@ -2060,8 +1952,6 @@ def _lista_clientes():
     if msg_massa:
         st.success(msg_massa)
 
-    PERFIS_CLI = ["Todos","Empório","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolão","Hortifruti","Açougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associação","Outro"]
-
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
         fil_status = st.selectbox("Filtrar por status",
@@ -2070,8 +1960,7 @@ def _lista_clientes():
         fil_busca  = st.text_input("Buscar por nome", key="fil_cli_nome",
                                    placeholder="Digite parte do nome...")
     with col_f3:
-        fil_perfil = st.selectbox("Tipo de estabelecimento",
-                                  PERFIS_CLI, key="fil_cli_perfil")
+        pass  # reservado
 
     # Alteracao em massa — session_state para capturar apos rerun
     with st.expander("🔄 Alterar status em massa"):
@@ -2097,21 +1986,18 @@ def _lista_clientes():
         where_q.append("c.status=?"); params_q.append(fil_status)
     if fil_busca.strip():
         where_q.append("c.nome_fantasia LIKE ?"); params_q.append(f"%{fil_busca.strip()}%")
-    if fil_perfil != "Todos":
-        where_q.append("c.perfil=?"); params_q.append(fil_perfil)
     where_sql = ("WHERE " + " AND ".join(where_q)) if where_q else ""
 
     dados = query(f"""
         SELECT c.cliente_id, c.nome_fantasia, c.cidade, c.estado,
                c.ativo, COALESCE(c.status,'Ativo') AS status,
                COUNT(DISTINCT cf.cliente_fornecedor_id) AS fornecedores,
-               COUNT(DISTINCT p.pdv_id) AS pdvs,
-               COALESCE(c.perfil,'—') AS perfil
+               COUNT(DISTINCT p.pdv_id) AS pdvs
         FROM cliente c
-        LEFT JOIN cliente_fornecedor cf ON c.cliente_id=cf.cliente_id AND cf.ativo!=0
-        LEFT JOIN pdv p ON c.cliente_id=p.cliente_id AND p.ativo!=0
+        LEFT JOIN cliente_fornecedor cf ON c.cliente_id=cf.cliente_id AND cf.ativo=1
+        LEFT JOIN pdv p ON c.cliente_id=p.cliente_id AND p.ativo=1
         {where_sql}
-        GROUP BY c.cliente_id, c.nome_fantasia, c.cidade, c.estado, c.ativo, c.status, c.perfil
+        GROUP BY c.cliente_id
         ORDER BY c.nome_fantasia
     """, tuple(params_q))
 
@@ -2119,89 +2005,73 @@ def _lista_clientes():
         st.info("Nenhum cliente encontrado.")
         return
 
-    total = len(dados)
-    col_ct, col_exp = st.columns([3, 1])
-    col_ct.caption(f"{total} cliente(s) — clique em uma linha para editar")
+    col_ct, col_exp = st.columns([3,1])
+    col_ct.caption(f"{len(dados)} cliente(s)")
     with col_exp:
-        if st.button("⬇️ Exportar Excel", key="btn_exp_cli", use_container_width=True):
-            try:
-                extras = query(f"""
-                    SELECT c.cliente_id, COALESCE(c.razao_social,''),
-                           COALESCE(c.perfil,''), COALESCE(c.fone,''),
-                           COALESCE(c.email,''), COALESCE(c.cnpj,''),
-                           COALESCE(c.endereco,''), COALESCE(c.bairro,''),
-                           COALESCE(c.site,''), COALESCE(c.instagram,''),
-                           COALESCE(c.observacao,''), COALESCE(a.nome,'')
-                    FROM cliente c
-                    LEFT JOIN associacao a ON a.associacao_id = c.associacao_id
-                    {where_sql}
-                    ORDER BY c.nome_fantasia
-                """, tuple(params_q))
-                extras_map = {r[0]: r for r in extras}
-                cols_exp = ["ID","nome_fantasia","razao_social","perfil","status",
-                            "fone","email","cnpj","endereco","bairro","cidade",
-                            "estado","site","instagram","associacao_nome","observacao"]
-                linhas = []
-                for r in dados:
-                    ex = extras_map.get(r[0],[r[0],'','','','','','','','','','',''])
-                    linhas.append([r[0],r[1],ex[1],ex[2],r[5],ex[3],ex[4],ex[5],
-                                   ex[6],ex[7],r[2],r[3],ex[8],ex[9],ex[11],ex[10]])
-                df_exp = pd.DataFrame(linhas, columns=cols_exp)
-                buf_exp = io.BytesIO()
-                with pd.ExcelWriter(buf_exp, engine='openpyxl') as writer:
-                    df_exp.to_excel(writer, index=False, sheet_name="Clientes")
-                st.session_state["_cli_xlsx"] = buf_exp.getvalue()
-            except Exception as _ex:
-                st.error(f"Erro: {_ex}")
+        if st.button("⬇️ Exportar Excel", key="exp_cli_xlsx", use_container_width=True):
+            st.session_state["exp_cli_trigger"] = True
 
-    if "_cli_xlsx" in st.session_state:
-        st.download_button("📥 Baixar Excel",
-                           data=st.session_state.pop("_cli_xlsx"),
+    if st.session_state.pop("exp_cli_trigger", False):
+        dados_exp = query("""
+            SELECT c.cliente_id, c.nome_fantasia, c.razao_social,
+                   COALESCE(c.perfil,'—'), COALESCE(c.fone,'—'),
+                   COALESCE(c.cnpj,'—'), COALESCE(c.site,'—'),
+                   COALESCE(c.instagram,'—'),
+                   COALESCE(c.endereco,'—'), COALESCE(c.bairro,'—'),
+                   COALESCE(c.cidade,'—'), COALESCE(c.estado,'—'),
+                   COALESCE(a.nome,'—') AS associacao,
+                   COALESCE(c.status,'Ativo'), COALESCE(c.observacao,''),
+                   COUNT(DISTINCT p.pdv_id) AS pdvs
+            FROM cliente c
+            LEFT JOIN associacao a ON c.associacao_id=a.associacao_id
+            LEFT JOIN pdv p ON c.cliente_id=p.cliente_id
+            GROUP BY c.cliente_id
+            ORDER BY c.nome_fantasia
+        """)
+        df_exp = pd.DataFrame(dados_exp, columns=[
+            "ID","Nome fantasia","Razao social","Perfil","Fone","CNPJ","Site","Instagram",
+            "Endereco","Bairro","Cidade","UF","Associacao","Status","Observacao","PDVs"])
+        buf_exp = io.BytesIO()
+        df_exp.to_excel(buf_exp, index=False, sheet_name="Clientes")
+        buf_exp.seek(0)
+        st.download_button("📥 Baixar lista de clientes",
+                           data=buf_exp,
                            file_name="clientes_peppercrm.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           key="dl_cli_xlsx")
+                           use_container_width=True)
 
-    # Tabela interativa — leve e rápida
-    df_lista = pd.DataFrame([{
-        "ID":        r[0],
-        "Cliente":   r[1],
-        "Perfil":    r[8],
-        "Cidade":    f"{r[2] or '—'}/{r[3] or ''}",
-        "Status":    r[5],
-        "Fornec.":   int(r[6] or 0),
-        "PDVs":      int(r[7] or 0),
-    } for r in dados])
+    h1,h2,h3,h4,h5,h6 = st.columns([0.4,2.8,1.2,0.6,1.5,1.2])
+    for col, txt in zip([h1,h2,h3,h4,h5,h6],
+                        ["ID","Cliente","Cidade","UF","Status",""]):
+        col.markdown(f"<small><b>{txt}</b></small>", unsafe_allow_html=True)
 
-    sel = st.dataframe(
-        df_lista,
-        use_container_width=True,
-        hide_index=True,
-        on_select="rerun",
-        selection_mode="single-row",
-        column_config={
-            "ID":      st.column_config.NumberColumn(width="small"),
-            "Cliente": st.column_config.TextColumn(width="large"),
-            "Perfil":  st.column_config.TextColumn(width="medium"),
-            "Cidade":  st.column_config.TextColumn(width="medium"),
-            "Status":  st.column_config.TextColumn(width="medium"),
-            "Fornec.": st.column_config.NumberColumn(width="small"),
-            "PDVs":    st.column_config.NumberColumn(width="small"),
-        },
-        key="df_clientes"
-    )
+    for row in dados:
+        cid, nome, cidade, uf, ativo, status, fornec, pdvs = row
 
-    # Card de edição/exclusão ao selecionar linha
-    rows_sel = sel.selection.rows if sel and sel.selection else []
-    if rows_sel:
-        idx = rows_sel[0]
-        cid  = dados[idx][0]
-        nome = dados[idx][1]
-        st.divider()
-        st.markdown(f"#### ✏️ {nome}")
-        tab_edit, tab_del = st.tabs(["✏️ Editar dados", "🗑️ Excluir cliente"])
-        with tab_edit:
+        c1,c2,c3,c4,c5,c6 = st.columns([0.4,2.8,1.2,0.6,1.5,1.2])
+        c1.caption(str(cid))
+        c2.write(nome)
+        c3.caption(cidade or "—")
+        c4.caption(uf or "—")
+        c5.caption(_status_icone(status))
+        with c6:
+            b1, b2 = st.columns(2)
+            with b1:
+                if st.button("✏️", key=f"ed_cli_{cid}", help="Editar",
+                             use_container_width=True):
+                    st.session_state["cli_editar_id"] = cid
+                    st.session_state.pop("cli_excluir_id", None)
+                    st.rerun()
+            with b2:
+                if st.button("🗑️", key=f"ex_cli_{cid}", help="Excluir",
+                             use_container_width=True):
+                    st.session_state["cli_excluir_id"] = cid
+                    st.session_state.pop("cli_editar_id", None)
+                    st.rerun()
+
+        if st.session_state.get("cli_editar_id") == cid:
             _form_editar_cliente(cid)
-        with tab_del:
+        if st.session_state.get("cli_excluir_id") == cid:
             _confirmacao_excluir_cliente(cid, nome)
 
 
@@ -2261,9 +2131,8 @@ def _form_novo_cliente():
         with col1:
             fantasia = st.text_input("Nome fantasia *")
             razao    = st.text_input("Razao social")
-            perfil   = st.selectbox("Perfil / tipo *", ["— Selecione —","Empório","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolão","Hortifruti","Açougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associação","Outro"])
+            perfil   = st.selectbox("Perfil / tipo", ["Emporio","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolao","Hortifruti","Acougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associacao","Outro"])
             fone     = st.text_input("Fone / WhatsApp", placeholder="Ex: 13988776655")
-            email    = st.text_input("E-mail", placeholder="Ex: compras@cliente.com.br")
             cnpj     = st.text_input("CNPJ")
             site     = st.text_input("Site")
             insta    = st.text_input("Instagram", placeholder="@perfil")
@@ -2282,8 +2151,6 @@ def _form_novo_cliente():
     if salvar:
         if not fantasia.strip():
             _erro("Nome fantasia e obrigatorio."); return
-        if perfil == "— Selecione —":
-            _erro("Selecione o tipo de estabelecimento."); return
         existe = query("SELECT cliente_id FROM cliente WHERE LOWER(nome_fantasia)=LOWER(?)",
                        (fantasia.strip(),))
         if existe:
@@ -2292,17 +2159,15 @@ def _form_novo_cliente():
         conn = conectar()
         conn.execute("""
             INSERT INTO cliente
-            (razao_social, nome_fantasia, perfil, fone, email, cnpj, ie, endereco, bairro,
+            (razao_social, nome_fantasia, perfil, fone, cnpj, ie, endereco, bairro,
              cidade, estado, site, instagram, associacao_id, observacao, status, ativo)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """, (razao, fantasia.strip(), perfil, fone or None, email or None,
-              cnpj or None, None,
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (razao, fantasia.strip(), perfil, fone or None, cnpj or None, None,
               endereco or None, bairro or None, cidade, estado,
               site or None, insta or None, assoc_sel[0], obs or None,
               status_n, ativo_n))
         conn.commit(); conn.close()
-        st.session_state["_cli_msg_ok"] = f"✅ Cliente '{fantasia}' cadastrado como {status_n}!"
-        st.rerun()
+        _sucesso(f"Cliente '{fantasia}' cadastrado como {status_n}!")
 
 
 def _form_editar_cliente(cli_id):
@@ -2314,7 +2179,7 @@ def _form_editar_cliente(cli_id):
     assoc_opts = [(None, "— Nenhuma")] + [(a[0], a[1]) for a in assocs]
     assoc_ids  = [a[0] for a in assoc_opts]
     idx_assoc  = assoc_ids.index(c["associacao_id"]) if c["associacao_id"] in assoc_ids else 0
-    perfis_e   = ["— Selecione —","Empório","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolão","Hortifruti","Açougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associação","Outro"]
+    perfis_e   = ["Emporio","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolao","Hortifruti","Acougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associacao","Outro"]
     perfil_at  = c["perfil"] if c["perfil"] and c["perfil"] in perfis_e else perfis_e[0]
 
     with st.form(f"edit_cli_{cli_id}"):
@@ -2325,7 +2190,6 @@ def _form_editar_cliente(cli_id):
             perfil   = st.selectbox("Perfil / tipo", perfis_e,
                                     index=perfis_e.index(perfil_at))
             fone     = st.text_input("Fone / WhatsApp", c["fone"] or "")
-            email    = st.text_input("E-mail",          c["email"] or "" if "email" in (c.keys() if hasattr(c,'keys') else []) else "")
             cnpj     = st.text_input("CNPJ",           c["cnpj"]     or "")
             site     = st.text_input("Site",            c["site"]     or "")
             insta    = st.text_input("Instagram",       c["instagram"] or "")
@@ -2352,38 +2216,18 @@ def _form_editar_cliente(cli_id):
         if existe:
             _erro(f"Ja existe outro cliente com o nome '{fantasia}'."); return
         ativo_novo = 1 if status_e == "Ativo" else 0
-        # Verifica se coluna email existe antes de incluir no UPDATE
-        _tem_email = True
-        try:
-            query("SELECT email FROM cliente LIMIT 1")
-        except Exception:
-            _tem_email = False
-
         conn = conectar()
-        if _tem_email:
-            conn.execute("""
-                UPDATE cliente SET razao_social=?, nome_fantasia=?, perfil=?, fone=?,
-                email=?, cnpj=?, endereco=?, bairro=?, cidade=?, estado=?,
-                site=?, instagram=?, associacao_id=?, observacao=?, status=?, ativo=?
-                WHERE cliente_id=?
-            """, (razao, fantasia.strip(), perfil, fone or None,
-                  email or None, cnpj or None, endereco or None, bairro or None, cidade, estado,
-                  site or None, insta or None, assoc_e[0], obs or None,
-                  status_e, ativo_novo, cli_id))
-        else:
-            conn.execute("""
-                UPDATE cliente SET razao_social=?, nome_fantasia=?, perfil=?, fone=?,
-                cnpj=?, endereco=?, bairro=?, cidade=?, estado=?,
-                site=?, instagram=?, associacao_id=?, observacao=?, status=?, ativo=?
-                WHERE cliente_id=?
-            """, (razao, fantasia.strip(), perfil, fone or None,
-                  cnpj or None, endereco or None, bairro or None, cidade, estado,
-                  site or None, insta or None, assoc_e[0], obs or None,
-                  status_e, ativo_novo, cli_id))
-            st.warning("⚠️ E-mail não foi salvo — coluna ainda não existe no banco. Aguarde migration.")
+        conn.execute("""
+            UPDATE cliente SET razao_social=?, nome_fantasia=?, perfil=?, fone=?,
+            cnpj=?, endereco=?, bairro=?, cidade=?, estado=?,
+            site=?, instagram=?, associacao_id=?, observacao=?, status=?, ativo=?
+            WHERE cliente_id=?
+        """, (razao, fantasia.strip(), perfil, fone or None,
+              cnpj or None, endereco or None, bairro or None, cidade, estado,
+              site or None, insta or None, assoc_e[0], obs or None,
+              status_e, ativo_novo, cli_id))
         conn.commit(); conn.close()
-        st.session_state["_cli_msg_ok"] = "✅ Cliente atualizado com sucesso!"
-        st.rerun()
+        _sucesso("Cliente atualizado!")
 
 
 def _tela_vinculos_cliente():
@@ -2535,8 +2379,6 @@ def _tela_vinculos_cliente():
 def _tela_pdvs():
     msg_pdv = st.session_state.pop("_massa_pdv_msg", None)
     if msg_pdv: st.success(msg_pdv)
-    msg_pdv_ok = st.session_state.pop("_pdv_msg_ok", None)
-    if msg_pdv_ok: st.success(msg_pdv_ok)
 
     st.subheader("PDVs (lojas)")
     st.caption("Cadastre as lojas de cada cliente. Clientes sem PDV recebem os pedidos diretamente.")
@@ -2665,25 +2507,25 @@ def _tela_pdvs():
             # Exportação respeita os filtros ativos
             dados_pdv_exp = query(f"""
                 SELECT p.pdv_id, c.nome_fantasia AS cliente,
-                       COALESCE(p.numero_loja,''), p.nome_loja,
-                       COALESCE(p.tipo_pdv,''), COALESCE(p.setor,''),
-                       COALESCE(p.endereco,''), COALESCE(p.bairro,''),
-                       COALESCE(p.cidade,''), COALESCE(p.estado,''),
-                       COALESCE(p.cnpj,''), COALESCE(p.gerente,''),
-                       COALESCE(p.fone_gerente,''),
-                       COALESCE(p.horario_recebimento,''),
+                       COALESCE(p.numero_loja,'—'), p.nome_loja,
+                       COALESCE(p.tipo_pdv,'—'), COALESCE(p.setor,'—'),
+                       COALESCE(p.endereco,'—'), COALESCE(p.bairro,'—'),
+                       COALESCE(p.cidade,'—'), COALESCE(p.estado,'—'),
+                       COALESCE(p.cnpj,'—'), COALESCE(p.gerente,'—'),
+                       COALESCE(p.fone_gerente,'—'),
+                       COALESCE(p.horario_recebimento,'—'),
                        COALESCE(p.status,'Ativo'),
-                       COALESCE(p.latitude,''), COALESCE(p.longitude,''),
-                       COALESCE(p.observacao,'')
+                       COALESCE(p.observacao,''),
+                       COALESCE(p.latitude,''), COALESCE(p.longitude,'')
                 FROM pdv p
                 JOIN cliente c ON p.cliente_id=c.cliente_id
                 WHERE {' AND '.join(where_p)}
                 ORDER BY c.nome_fantasia, p.nome_loja
             """, tuple(params_p))
             df_pdv_exp = pd.DataFrame(dados_pdv_exp, columns=[
-                "ID","cliente_nome","numero_loja","nome_loja","tipo_pdv","setor",
-                "endereco","bairro","cidade","estado","cnpj","gerente","fone_gerente",
-                "horario_recebimento","status","latitude","longitude","observacao"])
+                "ID","Cliente","Nr. Loja","Nome loja","Tipo PDV","Setor",
+                "Endereco","Bairro","Cidade","UF","CNPJ","Gerente","Fone gerente",
+                "Horario recebimento","Status","Observacao","Latitude","Longitude"])
             buf_pdv = io.BytesIO()
             df_pdv_exp.to_excel(buf_pdv, index=False, sheet_name="PDVs")
             buf_pdv.seek(0)
@@ -2778,13 +2620,13 @@ def _form_novo_pdv(cli_id):
         col1, col2 = st.columns(2)
         with col1:
             nome_loja = st.text_input("Nome da loja *")
-            tipo_pdv  = st.selectbox("Tipo de PDV", TIPOS_PDV, key=f"pdv_tipo_{cli_id}")
+            tipo_pdv  = st.selectbox("Tipo de PDV", TIPOS_PDV, key="pdv_tipo")
             numero    = st.text_input("Numero da loja (opcional)",
                                       placeholder="Ex: Loja 05, Filial Centro")
             endereco  = st.text_input("Endereco")
             bairro    = st.text_input("Bairro")
             cidade    = st.text_input("Cidade")
-            estado    = st.selectbox("UF", _ufs(), key=f"pdv_uf_{cli_id}")
+            estado    = st.selectbox("UF", _ufs(), key="pdv_uf")
             cnpj      = st.text_input("CNPJ (opcional)")
         with col2:
             gerente          = st.text_input("Gerente")
@@ -2798,19 +2640,24 @@ def _form_novo_pdv(cli_id):
                                             help="Setor geografico — facilita planejamento de roteiro e alocacao de promotores")
             cluster          = st.selectbox("Cluster (poder aquisitivo)",
                                             ["A/B","B/C","C/D","A","B","C","D","—"],
-                                            key=f"pdv_cluster_{cli_id}",
+                                            key="pdv_cluster",
                                             help="A/B = premium, B/C = medio, C/D = popular")
             tamanho_pdv      = st.selectbox("Tamanho do PDV",
                                             ["GG","G","M","P","PP","—"],
-                                            key=f"pdv_tamanho_{cli_id}",
+                                            key="pdv_tamanho",
                                             help="GG=hipermercado, G=grande, M=medio, P=pequeno, PP=micro")
         status_pdv = st.selectbox("Status do PDV *",
                                    ["Prospecto", "Ativo", "Inativo", "Bloqueado"],
                                    index=0,
-                                   key=f"pdv_status_novo_{cli_id}",
+                                   key="pdv_status_novo",
+                                   help="Prospecto = cliente em prospecção, ainda não compra")
+        status_pdv = st.selectbox("Status do PDV *",
+                                   ["Prospecto", "Ativo", "Inativo", "Bloqueado"],
+                                   index=0,
+                                   key="pdv_status_novo",
                                    help="Prospecto = cliente em prospecção, ainda não compra")
         obs    = st.text_area("Observacao")
-        salvar = st.form_submit_button("💾 Salvar PDV", type="primary")
+        salvar = st.form_submit_button("Salvar PDV", type="primary")
 
     if salvar:
         if not nome_loja.strip():
@@ -2838,7 +2685,7 @@ def _form_novo_pdv(cli_id):
               obs or None,
               status_pdv))
         conn.commit(); conn.close()
-        st.session_state["_pdv_msg_ok"] = f"✅ PDV '{nome_loja}' cadastrado com sucesso!"
+        _sucesso(f"PDV '{nome_loja}' cadastrado!")
         st.rerun()
 
 
@@ -3128,6 +2975,8 @@ def _tela_mix_pdv():
 
 def _tela_contatos_cliente():
     st.subheader("Contatos por cliente")
+    _msg_cc = st.session_state.pop("_cc_msg_ok", None)
+    if _msg_cc: st.success(_msg_cc)
     st.caption("Lista todos os clientes — ativos, visitados e prospectos.")
 
     # Todos os clientes independente de status
@@ -3194,7 +3043,7 @@ def _tela_contatos_cliente():
 
         for ct in contatos:
             cid_ct, nome_ct, depto_ct, fone_ct, wa_ct, email_ct, obs_ct, ativo_ct = ct
-            c = st.columns([2.0, 1.5, 1.5, 1.8, 1.8, 1.8, 0.8])
+            c = st.columns([2.0, 1.5, 1.5, 1.8, 1.8, 1.8, 0.4, 0.4])
             c[0].write(nome_ct or "—")
             c[1].caption(depto_ct or "—")
             c[2].caption(fone_ct)
@@ -3215,12 +3064,56 @@ def _tela_contatos_cliente():
 
             c[5].caption(obs_ct or "—")
             with c[6]:
+                if st.button("✏️", key=f"ed_ct_{cid_ct}",
+                             use_container_width=True, help="Editar contato"):
+                    if st.session_state.get("cc_editar") == cid_ct:
+                        st.session_state.pop("cc_editar", None)
+                    else:
+                        st.session_state["cc_editar"] = cid_ct
+                    st.rerun()
+            with c[7]:
                 if st.button("🗑️", key=f"del_ct_{cid_ct}",
                              use_container_width=True, help="Remover contato"):
                     conn = conectar()
                     conn.execute("UPDATE contato_cliente SET ativo=0 WHERE contato_cliente_id=?",
                                  (cid_ct,))
                     conn.commit(); conn.close(); st.rerun()
+
+            # Formulário de edição inline
+            if st.session_state.get("cc_editar") == cid_ct:
+                with st.container(border=True):
+                    st.caption(f"✏️ Editando: **{nome_ct}**")
+                    ec1, ec2 = st.columns(2)
+                    e_nome  = ec1.text_input("Nome", value=nome_ct or "", key=f"e_nome_{cid_ct}")
+                    e_depto = ec2.text_input("Cargo/Departamento", value=depto_ct or "", key=f"e_depto_{cid_ct}")
+                    e_fone  = ec1.text_input("Fone", value=fone_ct if fone_ct != "—" else "", key=f"e_fone_{cid_ct}")
+                    e_wa    = ec2.text_input("WhatsApp", value=wa_ct if wa_ct != "—" else "", key=f"e_wa_{cid_ct}")
+                    e_email = ec1.text_input("E-mail", value=email_ct if email_ct != "—" else "", key=f"e_email_{cid_ct}")
+                    e_obs   = ec2.text_input("Observação", value=obs_ct or "", key=f"e_obs_{cid_ct}")
+                    cs, cc  = st.columns(2)
+                    if cs.button("💾 Salvar", key=f"sv_ct_{cid_ct}", type="primary",
+                                 use_container_width=True):
+                        if not e_nome.strip():
+                            st.warning("Nome é obrigatório.")
+                        else:
+                            conn = conectar()
+                            conn.execute("""
+                                UPDATE contato_cliente
+                                SET nome_contato=?, departamento=?, fone=?,
+                                    whatsapp=?, email=?, observacao=?
+                                WHERE contato_cliente_id=?
+                            """, (e_nome.strip(), e_depto.strip() or None,
+                                  e_fone.strip() or None, e_wa.strip() or None,
+                                  e_email.strip() or None, e_obs.strip() or None,
+                                  cid_ct))
+                            conn.commit(); conn.close()
+                            st.session_state.pop("cc_editar", None)
+                            st.session_state["_cc_msg_ok"] = f"✅ Contato '{e_nome}' atualizado!"
+                            st.rerun()
+                    if cc.button("✖️ Cancelar", key=f"canc_ct_{cid_ct}",
+                                 use_container_width=True):
+                        st.session_state.pop("cc_editar", None)
+                        st.rerun()
     else:
         st.info("Nenhum contato cadastrado para este cliente.")
 
@@ -3336,9 +3229,9 @@ def _tela_importar_clientes_pdvs():
     st.subheader("Importacao em massa — Clientes e PDVs")
 
     ABAS_IMP = {"cli":"Importar Clientes","pdv":"Importar PDVs",
-                "gps":"Atualizar GPS","ia":"Setores (IA)"}
+                "gps":"Atualizar GPS","ia":"Setores (IA)","tpl":"Templates"}
     if "imp_aba" not in st.session_state: st.session_state["imp_aba"] = "cli"
-    cols = st.columns(4)
+    cols = st.columns(5)
     for col,(k,v) in zip(cols, ABAS_IMP.items()):
         ativa = st.session_state["imp_aba"] == k
         if col.button(v, key=f"impnav_{k}", use_container_width=True,
@@ -3350,6 +3243,7 @@ def _tela_importar_clientes_pdvs():
     elif a=="pdv":_importar_pdvs_excel()
     elif a=="gps":_atualizar_gps_massa()
     elif a=="ia": _tela_sugestao_setores_ia()
+    elif a=="tpl":_baixar_templates()
 
 
 def _baixar_templates():
@@ -3360,32 +3254,29 @@ def _baixar_templates():
 
     with col1:
         st.markdown("**Template de Clientes**")
-        st.caption("Colunas: nome_fantasia*, razao_social, perfil, status, fone, email, cnpj, "
-                   "endereco, bairro, cidade, estado, site, instagram, associacao_nome, observacao")
+        st.caption("Colunas: nome_fantasia*, perfil, fone, cidade, estado, bairro, "
+                   "endereco, cnpj, site, instagram, associacao_nome, observacao")
         df_cli = pd.DataFrame([{
-            "nome_fantasia":   "Empório Exemplo",
-            "razao_social":    "",
-            "perfil":          "Empório",
-            "status":          "Ativo",
+            "nome_fantasia":   "Emporio Exemplo",
+            "perfil":          "Emporio",
             "fone":            "13988776655",
-            "email":           "compras@emporio.com.br",
-            "cnpj":            "",
-            "endereco":        "Av. Ana Costa 123",
-            "bairro":          "Gonzaga",
             "cidade":          "Santos",
             "estado":          "SP",
+            "bairro":          "Gonzaga",
+            "endereco":        "Av. Ana Costa 123",
+            "cnpj":            "",
             "site":            "",
             "instagram":       "@emporio_exemplo",
             "associacao_nome": "",
             "observacao":      "",
         }])
         buf = io.BytesIO()
-        with pd.ExcelWriter(buf, engine='openpyxl') as w:
-            df_cli.to_excel(w, index=False, sheet_name="Clientes")
-        st.download_button("⬇️ Baixar template Clientes", data=buf.getvalue(),
+        df_cli.to_excel(buf, index=False, sheet_name="Clientes")
+        buf.seek(0)
+        st.download_button("Baixar template Clientes", data=buf,
                            file_name="template_importacao_clientes.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True, key="tpl_cli_dl_old")
+                           use_container_width=True)
 
     with col2:
         st.markdown("**Template de PDVs**")
@@ -3402,44 +3293,25 @@ def _baixar_templates():
             "bairro":              "Centro",
             "cidade":              "Santos",
             "estado":              "SP",
-            "cnpj":                "",
             "gerente":             "Joao Silva",
             "fone_gerente":        "13977665544",
             "horario_recebimento": "Seg-Sex 08h-17h",
-            "status":              "Ativo",
             "latitude":            "",
             "longitude":           "",
             "observacao":          "",
         }])
-        _buf_pdv_old = io.BytesIO()
-        with pd.ExcelWriter(_buf_pdv_old, engine="openpyxl") as _w:
-            df_pdv.to_excel(_w, index=False, sheet_name="PDVs")
-        st.download_button("⬇️ Baixar template PDVs", data=_buf_pdv_old.getvalue(),
+        buf = io.BytesIO()
+        df_pdv.to_excel(buf, index=False, sheet_name="PDVs")
+        buf.seek(0)
+        st.download_button("Baixar template PDVs", data=buf,
                            file_name="template_importacao_pdvs.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True, key="tpl_pdv_dl_old")
+                           use_container_width=True)
 
 
 def _importar_clientes_excel():
     st.subheader("Importar clientes via Excel")
-
-    # Template direto — sem expander para 1 clique
-    _df_tpl_cli = pd.DataFrame([{
-        "nome_fantasia": "Empório Exemplo", "razao_social": "",
-        "perfil": "Empório", "status": "Ativo",
-        "fone": "13988776655", "email": "compras@emporio.com.br",
-        "cnpj": "", "endereco": "Av. Ana Costa 123", "bairro": "Gonzaga",
-        "cidade": "Santos", "estado": "SP", "site": "",
-        "instagram": "@emporio_exemplo", "associacao_nome": "", "observacao": "",
-    }])
-    _buf_tpl_cli = io.BytesIO()
-    with pd.ExcelWriter(_buf_tpl_cli, engine='openpyxl') as _w:
-        _df_tpl_cli.to_excel(_w, index=False, sheet_name="Clientes")
-    st.download_button("📥 Baixar template de Clientes", data=_buf_tpl_cli.getvalue(),
-                       file_name="template_importacao_clientes.xlsx",
-                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                       key="tpl_cli_dl_imp")
-    st.caption("Campos obrigatórios: nome_fantasia. Perfil: Empório, Supermercado, Padaria, etc.")
+    st.info("Baixe o template na aba 'Baixar templates', preencha e importe aqui.")
 
     resultado = st.session_state.pop("imp_cli_resultado", None)
     if resultado:
@@ -3539,25 +3411,6 @@ def _importar_clientes_excel():
 def _importar_pdvs_excel():
     st.subheader("Importar PDVs via Excel")
     st.info("O cliente ja deve estar cadastrado. Use o nome_fantasia exatamente como cadastrado.")
-
-    # Template direto — sem expander para 1 clique
-    _df_tpl_pdv = pd.DataFrame([{
-        "cliente_nome": "Supermercado Exemplo", "numero_loja": "01",
-        "nome_loja": "Loja Centro", "tipo_pdv": "Supermercado",
-        "setor": "Setor Centro", "endereco": "Rua XV de Novembro 100",
-        "bairro": "Centro", "cidade": "Santos", "estado": "SP",
-        "cnpj": "", "gerente": "Joao Silva", "fone_gerente": "13977665544",
-        "horario_recebimento": "Seg-Sex 08h-17h", "status": "Ativo",
-        "latitude": "", "longitude": "", "observacao": "",
-    }])
-    _buf_tpl_pdv = io.BytesIO()
-    with pd.ExcelWriter(_buf_tpl_pdv, engine='openpyxl') as _w:
-        _df_tpl_pdv.to_excel(_w, index=False, sheet_name="PDVs")
-    st.download_button("📥 Baixar template de PDVs", data=_buf_tpl_pdv.getvalue(),
-                       file_name="template_importacao_pdvs.xlsx",
-                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                       key="tpl_pdv_dl_imp")
-    st.caption("Campos obrigatórios: cliente_nome, nome_loja.")
 
     resultado = st.session_state.pop("imp_pdv_resultado", None)
     if resultado:
@@ -4259,15 +4112,14 @@ def _tela_pdvs_por_setor():
                 s_s = ParagraphStyle("ps_s", parent=sty["Normal"], fontSize=8, textColor=CINZA)
                 s_h = ParagraphStyle("ps_h", parent=sty["Normal"], fontSize=7,
                                      fontName="Helvetica-Bold", textColor=colors.white)
-                s_c = ParagraphStyle("ps_c", parent=sty["Normal"], fontSize=7, leading=9)
+                s_c = ParagraphStyle("ps_c", parent=sty["Normal"], fontSize=7)
                 s_r = ParagraphStyle("ps_r", parent=sty["Normal"], fontSize=6,
                                      textColor=CINZA, alignment=TA_CENTER)
 
                 buf_pdf = io.BytesIO()
-                # Margens menores para aproveitar a largura
                 doc = SimpleDocTemplate(buf_pdf, pagesize=landscape(A4),
-                                        leftMargin=0.8*cm, rightMargin=0.8*cm,
-                                        topMargin=1*cm, bottomMargin=1*cm)
+                                        leftMargin=1.2*cm, rightMargin=1.2*cm,
+                                        topMargin=1.2*cm, bottomMargin=1.2*cm)
                 el = []
                 rep = query("SELECT nome_fantasia FROM representante WHERE ativo=1 LIMIT 1")
                 rep_nome  = rep[0][0] if rep else "PepperCRM"
@@ -4278,61 +4130,34 @@ def _tela_pdvs_por_setor():
                     f"Gerado em {_dt.now().strftime('%d/%m/%Y %H:%M')}", s_s))
                 el.append(HRFlowable(width="100%", thickness=2, color=VERDE, spaceAfter=6))
 
-                # Agrupado por setor — sem coluna Setor, com cabeçalho por grupo
-                PDF_COLS = ["Cliente","PDV","Tipo","Endereço","Bairro",
-                            "Cidade","Gerente","Fone","Clust.","Tam."]
-                PDF_IDX  = [1, 3, 4, 5, 6, 7, 8, 9, 15, 16]
-                PDF_CW   = [3.5*cm, 3.0*cm, 2.2*cm, 5.0*cm, 2.8*cm,
-                            2.5*cm, 2.8*cm, 2.5*cm, 1.2*cm, 1.3*cm]
-
-                s_setor = ParagraphStyle("ps_setor", parent=sty["Normal"], fontSize=9,
-                                         fontName="Helvetica-Bold", textColor=colors.white)
-
-                # Agrupa por setor
-                from collections import OrderedDict
-                grupos = OrderedDict()
+                PDF_COLS = ["Setor","Cliente","PDV","Tipo","Clust.","Tam.",
+                            "Bairro","Cidade","Gerente","Horario"]
+                PDF_IDX  = [0, 1, 3, 4, 15, 16, 6, 7, 8, 10]
+                PDF_CW   = [3.5*cm, 3.0*cm, 2.5*cm, 2.0*cm, 1.2*cm, 1.2*cm,
+                            2.0*cm, 1.8*cm, 2.0*cm, 2.0*cm]
+                rows_pdf = [[Paragraph(c, s_h) for c in PDF_COLS]]
                 for r in pdvs_setor:
-                    s = r[0] or "Sem setor"
-                    grupos.setdefault(s, []).append(r)
-
-                for setor_nome, rows_s in grupos.items():
-                    # Cabeçalho do setor
-                    cab_setor = Table(
-                        [[Paragraph(f"📍  {setor_nome}  —  {len(rows_s)} PDV(s)", s_setor)]],
-                        colWidths=[sum(PDF_CW)])
-                    cab_setor.setStyle(TableStyle([
-                        ("BACKGROUND", (0,0), (-1,-1), VERDE),
-                        ("TOPPADDING", (0,0), (-1,-1), 5),
-                        ("BOTTOMPADDING", (0,0), (-1,-1), 5),
-                        ("LEFTPADDING", (0,0), (-1,-1), 6),
-                    ]))
-                    el.append(cab_setor)
-
-                    # Cabeçalho das colunas
-                    rows_tbl = [[Paragraph(c, s_h) for c in PDF_COLS]]
-                    for r in rows_s:
-                        rows_tbl.append([Paragraph(str(r[i] or "—")[:55], s_c)
-                                        for i in PDF_IDX])
-
-                    t_s = Table(rows_tbl, colWidths=PDF_CW, repeatRows=1)
-                    t_s.setStyle(TableStyle([
-                        ("BACKGROUND",    (0,0), (-1,0),  colors.HexColor("#4a9e6e")),
-                        ("TEXTCOLOR",     (0,0), (-1,0),  colors.white),
-                        ("FONTSIZE",      (0,0), (-1,-1), 7),
-                        ("TOPPADDING",    (0,0), (-1,-1), 3),
-                        ("BOTTOMPADDING", (0,0), (-1,-1), 3),
-                        ("LEFTPADDING",   (0,0), (-1,-1), 3),
-                        ("GRID",          (0,0), (-1,-1), 0.3, colors.HexColor("#cccccc")),
-                        ("ROWBACKGROUNDS",(0,1), (-1,-1), [colors.white, CINZAC]),
-                        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-                    ]))
-                    el.append(t_s)
-                    el.append(Spacer(1, 0.4*cm))
+                    rows_pdf.append([Paragraph(str(r[i] or "—")[:40], s_c)
+                                     for i in PDF_IDX])
+                t_pdf = Table(rows_pdf, colWidths=PDF_CW, repeatRows=1)
+                t_pdf.setStyle(TableStyle([
+                    ("BACKGROUND",    (0,0), (-1,0),  VERDE),
+                    ("TEXTCOLOR",     (0,0), (-1,0),  colors.white),
+                    ("FONTSIZE",      (0,0), (-1,-1), 7),
+                    ("TOPPADDING",    (0,0), (-1,-1), 3),
+                    ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+                    ("LEFTPADDING",   (0,0), (-1,-1), 3),
+                    ("GRID",          (0,0), (-1,-1), 0.3, colors.HexColor("#cccccc")),
+                    ("ROWBACKGROUNDS",(0,1), (-1,-1), [colors.white, CINZAC]),
+                    ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+                ]))
+                el.append(t_pdf)
                 el.append(Spacer(1, 0.3*cm))
                 el.append(Paragraph("PepperCRM", s_r))
                 doc.build(el)
+                buf_pdf.seek(0)
                 st.download_button("📥 Baixar PDF",
-                                   data=buf_pdf.getvalue(),
+                                   data=buf_pdf,
                                    file_name=f"pdvs_setor_{tipos_slug}.pdf",
                                    mime="application/pdf",
                                    use_container_width=True)
@@ -4538,24 +4363,21 @@ def _exportar_produtos_pdf(df, filtro_forn="Todos"):
     from reportlab.lib.units import cm
     from reportlab.lib import colors
     from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
-                                    Paragraph, Spacer, HRFlowable, KeepTogether)
+                                    Paragraph, Spacer, HRFlowable)
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.enums import TA_CENTER
     from datetime import datetime as _dt
     import io as _io
 
     VERDE  = colors.HexColor("#2d6a4f")
-    VERDE_L= colors.HexColor("#e8f5e9")
     CINZA  = colors.HexColor("#555555")
     CINZA_C= colors.HexColor("#f8f9fa")
 
     styles = getSampleStyleSheet()
     s_tit  = ParagraphStyle("t", parent=styles["Normal"], fontSize=14,
                             fontName="Helvetica-Bold", textColor=VERDE)
-    s_sub  = ParagraphStyle("s", parent=styles["Normal"], fontSize=8, textColor=CINZA)
-    s_cat  = ParagraphStyle("cat", parent=styles["Normal"], fontSize=9,
-                            fontName="Helvetica-Bold", textColor=VERDE,
-                            spaceBefore=8, spaceAfter=3)
+    s_sub  = ParagraphStyle("s", parent=styles["Normal"], fontSize=8,
+                            textColor=CINZA)
     s_hdr  = ParagraphStyle("h", parent=styles["Normal"], fontSize=7,
                             fontName="Helvetica-Bold", textColor=colors.white)
     s_cel  = ParagraphStyle("c", parent=styles["Normal"], fontSize=7)
@@ -4566,7 +4388,7 @@ def _exportar_produtos_pdf(df, filtro_forn="Todos"):
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
                             leftMargin=1.2*cm, rightMargin=1.2*cm,
                             topMargin=1.2*cm, bottomMargin=1.2*cm)
-    el = []
+    el  = []
 
     rep = query("SELECT nome_fantasia FROM representante WHERE ativo=1 LIMIT 1")
     rep_nome = rep[0][0] if rep else "PepperCRM"
@@ -4577,21 +4399,28 @@ def _exportar_produtos_pdf(df, filtro_forn="Todos"):
                         f"Gerado em {_dt.now().strftime('%d/%m/%Y %H:%M')}", s_sub))
     el.append(HRFlowable(width="100%", thickness=2, color=VERDE, spaceAfter=6))
 
-    # Colunas sem Shelf Life
     colunas = ["Fornecedor","Marca","Codigo","Descricao","UM","Un/Cx",
-               "Peso un.","Peso cx.","Sub-cat.","Grupo","Validade (d)"]
-    cw      = [2.8*cm, 2.5*cm, 1.8*cm, 5.5*cm, 1.0*cm, 1.0*cm,
-               1.5*cm, 1.5*cm, 2.0*cm, 2.0*cm, 1.8*cm]
+               "Peso un.","Peso cx.","Sub-cat.","Grupo","Validade","Shelf R.","Shelf C."]
+    cw = [2.8*cm,2.5*cm,1.8*cm,5.0*cm,1.0*cm,1.0*cm,
+          1.5*cm,1.5*cm,1.8*cm,1.8*cm,1.5*cm,1.5*cm,1.5*cm]
+
     col_map = {
         "Fornecedor":"Fornecedor","Marca":"Marca","Codigo":"Codigo",
         "Descricao":"Descricao curta","UM":"UM","Un/Cx":"Un/Cx",
         "Peso un.":"Peso un.","Peso cx.":"Peso cx.",
-        "Sub-cat.":"Sub-categoria","Grupo":"Grupo","Validade (d)":"Validade (d)"
+        "Sub-cat.":"Sub-categoria","Grupo":"Grupo",
+        "Validade":"Validade (d)","Shelf R.":"Shelf refr. (d)","Shelf C.":"Shelf cong. (d)"
     }
 
     header = [Paragraph(c, s_hdr) for c in colunas]
+    rows = [header]
+    for _, row in df.iterrows():
+        linha = [Paragraph(str(row.get(col_map[c],"—") or "—")[:60], s_cel)
+                 for c in colunas]
+        rows.append(linha)
 
-    t_style = TableStyle([
+    t = Table(rows, colWidths=cw, repeatRows=1)
+    t.setStyle(TableStyle([
         ("BACKGROUND",    (0,0), (-1,0),  VERDE),
         ("TEXTCOLOR",     (0,0), (-1,0),  colors.white),
         ("FONTSIZE",      (0,0), (-1,-1), 7),
@@ -4601,41 +4430,14 @@ def _exportar_produtos_pdf(df, filtro_forn="Todos"):
         ("GRID",          (0,0), (-1,-1), 0.3, colors.HexColor("#cccccc")),
         ("ROWBACKGROUNDS",(0,1), (-1,-1), [colors.white, CINZA_C]),
         ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-    ])
-
-    # Agrupa por Categoria
-    df_sorted = df.sort_values(["Categoria","Fornecedor","Descricao curta"])
-    categorias = df_sorted["Categoria"].fillna("—").unique()
-
-    for cat in categorias:
-        df_cat = df_sorted[df_sorted["Categoria"].fillna("—") == cat]
-        rows = [header]
-        for _, row in df_cat.iterrows():
-            linha = [Paragraph(str(row.get(col_map[c], "—") or "—")[:60], s_cel)
-                     for c in colunas]
-            rows.append(linha)
-
-        t = Table(rows, colWidths=cw, repeatRows=1)
-        t.setStyle(t_style)
-
-        bloco = [
-            Paragraph(f"▸ {cat}  ({len(df_cat)} produto(s))", s_cat),
-            t,
-            Spacer(1, 0.3*cm)
-        ]
-        el.append(KeepTogether(bloco) if len(df_cat) <= 15 else bloco[0])
-        if len(df_cat) > 15:
-            el.append(t)
-            el.append(Spacer(1, 0.3*cm))
-
-    el.append(HRFlowable(width="100%", thickness=0.5,
-                         color=colors.HexColor("#cccccc"), spaceAfter=3))
-    el.append(Paragraph(f"PepperCRM — {rep_nome}  |  Gerado em "
-                        f"{_dt.now().strftime('%d/%m/%Y %H:%M')}", s_rod))
+    ]))
+    el.append(t)
+    el.append(Spacer(1, 0.3*cm))
+    el.append(Paragraph("PepperCRM", s_rod))
 
     doc.build(el)
     buf.seek(0)
-    return buf.read()  # retorna bytes, não BytesIO
+    return buf
 
 
 def _exportar_tabela_pdf(df_itens, filtro_forn="Todos"):
