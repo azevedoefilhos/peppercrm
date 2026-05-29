@@ -213,6 +213,17 @@ def _traduzir_sql_pg(sql):
 
 def _pg_connect():
     import psycopg2
+    db_url = os.environ.get("DATABASE_URL", "")
+    if db_url:
+        return psycopg2.connect(
+            db_url,
+            sslmode="prefer",
+            connect_timeout=8,
+            keepalives=1,
+            keepalives_idle=30,
+            keepalives_interval=10,
+            keepalives_count=3,
+        )
     return psycopg2.connect(
         host="aws-1-sa-east-1.pooler.supabase.com",
         port=5432,
