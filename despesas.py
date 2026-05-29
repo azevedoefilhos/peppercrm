@@ -287,20 +287,20 @@ def _lista_despesas():
     else:
         d_ini = "2000-01-01"; d_fim = hoje.isoformat()
 
-    where = ["d.ativo!=0", "d.data_despesa BETWEEN ? AND ?"]
+    where = ["d.ativo IS NOT FALSE", "d.data_despesa BETWEEN ? AND ?"]
     params = [d_ini, d_fim]
     if cat_fil != "Todas":
         where.append("d.categoria=?"); params.append(cat_fil)
     if forn_fil[0]:
         where.append("d.fornecedor_id=?"); params.append(forn_fil[0])
     if reimb_fil == "Reembolsável":
-        where.append("d.reembolsavel=true")
+        where.append("d.reembolsavel!=false")
     elif reimb_fil == "Não reembolsável":
         where.append("d.reembolsavel=false")
     elif reimb_fil == "Pendente reembolso":
-        where.append("d.reembolsavel=true AND d.reembolsado=false")
+        where.append("d.reembolsavel!=false AND d.reembolsado=false")
     elif reimb_fil == "Reembolsado":
-        where.append("d.reembolsado=true")
+        where.append("d.reembolsado!=false")
 
     despesas = query(f"""
         SELECT d.despesa_id, d.data_despesa, d.categoria,
@@ -543,7 +543,7 @@ def _relatorio_despesas():
     import calendar
     d_fim = f"{ano}-{mes}-{calendar.monthrange(int(ano), int(mes))[1]}"
 
-    where = ["d.ativo!=0", "d.data_despesa BETWEEN ? AND ?"]
+    where = ["d.ativo IS NOT FALSE", "d.data_despesa BETWEEN ? AND ?"]
     params = [d_ini, d_fim]
     if forn_sel[0]:
         where.append("d.fornecedor_id=?"); params.append(forn_sel[0])
@@ -606,7 +606,7 @@ def _pdf_despesas(d_ini, d_fim, forn_nome, apenas_reimb, mes_ano):
     s_r   = ParagraphStyle("r", parent=sty["Normal"], fontSize=7,
                             textColor=colors.grey, alignment=TA_CENTER)
 
-    where = ["d.ativo!=0", "d.data_despesa BETWEEN ? AND ?"]
+    where = ["d.ativo IS NOT FALSE", "d.data_despesa BETWEEN ? AND ?"]
     params = [d_ini, d_fim]
     if forn_nome != "Todos":
         where.append("f.nome_fantasia=?"); params.append(forn_nome)
