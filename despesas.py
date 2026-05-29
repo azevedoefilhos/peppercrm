@@ -110,6 +110,10 @@ def _form_nova_despesa():
     col1, col2 = st.columns(2)
     with col1:
         data_d    = st.date_input("Data", key="nd_data")
+        # Garante que data_d é um objeto date válido
+        if not hasattr(data_d, 'isoformat'):
+            from datetime import datetime
+            data_d = datetime.fromtimestamp(data_d/1000).date() if data_d > 1000000 else date.today()
         categoria = st.selectbox("Categoria", CATEGORIAS, key="nd_cat")
         cli_sel   = st.selectbox("Cliente visitado / motivo",
                                  cli_opts, format_func=lambda x: x[1], key="nd_cli")
@@ -348,7 +352,7 @@ def _lista_despesas():
     # Tabela interativa
     df_desp = pd.DataFrame([{
         "ID":          r[0],
-        "Data":        r[1],
+        "Data":        str(r[1])[:10] if r[1] else "—",
         "Categoria":   r[2],
         "Descrição":   r[3],
         "Cliente":     r[4],
