@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import io
 from datetime import date, timedelta
-from database import query, execute_write, conectar, _check_supabase
+from database import query, execute_write, conectar, _check_supabase, _pg_connect
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -210,50 +210,28 @@ def _form_nova_despesa():
 
         try:
             _criar_tabela()
-            _conn = conectar()
-            if _check_supabase():
-                # PostgreSQL — usa %s
-                _cur = _conn.cursor()
-                _cur.execute("""
-                    INSERT INTO despesa (data_despesa, categoria, descricao,
-                        cliente_id, fornecedor_id, tipo_visita, valor, forma_pagamento,
-                        combustivel_tipo, km_inicial, km_final, preco_litro, media_km_litro,
-                        reembolsavel, foto_base64, observacao, ativo)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,True)
-                """, (
-                    data_d.isoformat(), categoria, descricao.strip() or None,
-                    cli_sel[0] if cli_sel else None,
-                    forn_sel[0] if forn_sel else None,
-                    None if tipo_visita == "— Não se aplica —" else tipo_visita,
-                    _valor_final, forma_pgto,
-                    comb_tipo, km_ini or None, km_fim or None,
-                    preco_l or None, media_km or None,
-                    bool(reembolsavel),
-                    foto_b64, obs.strip() or None
-                ))
-                _conn.commit()
-                _conn.close()
-            else:
-                # SQLite — usa ?
-                _conn.execute("""
-                    INSERT INTO despesa (data_despesa, categoria, descricao,
-                        cliente_id, fornecedor_id, tipo_visita, valor, forma_pagamento,
-                        combustivel_tipo, km_inicial, km_final, preco_litro, media_km_litro,
-                        reembolsavel, foto_base64, observacao, ativo)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
-                """, (
-                    data_d.isoformat(), categoria, descricao.strip() or None,
-                    cli_sel[0] if cli_sel else None,
-                    forn_sel[0] if forn_sel else None,
-                    None if tipo_visita == "— Não se aplica —" else tipo_visita,
-                    _valor_final, forma_pgto,
-                    comb_tipo, km_ini or None, km_fim or None,
-                    preco_l or None, media_km or None,
-                    1 if reembolsavel else 0,
-                    foto_b64, obs.strip() or None
-                ))
-                _conn.commit()
-                _conn.close()
+            # Usa conexão PostgreSQL direta — bypassa wrapper _PgConn
+            _conn = _pg_connect()
+            _cur  = _conn.cursor()
+            _cur.execute("""
+                INSERT INTO despesa (data_despesa, categoria, descricao,
+                    cliente_id, fornecedor_id, tipo_visita, valor, forma_pagamento,
+                    combustivel_tipo, km_inicial, km_final, preco_litro, media_km_litro,
+                    reembolsavel, foto_base64, observacao, ativo)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,True)
+            """, (
+                data_d.isoformat(), categoria, descricao.strip() or None,
+                cli_sel[0] if cli_sel else None,
+                forn_sel[0] if forn_sel else None,
+                None if tipo_visita == "— Não se aplica —" else tipo_visita,
+                _valor_final, forma_pgto,
+                comb_tipo, km_ini or None, km_fim or None,
+                preco_l or None, media_km or None,
+                bool(reembolsavel),
+                foto_b64, obs.strip() or None
+            ))
+            _conn.commit()
+            _conn.close()
             # Limpa campos após salvar
             for k in list(_defaults.keys()) + ["nd_cli","nd_forn","nd_valor_auto_ant","nd_foto"]:
                 st.session_state.pop(k, None)
