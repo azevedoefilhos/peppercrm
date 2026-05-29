@@ -12,8 +12,8 @@ except ImportError:
 
 TIPOS_PONTO_EXTRA = ["Ponta de gondola","Ilha","Check-stand","Clip strip","Display"]
 
-# Lazy: nao verifica secrets durante import
-_USE_SUPABASE = None  # None = ainda nao verificado
+# Detecta banco na importação — DATABASE_URL tem prioridade
+_USE_SUPABASE = True if os.environ.get("DATABASE_URL") else None
 
 def _check_supabase():
     """Verifica se deve usar PostgreSQL (Railway ou Supabase)."""
