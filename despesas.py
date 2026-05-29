@@ -210,10 +210,10 @@ def _form_nova_despesa():
 
         try:
             _criar_tabela()
-            import psycopg2
             _conn = conectar()
-            _cur = _conn.cursor() if hasattr(_conn, 'cursor') else None
-            if _cur:  # PostgreSQL
+            if _check_supabase():
+                # PostgreSQL — usa %s
+                _cur = _conn.cursor()
                 _cur.execute("""
                     INSERT INTO despesa (data_despesa, categoria, descricao,
                         cliente_id, fornecedor_id, tipo_visita, valor, forma_pagamento,
@@ -233,7 +233,8 @@ def _form_nova_despesa():
                 ))
                 _conn.commit()
                 _conn.close()
-            else:  # SQLite
+            else:
+                # SQLite — usa ?
                 _conn.execute("""
                     INSERT INTO despesa (data_despesa, categoria, descricao,
                         cliente_id, fornecedor_id, tipo_visita, valor, forma_pagamento,
@@ -256,10 +257,10 @@ def _form_nova_despesa():
             # Limpa campos após salvar
             for k in list(_defaults.keys()) + ["nd_cli","nd_forn","nd_valor_auto_ant","nd_foto"]:
                 st.session_state.pop(k, None)
-            st.success(f"✅ Despesa de R$ {_valor_final:.2f} registrada com sucesso!")
-            st.balloons()
+            st.session_state["_desp_msg_ok"] = f"✅ Despesa de R$ {_valor_final:.2f} registrada."
+            st.rerun()
         except Exception as _e:
-            st.error(f"❌ Erro ao salvar: {_e}")
+            st.error(f"❌ Erro ao salvar despesa: {_e}")
 
 
 # ── Lista de despesas ─────────────────────────────────────────────────────────
