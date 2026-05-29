@@ -1,5 +1,12 @@
 # crm_app.py — PepperCRM
 
+# Carrega .env ANTES de qualquer import — garante DATABASE_URL disponível
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 import streamlit as st
 from database import query
 
@@ -11,44 +18,42 @@ def _nome_empresa():
 st.set_page_config(page_title="PepperCRM", layout="wide")
 
 # Scroll para topo a cada rerun
-st.markdown("""<script>
-(function(){
-    var sels = ['section[data-testid="stMain"]','section.main',
-                '.main .block-container','section[data-testid="stAppViewContainer"] > div'];
-    for(var i=0;i<sels.length;i++){
-        var el=window.parent.document.querySelector(sels[i]);
-        if(el){el.scrollTop=0;break;}
-    }
-    window.parent.scrollTo(0,0);
-})();
-</script>""", unsafe_allow_html=True)
+st.components.v1.html("<script>window.parent.document.querySelector('section.main').scrollTo(0,0);</script>", height=0)
 
 if "pagina"         not in st.session_state: st.session_state["pagina"]         = "home"
 if "id_selecionado" not in st.session_state: st.session_state["id_selecionado"] = None
+# estado do módulo de pesquisa
 if "pq_modo"        not in st.session_state: st.session_state["pq_modo"]        = "lista"
 
-# Mapa de abas principais de cada módulo — reseta ao navegar
-_ABAS_PRINCIPAIS = {
-    "clientes":   ("cli_aba",  "lista"),
-    "contatos":   ("ct_aba",   "lista"),
-    "produtos":   ("prod_aba", "lista"),
-    "visitas":    ("vis_aba",  "lista"),
-    "pedidos":    ("ped_aba",  "lista"),
-    "relatorios": ("rel_aba",  "lista"),
-    "metas":      ("met_aba",  "lista"),
-}
 
 def ir(p):
-    # Reseta aba principal do módulo destino
-    if p in _ABAS_PRINCIPAIS:
-        _key, _val = _ABAS_PRINCIPAIS[p]
-        st.session_state[_key] = _val
     st.session_state["pagina"] = p
+    st.session_state["_scroll_topo"] = True
     st.rerun()
 
 
 def _scroll_topo():
-    pass  # scroll já feito via markdown global acima
+    """Rola para o topo — injeta CSS anchor e JS via markdown."""
+    if st.session_state.pop("_scroll_topo", False):
+        import streamlit.components.v1 as components
+        # Tenta múltiplos seletores para cobrir versões diferentes do Streamlit
+        components.html("""
+<script>
+(function(){
+    var sels = [
+        'section[data-testid="stMain"]',
+        'section.main',
+        '.main .block-container',
+        'section[data-testid="stAppViewContainer"] > div:first-child'
+    ];
+    for (var i=0; i<sels.length; i++){
+        var el = window.parent.document.querySelector(sels[i]);
+        if (el){ el.scrollTop = 0; break; }
+    }
+    window.parent.scrollTo(0,0);
+})();
+</script>
+""", height=0, scrolling=False)
 
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -546,7 +551,6 @@ if pagina == "home":
         if st.button("📊 Ver Pedidos",    use_container_width=True): ir("ver_pedidos")
         if st.button("📈 Relatórios",     use_container_width=True): ir("relatorios")
         if st.button("💰 Comissões",      use_container_width=True): ir("comissoes")
-        if st.button("💸 Despesas",       use_container_width=True): ir("despesas")
         if st.button("📋 Visitas",        use_container_width=True): ir("visitas")
         if st.button("🎯 Mix / Oferta",   use_container_width=True): ir("mix_analise")
         if st.button("🔍 Pesquisa PDV",   use_container_width=True):
@@ -567,7 +571,6 @@ elif pagina == "ver_pedidos":   from ver_pedidos import tela_ver_pedidos; tela_v
 elif pagina == "relatorios":    from relatorios import tela_relatorios; tela_relatorios()
 elif pagina == "comissoes":     from comissoes import tela_comissoes; tela_comissoes()
 elif pagina == "visitas":       from visitas import tela_visitas; tela_visitas()
-elif pagina == "despesas":      from despesas import tela_despesas; tela_despesas()
 elif pagina == "mix_analise":   from mix_analise import tela_mix_analise; tela_mix_analise()
 elif pagina == "pesquisa":      from pesquisa import tela_pesquisa; tela_pesquisa()
 elif pagina == "concorrentes":        from concorrentes import tela_concorrentes; tela_concorrentes()
