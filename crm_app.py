@@ -154,26 +154,35 @@ def _dados_dashboard_cache():
     # ── Alertas de oportunidade ────────────────────────────────────────────
     alertas = []
 
-    neg_paradas = query("""
-        SELECT COUNT(*), MIN(dias) FROM (
-            SELECT cr.contato_id,
-                   CAST(julianday('now') - julianday(
-                       COALESCE(MAX(ci.data_interacao), cr.data_contato)
-                   ) AS INTEGER) AS dias
-            FROM contato_registro cr
-            LEFT JOIN contato_interacao ci ON ci.contato_id=cr.contato_id AND ci.ativo!=0
-            WHERE cr.ativo!=0 AND cr.tipo_topico='Negociação'
-              AND cr.status NOT IN ('Concluído','Cancelado')
-            GROUP BY cr.contato_id
-            HAVING CAST(julianday('now') - julianday(
-                       COALESCE(MAX(ci.data_interacao), cr.data_contato)
-                   ) AS INTEGER) >= 15
-        )""")
-    if neg_paradas and neg_paradas[0][0]:
-        qtd, min_dias = neg_paradas[0]
-        alertas.append(("warn",
-            f"🤝 **{qtd} negociação(ões) parada(s)** há mais de 15 dias "
-            f"(a mais antiga há {min_dias} dias)", "contatos", "neg_parada"))
+    from datetime import timedelta as _td
+    _hoje_str       = _date.today().isoformat()
+    _limite_neg     = (_date.today() - _td(days=15)).isoformat()  # negociações paradas ≥15 dias
+
+    # Negociações paradas — calcula dias em Python via data_contato/ultima_interacao
+    neg_paradas_raw = query("""
+        SELECT cr.contato_id,
+               COALESCE(MAX(ci.data_interacao), cr.data_contato) AS ultima
+        FROM contato_registro cr
+        LEFT JOIN contato_interacao ci ON ci.contato_id=cr.contato_id AND ci.ativo!=0
+        WHERE cr.ativo!=0 AND cr.tipo_topico='Negociação'
+          AND cr.status NOT IN ('Concluído','Cancelado')
+        GROUP BY cr.contato_id
+        HAVING COALESCE(MAX(ci.data_interacao), cr.data_contato) <= ?
+    """, (_limite_neg,))
+    if neg_paradas_raw:
+        from datetime import date as _d2
+        dias_lista = []
+        for row in neg_paradas_raw:
+            try:
+                _ult = str(row[1])[:10]
+                _dias = (_d2.fromisoformat(_hoje_str) - _d2.fromisoformat(_ult)).days
+                dias_lista.append(_dias)
+            except Exception:
+                pass
+        if dias_lista:
+            alertas.append(("warn",
+                f"🤝 **{len(dias_lista)} negociação(ões) parada(s)** há mais de 15 dias "
+                f"(a mais antiga há {max(dias_lista)} dias)", "contatos", "neg_parada"))
 
     sem_contato = query("""
         SELECT COUNT(*) FROM cliente c
@@ -186,7 +195,6 @@ def _dados_dashboard_cache():
             f"📋 **{sem_contato[0][0]} cliente(s) visitado(s)/ativo(s)** "
             f"sem nenhum contato registrado", "contatos", "sem_contato"))
 
-    from datetime import timedelta as _td
     amanha      = (_date.today() + _td(days=1)).isoformat()
     depois      = (_date.today() + _td(days=2)).isoformat()
     tres_dias   = (_date.today() - _td(days=3)).isoformat()

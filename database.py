@@ -16,27 +16,13 @@ TIPOS_PONTO_EXTRA = ["Ponta de gondola","Ilha","Check-stand","Clip strip","Displ
 _USE_SUPABASE = True if os.environ.get("DATABASE_URL") else None
 
 def _check_supabase():
-    """Verifica se deve usar PostgreSQL (Railway ou Supabase)."""
+    """Retorna True se deve usar PostgreSQL (Railway via DATABASE_URL)."""
     global _USE_SUPABASE
     if _USE_SUPABASE is not None:
         return _USE_SUPABASE
-    # Railway PostgreSQL via DATABASE_URL — prioridade máxima
     if os.environ.get("DATABASE_URL"):
         _USE_SUPABASE = True
         return True
-    if os.environ.get("SUPABASE_URL"):
-        _USE_SUPABASE = True
-        return True
-    try:
-        import streamlit as st
-        url = st.secrets.get("SUPABASE_URL", "")
-        if url:
-            os.environ["SUPABASE_URL"] = url
-            os.environ["SUPABASE_DB_PASSWORD"] = st.secrets.get("SUPABASE_DB_PASSWORD", "")
-            _USE_SUPABASE = True
-            return True
-    except Exception:
-        pass
     _USE_SUPABASE = False
     return False
 
@@ -216,25 +202,17 @@ def _traduzir_sql_pg(sql):
 # ── Conexao PostgreSQL (lazy) ────────────────────────────────────────────────
 
 def _pg_connect():
+    """Conecta ao PostgreSQL Railway via DATABASE_URL."""
     import psycopg2
     db_url = os.environ.get("DATABASE_URL", "")
-    if db_url:
-        return psycopg2.connect(
-            db_url,
-            sslmode="prefer",
-            connect_timeout=8,
-            keepalives=1,
-            keepalives_idle=30,
-            keepalives_interval=10,
-            keepalives_count=3,
+    if not db_url:
+        raise RuntimeError(
+            "DATABASE_URL não definida. "
+            "Configure a variável de ambiente apontando para o PostgreSQL Railway."
         )
     return psycopg2.connect(
-        host="aws-1-sa-east-1.pooler.supabase.com",
-        port=5432,
-        dbname="postgres",
-        user="postgres.yunzqndswpwttejlgeaa",
-        password=os.environ.get("SUPABASE_DB_PASSWORD", ""),
-        sslmode="require",
+        db_url,
+        sslmode="prefer",
         connect_timeout=8,
         keepalives=1,
         keepalives_idle=30,

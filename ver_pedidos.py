@@ -703,41 +703,87 @@ def _romaneio_pdf(ped, itens):
 
 
 def _form_editar_cabecalho(ped_id, ped):
+    from datetime import date as _date, timedelta as _td
+    import re as _re
+
+    # Prazo da tabela de preço para sugestão automática
+    prazo_tabela = None
+    if ped["tabela_preco_id"]:
+        _tp = query("SELECT prazo_pagamento FROM tabela_preco WHERE tabela_preco_id=?",
+                    (ped["tabela_preco_id"],))
+        if _tp:
+            prazo_tabela = _tp[0][0]
+
     with st.form(f"cab_{ped_id}"):
         col1, col2 = st.columns(2)
         with col1:
-            nr_cli  = st.text_input("Nr. pedido cliente",    value=ped["nr_pedido_cliente"]    or "")
-            nr_forn = st.text_input("Nr. pedido fornecedor", value=ped["nr_pedido_fornecedor"] or "")
-            prazo   = st.text_input("Prazo de pagamento",    value=ped["prazo_pagamento"]      or "")
+            nr_cli  = st.text_input("Nr. pedido cliente",
+                                    value=ped["nr_pedido_cliente"]    or "")
+            nr_forn = st.text_input("Nr. pedido fornecedor",
+                                    value=ped["nr_pedido_fornecedor"] or "")
+            prazo_hint = f" (tabela: {prazo_tabela})" if prazo_tabela else ""
+            prazo = st.text_input(
+                f"Prazo de pagamento{prazo_hint}",
+                value=ped["prazo_pagamento"] or prazo_tabela or "",
+                help="Herdado da tabela de preço. Edite só se houver condição especial.")
         with col2:
-            frete   = st.text_input("Frete",                 value=ped["frete"]                or "")
-            desc_g  = st.number_input("Desconto geral (%)", min_value=0.0, max_value=100.0,
-                                      value=float(ped["desconto_geral"] or 0), step=0.5)
-            entrega = st.text_input("Data de entrega",       value=ped["data_entrega"]         or "",
-                                    placeholder="AAAA-MM-DD")
+            frete  = st.text_input("Frete",  value=ped["frete"]      or "")
+            desc_g = st.number_input("Desconto geral (%)", min_value=0.0,
+                                     max_value=100.0,
+                                     value=float(ped["desconto_geral"] or 0), step=0.5)
+            obs = st.text_input("Observação", value=ped["observacao"] or "")
+
+        st.divider()
+        st.markdown("**📦 Datas de entrega**")
         col_e1, col_e2 = st.columns(2)
         with col_e1:
-            entrega_prev_e = st.text_input(
-                "Data de entrega prevista", value=ped["data_entrega"] or "",
-                placeholder="AAAA-MM-DD")
+            _prev_val = None
+            if ped["data_entrega"]:
+                try: _prev_val = _date.fromisoformat(ped["data_entrega"][:10])
+                except: pass
+            entrega_prev_e = st.date_input(
+                "Entrega prevista", value=_prev_val, format="DD/MM/YYYY",
+                help="Data combinada com o fornecedor.")
         with col_e2:
-            entrega_real_e = st.text_input(
-                "Data de entrega realizada",
-                value=ped["data_entrega_realizada"] or "",
-                placeholder="AAAA-MM-DD — preencha quando entregue")
-        obs    = st.text_input("Observação", value=ped["observacao"] or "")
+            _real_val = None
+            if ped["data_entrega_realizada"]:
+                try: _real_val = _date.fromisoformat(ped["data_entrega_realizada"][:10])
+                except: pass
+            entrega_real_e = st.date_input(
+                "Entrega efetiva (data real)",
+                value=_real_val,
+                max_value=_date.today(),
+                format="DD/MM/YYYY",
+                help="Preencha quando entregue. Pode ser retroativa — informe a data real.")
+
+        # Vencimento calculado automaticamente
+        _venc = None
+        _data_base = entrega_real_e or entrega_prev_e
+        if _data_base and prazo:
+            _m = _re.search(r"(\d+)", prazo)
+            if _m:
+                try: _venc = _data_base + _td(days=int(_m.group(1)))
+                except: pass
+        if _venc:
+            _origem = "entrega efetiva" if entrega_real_e else "entrega prevista"
+            st.info(f"📅 Vencimento do boleto: **{_venc.strftime('%d/%m/%Y')}** "
+                    f"({prazo} a partir da {_origem})")
+
         salvar = st.form_submit_button("💾 Salvar cabeçalho", type="primary")
 
     if salvar:
+        _prev_str = entrega_prev_e.isoformat() if entrega_prev_e else None
+        _real_str = entrega_real_e.isoformat() if entrega_real_e else None
         conn = conectar()
         campos = {
-            "nr_pedido_cliente":    (ped["nr_pedido_cliente"],    nr_cli    or None),
-            "nr_pedido_fornecedor": (ped["nr_pedido_fornecedor"], nr_forn   or None),
-            "prazo_pagamento":      (ped["prazo_pagamento"],      prazo     or None),
-            "frete":                (ped["frete"],                frete     or None),
-            "desconto_geral":       (ped["desconto_geral"],       desc_g),
-            "data_entrega":         (ped["data_entrega"],         entrega   or None),
-            "observacao":           (ped["observacao"],           obs       or None),
+            "nr_pedido_cliente":      (ped["nr_pedido_cliente"],      nr_cli  or None),
+            "nr_pedido_fornecedor":   (ped["nr_pedido_fornecedor"],   nr_forn or None),
+            "prazo_pagamento":        (ped["prazo_pagamento"],        prazo   or None),
+            "frete":                  (ped["frete"],                  frete   or None),
+            "desconto_geral":         (ped["desconto_geral"],         desc_g),
+            "data_entrega":           (ped["data_entrega"],           _prev_str),
+            "data_entrega_realizada": (ped["data_entrega_realizada"], _real_str),
+            "observacao":             (ped["observacao"],             obs     or None),
         }
         for campo, (antes, depois) in campos.items():
             if str(antes or "") != str(depois or ""):
@@ -748,10 +794,7 @@ def _form_editar_cabecalho(ped_id, ped):
             data_entrega=?, data_entrega_realizada=?, observacao=?
             WHERE pedido_id=?""",
             (nr_cli or None, nr_forn or None, prazo or None,
-             frete or None, desc_g,
-             entrega_prev_e or None,
-             entrega_real_e or None,
-             obs or None, ped_id))
+             frete or None, desc_g, _prev_str, _real_str, obs or None, ped_id))
         conn.commit(); conn.close()
         st.success("✅ Cabeçalho atualizado!")
         st.rerun()
@@ -911,16 +954,80 @@ def _form_adicionar_item(ped_id, ped):
 
 
 def _form_alterar_status(ped_id, ped):
+    from datetime import date as _date, timedelta as _td
+    import re as _re
+
     st.subheader("Status do pedido")
     status_atual = ped["status_pedido"]
     idx = STATUS_PEDIDO.index(status_atual) if status_atual in STATUS_PEDIDO else 0
 
-    col1, col2 = st.columns([2,1])
+    col1, col2 = st.columns([2, 1])
     with col1:
         novo_status = st.selectbox("Alterar status para", STATUS_PEDIDO,
                                    index=idx, key=f"novo_status_{ped_id}")
     with col2:
         obs_status = st.text_input("Observação", key=f"obs_status_{ped_id}")
+
+    # ── Campos extras ao confirmar entrega ───────────────────────────────
+    data_entrega_conf = None
+    data_pgto_prorr   = None
+    motivo_prorr      = None
+
+    if novo_status == "ENTREGUE" and status_atual != "ENTREGUE":
+        st.divider()
+        st.markdown("**📦 Confirmação de entrega**")
+
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            _real_val = None
+            if ped["data_entrega_realizada"]:
+                try: _real_val = _date.fromisoformat(ped["data_entrega_realizada"][:10])
+                except: pass
+            data_entrega_conf = st.date_input(
+                "Data efetiva de entrega",
+                value=_real_val or _date.today(),
+                max_value=_date.today(),
+                format="DD/MM/YYYY",
+                key=f"dt_entrega_conf_{ped_id}",
+                help="Informe a data real de entrega — pode ser retroativa.")
+
+        # Vencimento calculado
+        prazo = ped["prazo_pagamento"] or ""
+        _venc = None
+        if prazo and data_entrega_conf:
+            _m = _re.search(r"(\d+)", prazo)
+            if _m:
+                try: _venc = data_entrega_conf + _td(days=int(_m.group(1)))
+                except: pass
+        with col_d2:
+            if _venc:
+                st.metric("Vencimento do boleto",
+                          _venc.strftime("%d/%m/%Y"),
+                          help=f"Prazo: {prazo} a partir da entrega efetiva")
+            elif prazo:
+                st.caption(f"Prazo: {prazo} — informe a data de entrega para calcular vencimento")
+            else:
+                st.caption("Prazo de pagamento não definido neste pedido.")
+
+        # Prorrogação de comissão
+        st.markdown("**💰 Pagamento de comissão**")
+        prorrogou = st.checkbox(
+            "Houve atraso/prorrogação no pagamento da comissão?",
+            key=f"prorr_{ped_id}",
+            help="Marque se o pagamento da comissão foi renegociado por causa de atraso na entrega ou outro motivo.")
+        if prorrogou:
+            col_p1, col_p2 = st.columns(2)
+            with col_p1:
+                data_pgto_prorr = st.date_input(
+                    "Nova data de pagamento da comissão",
+                    value=_venc or _date.today(),
+                    format="DD/MM/YYYY",
+                    key=f"dt_prorr_{ped_id}")
+            with col_p2:
+                motivo_prorr = st.text_input(
+                    "Motivo da prorrogação",
+                    placeholder="Ex: Atraso de 15 dias na entrega",
+                    key=f"motivo_prorr_{ped_id}")
 
     if st.button("✓ Confirmar alteração de status", type="primary",
                  key=f"btn_status_{ped_id}",
@@ -930,8 +1037,42 @@ def _form_alterar_status(ped_id, ped):
                             status_atual, novo_status, obs_status or None)
         conn.execute("UPDATE pedido SET status_pedido=? WHERE pedido_id=?",
                      (novo_status, ped_id))
+
+        # Se confirmando entrega — salva data efetiva e registra prorrogação
+        if novo_status == "ENTREGUE" and data_entrega_conf:
+            _real_str = data_entrega_conf.isoformat()
+            conn.execute(
+                "UPDATE pedido SET data_entrega_realizada=? WHERE pedido_id=?",
+                (_real_str, ped_id))
+            registrar_historico(conn, ped_id, "data_entrega_realizada",
+                                ped["data_entrega_realizada"], _real_str)
+
+            # Prorrogação de comissão
+            if data_pgto_prorr:
+                # Verifica se já existe registro em comissao_pagamento
+                _cpag = conn.execute(
+                    "SELECT pagamento_id, data_pagamento FROM comissao_pagamento "
+                    "WHERE pedido_id=?", (ped_id,)).fetchone()
+                _nova_dt = data_pgto_prorr.isoformat()
+                _motivo  = motivo_prorr or "Prorrogação registrada na confirmação de entrega"
+                if _cpag:
+                    conn.execute("""UPDATE comissao_pagamento SET
+                        data_pagamento_original=COALESCE(data_pagamento_original, data_pagamento),
+                        data_pagamento=?,
+                        motivo_prorrogacao=?,
+                        status_pagamento='PENDENTE'
+                        WHERE pedido_id=?""",
+                        (_nova_dt, _motivo, ped_id))
+                else:
+                    conn.execute("""INSERT INTO comissao_pagamento
+                        (pedido_id, data_pagamento, status_pagamento, motivo_prorrogacao)
+                        VALUES (?,?,'PENDENTE',?)""",
+                        (ped_id, _nova_dt, _motivo))
+                registrar_historico(conn, ped_id, "comissao_data_pagamento",
+                                    None, _nova_dt, _motivo)
+
         conn.commit(); conn.close()
-        icone = ICONE_STATUS.get(novo_status,"")
+        icone = ICONE_STATUS.get(novo_status, "")
         st.success(f"{icone} Status alterado para **{novo_status}**!")
         st.rerun()
 

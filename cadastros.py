@@ -1995,12 +1995,21 @@ def _lista_clientes():
         SELECT c.cliente_id, c.nome_fantasia, c.cidade, c.estado,
                c.ativo, COALESCE(c.status,'Ativo') AS status,
                COUNT(DISTINCT cf.cliente_fornecedor_id) AS fornecedores,
-               COUNT(DISTINCT p.pdv_id) AS pdvs
+               COUNT(DISTINCT p.pdv_id) AS pdvs,
+               COALESCE(c.razao_social,''),
+               COALESCE(c.perfil,''), COALESCE(c.fone,''),
+               COALESCE(c.cnpj,''), COALESCE(c.site,''),
+               COALESCE(c.instagram,''),
+               COALESCE(c.endereco,''), COALESCE(c.bairro,''),
+               COALESCE(c.observacao,''),
+               COALESCE(a.nome,'') AS associacao
         FROM cliente c
         LEFT JOIN cliente_fornecedor cf ON c.cliente_id=cf.cliente_id AND cf.ativo=1
         LEFT JOIN pdv p ON c.cliente_id=p.cliente_id AND p.ativo=1
+        LEFT JOIN associacao a ON c.associacao_id=a.associacao_id
         {where_sql}
-        GROUP BY c.cliente_id
+        GROUP BY c.cliente_id, c.razao_social, c.perfil, c.fone, c.cnpj,
+                 c.site, c.instagram, c.endereco, c.bairro, c.observacao, a.nome
         ORDER BY c.nome_fantasia
     """, tuple(params_q))
 
@@ -2008,37 +2017,29 @@ def _lista_clientes():
         st.info("Nenhum cliente encontrado.")
         return
 
-    # Export: mesma query de dados + campos extras, mesmos filtros, sem f-string dinâmica
-    _where_exp = []
-    _params_exp = list(params_q)  # copia dos filtros já usados em dados
-    if fil_status != "Todos":
-        _where_exp.append("c.status=?")
-    if fil_busca.strip():
-        _where_exp.append("c.nome_fantasia ILIKE ?")
-    _where_exp_sql = ("WHERE " + " AND ".join(_where_exp)) if _where_exp else ""
-
-    _dados_exp = query("""
-            SELECT c.cliente_id, c.nome_fantasia,
-                   COALESCE(c.razao_social,'—'),
-                   COALESCE(c.perfil,'—'), COALESCE(c.fone,'—'),
-                   COALESCE(c.cnpj,'—'), COALESCE(c.site,'—'),
-                   COALESCE(c.instagram,'—'),
-                   COALESCE(c.endereco,'—'), COALESCE(c.bairro,'—'),
-                   COALESCE(c.cidade,'—'), COALESCE(c.estado,'—'),
-                   COALESCE(a.nome,'—') AS associacao,
-                   COALESCE(c.status,'Ativo'),
-                   COALESCE(c.observacao,''),
-                   COUNT(DISTINCT p.pdv_id) AS pdvs
-            FROM cliente c
-            LEFT JOIN associacao a ON c.associacao_id=a.associacao_id
-            LEFT JOIN pdv p ON c.cliente_id=p.cliente_id AND p.ativo IS NOT FALSE
-            """ + _where_exp_sql + """
-            GROUP BY c.cliente_id
-            ORDER BY c.nome_fantasia
-    """, tuple(_params_exp)) or []
-    _df_cli_exp = pd.DataFrame(_dados_exp, columns=[
-        "ID","Nome fantasia","Razao social","Perfil","Fone","CNPJ","Site","Instagram",
-        "Endereco","Bairro","Cidade","UF","Associacao","Status","Observacao","PDVs"])
+    # Export: monta DataFrame direto de dados (já filtrado, zero queries extras)
+    # Índices de dados: 0=id, 1=nome, 2=cidade, 3=estado, 4=ativo, 5=status,
+    #                   6=fornecedores, 7=pdvs, 8=razao, 9=perfil, 10=fone,
+    #                   11=cnpj, 12=site, 13=instagram, 14=endereco, 15=bairro,
+    #                   16=observacao, 17=associacao
+    # ID mantido para auditoria e integração — importador trata ID de forma inteligente
+    _df_cli_exp = pd.DataFrame([{
+        "ID":            r[0],
+        "Nome Fantasia": r[1],
+        "Razao Social":  r[8]  if r[8]  != '' else None,
+        "Perfil":        r[9]  if r[9]  != '' else None,
+        "Fone":          r[10] if r[10] != '' else None,
+        "CNPJ":          r[11] if r[11] != '' else None,
+        "Site":          r[12] if r[12] != '' else None,
+        "Instagram":     r[13] if r[13] != '' else None,
+        "Endereco":      r[14] if r[14] != '' else None,
+        "Bairro":        r[15] if r[15] != '' else None,
+        "Cidade":        r[2]  if r[2]  != '' else None,
+        "Estado":        r[3]  if r[3]  != '' else None,
+        "Associacao":    r[17] if r[17] != '' else None,
+        "Status":        r[5],
+        "Observacao":    r[16] if r[16] != '' else None,
+    } for r in dados])
     _buf_cli = io.BytesIO()
     with pd.ExcelWriter(_buf_cli, engine="openpyxl") as _wcli:
         _df_cli_exp.to_excel(_wcli, index=False, sheet_name="Clientes")
@@ -2058,7 +2059,7 @@ def _lista_clientes():
         col.markdown(f"<small><b>{txt}</b></small>", unsafe_allow_html=True)
 
     for row in dados:
-        cid, nome, cidade, uf, ativo, status, fornec, pdvs = row
+        cid, nome, cidade, uf, ativo, status, fornec, pdvs = row[:8]
 
         c1,c2,c3,c4,c5,c6 = st.columns([0.4,2.8,1.2,0.6,1.5,1.2])
         c1.caption(str(cid))
@@ -2511,13 +2512,13 @@ def _tela_pdvs():
         # Gera Excel de PDVs FORA do with col — garante ExcelWriter fechado antes do getvalue()
         _dados_pdv_exp = query(f"""
                 SELECT p.pdv_id, c.nome_fantasia AS cliente,
-                       COALESCE(p.numero_loja,'—'), p.nome_loja,
-                       COALESCE(p.tipo_pdv,'—'), COALESCE(p.setor,'—'),
-                       COALESCE(p.endereco,'—'), COALESCE(p.bairro,'—'),
-                       COALESCE(p.cidade,'—'), COALESCE(p.estado,'—'),
-                       COALESCE(p.cnpj,'—'), COALESCE(p.gerente,'—'),
-                       COALESCE(p.fone_gerente,'—'),
-                       COALESCE(p.horario_recebimento,'—'),
+                       COALESCE(p.numero_loja,''), p.nome_loja,
+                       COALESCE(p.tipo_pdv,''), COALESCE(p.setor,''),
+                       COALESCE(p.endereco,''), COALESCE(p.bairro,''),
+                       COALESCE(p.cidade,''), COALESCE(p.estado,''),
+                       COALESCE(p.cnpj,''), COALESCE(p.gerente,''),
+                       COALESCE(p.fone_gerente,''),
+                       COALESCE(p.horario_recebimento,''),
                        COALESCE(p.status,'Ativo'),
                        COALESCE(p.observacao,''),
                        COALESCE(p.latitude,''), COALESCE(p.longitude,'')
@@ -2527,9 +2528,9 @@ def _tela_pdvs():
                 ORDER BY c.nome_fantasia, p.nome_loja
             """, tuple(params_p))
         _df_pdv_exp = pd.DataFrame(_dados_pdv_exp or [], columns=[
-            "ID","Cliente","Nr. Loja","Nome loja","Tipo PDV","Setor",
-            "Endereco","Bairro","Cidade","UF","CNPJ","Gerente","Fone gerente",
-            "Horario recebimento","Status","Observacao","Latitude","Longitude"])
+            "ID","Cliente","Nr Loja","Nome Loja","Tipo PDV","Setor",
+            "Endereco","Bairro","Cidade","Estado","CNPJ","Gerente","Fone Gerente",
+            "Horario Recebimento","Status","Observacao","Latitude","Longitude"])
         _sufixo = "_".join(filter(None, [
             fil_tipo if fil_tipo != "Todos" else "",
             fil_cid  if fil_cid  != "Todas" else "",
@@ -3235,9 +3236,9 @@ def _tela_importar_clientes_pdvs():
     st.subheader("Importacao em massa — Clientes e PDVs")
 
     ABAS_IMP = {"cli":"Importar Clientes","pdv":"Importar PDVs",
-                "gps":"Atualizar GPS","ia":"Setores (IA)","tpl":"Templates"}
+                "gps":"Atualizar GPS","ia":"Setores (IA)"}
     if "imp_aba" not in st.session_state: st.session_state["imp_aba"] = "cli"
-    cols = st.columns(5)
+    cols = st.columns(4)
     for col,(k,v) in zip(cols, ABAS_IMP.items()):
         ativa = st.session_state["imp_aba"] == k
         if col.button(v, key=f"impnav_{k}", width="stretch",
@@ -3249,75 +3250,40 @@ def _tela_importar_clientes_pdvs():
     elif a=="pdv":_importar_pdvs_excel()
     elif a=="gps":_atualizar_gps_massa()
     elif a=="ia": _tela_sugestao_setores_ia()
-    elif a=="tpl":_baixar_templates()
-
-
-def _baixar_templates():
-    st.markdown("### Templates Excel para importacao")
-    st.caption("Baixe, preencha e importe. Campos com * sao obrigatorios.")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("**Template de Clientes**")
-        st.caption("Colunas: nome_fantasia*, perfil, fone, cidade, estado, bairro, "
-                   "endereco, cnpj, site, instagram, associacao_nome, observacao")
-        df_cli = pd.DataFrame([{
-            "nome_fantasia":   "Emporio Exemplo",
-            "perfil":          "Emporio",
-            "fone":            "13988776655",
-            "cidade":          "Santos",
-            "estado":          "SP",
-            "bairro":          "Gonzaga",
-            "endereco":        "Av. Ana Costa 123",
-            "cnpj":            "",
-            "site":            "",
-            "instagram":       "@emporio_exemplo",
-            "associacao_nome": "",
-            "observacao":      "",
-        }])
-        buf = io.BytesIO()
-        df_cli.to_excel(buf, index=False, sheet_name="Clientes")
-        buf.seek(0)
-        st.download_button("Baixar template Clientes", data=buf,
-                           file_name="template_importacao_clientes.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           width="stretch")
-
-    with col2:
-        st.markdown("**Template de PDVs**")
-        st.caption("Colunas: cliente_nome*, numero_loja, nome_loja*, tipo_pdv, setor, endereco, bairro, "
-                   "cidade, estado, gerente, fone_gerente, horario_recebimento, "
-                   "latitude, longitude, observacao")
-        df_pdv = pd.DataFrame([{
-            "cliente_nome":        "Supermercado Exemplo",
-            "numero_loja":         "01",
-            "nome_loja":           "Loja Centro",
-            "tipo_pdv":            "Supermercado",
-            "setor":               "Setor Centro",
-            "endereco":            "Rua XV de Novembro 100",
-            "bairro":              "Centro",
-            "cidade":              "Santos",
-            "estado":              "SP",
-            "gerente":             "Joao Silva",
-            "fone_gerente":        "13977665544",
-            "horario_recebimento": "Seg-Sex 08h-17h",
-            "latitude":            "",
-            "longitude":           "",
-            "observacao":          "",
-        }])
-        buf = io.BytesIO()
-        df_pdv.to_excel(buf, index=False, sheet_name="PDVs")
-        buf.seek(0)
-        st.download_button("Baixar template PDVs", data=buf,
-                           file_name="template_importacao_pdvs.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           width="stretch")
 
 
 def _importar_clientes_excel():
     st.subheader("Importar clientes via Excel")
-    st.info("Baixe o template na aba 'Baixar templates', preencha e importe aqui.")
+
+    # Template para download — colunas espelham o export
+    _df_tpl_cli = pd.DataFrame([{
+        "Nome Fantasia": "Emporio Exemplo",
+        "Razao Social":  "Emporio Exemplo Comercio Ltda",
+        "Perfil":        "Emporio",
+        "Fone":          "13988776655",
+        "CNPJ":          "",
+        "Site":          "",
+        "Instagram":     "@emporio_exemplo",
+        "Endereco":      "Av. Ana Costa 123",
+        "Bairro":        "Gonzaga",
+        "Cidade":        "Santos",
+        "Estado":        "SP",
+        "Associacao":    "",
+        "Status":        "Ativo",
+        "Observacao":    "",
+    }])
+    _buf_tpl_cli = io.BytesIO()
+    with pd.ExcelWriter(_buf_tpl_cli, engine="openpyxl") as _w:
+        _df_tpl_cli.to_excel(_w, index=False, sheet_name="Clientes")
+    st.download_button("⬇️ Baixar template de Clientes",
+                       data=_buf_tpl_cli.getvalue(),
+                       file_name="template_clientes.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                       key="tpl_cli_dl", width="stretch")
+    st.caption("Obrigatório: `nome_fantasia`. "
+               "Status aceita: Ativo, Prospecto, Inativo. "
+               "`associacao_nome` deve ser exatamente como cadastrado no sistema.")
+    st.divider()
 
     resultado = st.session_state.pop("imp_cli_resultado", None)
     if resultado:
@@ -3336,8 +3302,12 @@ def _importar_clientes_excel():
     try:
         df = pd.read_excel(arquivo, dtype=str)
         df.columns = (df.columns.str.strip().str.lower()
-                      .str.replace(" ","_").str.replace("*",""))
+                      .str.replace(r'\s+', '_', regex=True)
+                      .str.replace("*", "").str.replace(".", "", regex=False))
         df = df.where(pd.notnull(df), None)
+        # Trata '—', '–', '-' como vazio — evita poluição de campos não informados
+        _dash = {'—', '–', '-', '--'}
+        df = df.applymap(lambda v: None if (isinstance(v, str) and v.strip() in _dash) else v)
         st.caption(f"Preview — {len(df)} linha(s):")
         st.dataframe(df.head(10), width="stretch")
     except Exception as e:
@@ -3357,19 +3327,38 @@ def _importar_clientes_excel():
                     erros.append(f"Linha {idx+2}: nome_fantasia vazio."); continue
 
                 assoc_id = None
-                assoc_nome = (row.get("associacao_nome") or "").strip().lower()
+                assoc_nome = (row.get("associacao") or "").strip().lower()
                 if assoc_nome:
                     assoc_id = assocs_cache.get(assoc_nome)
                     if not assoc_id:
                         erros.append(f"Linha {idx+2}: associacao '{assoc_nome}' nao encontrada.")
 
-                existe = conn.execute(
-                    "SELECT cliente_id FROM cliente WHERE LOWER(nome_fantasia)=LOWER(?)",
-                    (fantasia,)).fetchone()
+                # Busca inteligente: prioriza ID se presente e válido no banco
+                existe = None
+                id_planilha = row.get("id") or row.get("ID")
+                if id_planilha:
+                    try:
+                        existe = conn.execute(
+                            "SELECT cliente_id FROM cliente WHERE cliente_id=?",
+                            (int(id_planilha),)).fetchone()
+                    except (ValueError, TypeError):
+                        pass  # ID inválido — ignora e busca por nome
+                if not existe:
+                    existe = conn.execute(
+                        "SELECT cliente_id FROM cliente WHERE LOWER(nome_fantasia)=LOWER(?)",
+                        (fantasia,)).fetchone()
+
+                _params_upd = (row.get("razao_social"), row.get("perfil"), row.get("fone"),
+                               row.get("cidade"), row.get("estado") or "SP",
+                               row.get("bairro"), row.get("endereco"),
+                               row.get("cnpj"), row.get("site"),
+                               row.get("instagram"), assoc_id,
+                               row.get("observacao"), existe[0] if existe else None)
 
                 if existe:
                     if opcao == "Atualizar":
                         conn.execute("""UPDATE cliente SET
+                            razao_social=COALESCE(?,razao_social),
                             perfil=COALESCE(?,perfil), fone=COALESCE(?,fone),
                             cidade=COALESCE(?,cidade), estado=COALESCE(?,estado),
                             bairro=COALESCE(?,bairro), endereco=COALESCE(?,endereco),
@@ -3377,28 +3366,20 @@ def _importar_clientes_excel():
                             instagram=COALESCE(?,instagram),
                             associacao_id=COALESCE(?,associacao_id),
                             observacao=COALESCE(?,observacao)
-                            WHERE cliente_id=?""",
-                            (row.get("perfil"), row.get("fone"),
-                             row.get("cidade"), row.get("estado") or "SP",
-                             row.get("bairro"), row.get("endereco"),
-                             row.get("cnpj"), row.get("site"),
-                             row.get("instagram"), assoc_id,
-                             row.get("observacao"), existe[0]))
+                            WHERE cliente_id=?""", _params_upd)
                         atualizados += 1
                 else:
-                    # Status da importacao: usa coluna "status" do Excel
-                    # se nao informado, padrao e Prospecto
                     status_imp = (row.get("status") or "Prospecto").strip()
                     if status_imp not in STATUS_CLI_OPTS:
                         status_imp = "Prospecto"
-                    ativo_imp  = 1 if status_imp == "Ativo" else 0
+                    ativo_imp = 1 if status_imp == "Ativo" else 0
                     conn.execute("""INSERT INTO cliente
-                        (nome_fantasia, perfil, fone, cidade, estado, bairro,
+                        (nome_fantasia, razao_social, perfil, fone, cidade, estado, bairro,
                          endereco, cnpj, site, instagram, associacao_id,
                          observacao, status, ativo)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (fantasia,
-                         row.get("perfil"), row.get("fone"),
+                         row.get("razao_social"), row.get("perfil"), row.get("fone"),
                          row.get("cidade"), row.get("estado") or "SP",
                          row.get("bairro"), row.get("endereco"),
                          row.get("cnpj"), row.get("site"),
@@ -3416,7 +3397,38 @@ def _importar_clientes_excel():
 
 def _importar_pdvs_excel():
     st.subheader("Importar PDVs via Excel")
-    st.info("O cliente ja deve estar cadastrado. Use o nome_fantasia exatamente como cadastrado.")
+
+    # Template para download
+    _df_tpl_pdv = pd.DataFrame([{
+        "Cliente":             "Supermercado Exemplo",
+        "Nr Loja":             "01",
+        "Nome Loja":           "Loja Centro",
+        "Tipo PDV":            "Supermercado",
+        "Setor":               "Setor Centro",
+        "Endereco":            "Rua XV de Novembro 100",
+        "Bairro":              "Centro",
+        "Cidade":              "Santos",
+        "Estado":              "SP",
+        "CNPJ":                "",
+        "Gerente":             "Joao Silva",
+        "Fone Gerente":        "13977665544",
+        "Horario Recebimento": "Seg-Sex 08h-17h",
+        "Status":              "Ativo",
+        "Observacao":          "",
+        "Latitude":            "",
+        "Longitude":           "",
+    }])
+    _buf_tpl_pdv = io.BytesIO()
+    with pd.ExcelWriter(_buf_tpl_pdv, engine="openpyxl") as _w:
+        _df_tpl_pdv.to_excel(_w, index=False, sheet_name="PDVs")
+    st.download_button("⬇️ Baixar template de PDVs",
+                       data=_buf_tpl_pdv.getvalue(),
+                       file_name="template_pdvs.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                       key="tpl_pdv_dl", width="stretch")
+    st.caption("Obrigatório: `cliente_nome` (exatamente como cadastrado) e `nome_loja`.")
+    st.divider()
+    st.info("O cliente já deve estar cadastrado antes de importar PDVs.")
 
     resultado = st.session_state.pop("imp_pdv_resultado", None)
     if resultado:
@@ -3435,8 +3447,12 @@ def _importar_pdvs_excel():
     try:
         df = pd.read_excel(arquivo, dtype=str)
         df.columns = (df.columns.str.strip().str.lower()
-                      .str.replace(" ","_").str.replace("*",""))
+                      .str.replace(r'\s+', '_', regex=True)
+                      .str.replace("*", "").str.replace(".", "", regex=False))
         df = df.where(pd.notnull(df), None)
+        # Trata '—', '–', '-' como vazio — evita poluição de campos não informados
+        _dash = {'—', '–', '-', '--'}
+        df = df.applymap(lambda v: None if (isinstance(v, str) and v.strip() in _dash) else v)
         st.caption(f"Preview — {len(df)} linha(s):")
         st.dataframe(df.head(10), width="stretch")
     except Exception as e:
@@ -3450,10 +3466,10 @@ def _importar_pdvs_excel():
 
         for idx, row in df.iterrows():
             try:
-                cli_nome  = (row.get("cliente_nome") or "").strip()
+                cli_nome  = (row.get("cliente") or "").strip()
                 nome_loja = (row.get("nome_loja") or "").strip()
                 if not cli_nome or not nome_loja:
-                    erros.append(f"Linha {idx+2}: cliente_nome e nome_loja sao obrigatorios."); continue
+                    erros.append(f"Linha {idx+2}: Cliente e Nome Loja sao obrigatorios."); continue
 
                 cli = conn.execute(
                     "SELECT cliente_id FROM cliente WHERE LOWER(nome_fantasia)=LOWER(?)",
@@ -3462,9 +3478,20 @@ def _importar_pdvs_excel():
                     erros.append(f"Linha {idx+2}: cliente '{cli_nome}' nao encontrado."); continue
                 cli_id = cli[0]
 
-                existe = conn.execute(
-                    "SELECT pdv_id FROM pdv WHERE cliente_id=? AND LOWER(nome_loja)=LOWER(?)",
-                    (cli_id, nome_loja)).fetchone()
+                # Busca inteligente: prioriza ID do PDV se presente e válido no banco
+                existe = None
+                id_pdv_planilha = row.get("id") or row.get("ID")
+                if id_pdv_planilha:
+                    try:
+                        existe = conn.execute(
+                            "SELECT pdv_id FROM pdv WHERE pdv_id=? AND cliente_id=?",
+                            (int(id_pdv_planilha), cli_id)).fetchone()
+                    except (ValueError, TypeError):
+                        pass  # ID inválido — ignora e busca por nome
+                if not existe:
+                    existe = conn.execute(
+                        "SELECT pdv_id FROM pdv WHERE cliente_id=? AND LOWER(nome_loja)=LOWER(?)",
+                        (cli_id, nome_loja)).fetchone()
 
                 # Converte lat/lng
                 def _parse_float(v):
@@ -3475,7 +3502,7 @@ def _importar_pdvs_excel():
                     except: return None
 
                 campos = {
-                    "numero_loja":        row.get("numero_loja"),
+                    "numero_loja":        row.get("nr_loja"),
                     "tipo_pdv":           row.get("tipo_pdv"),
                     "setor":              row.get("setor"),
                     "endereco":           row.get("endereco"),
@@ -3890,7 +3917,8 @@ def _atualizar_gps_massa():
     try:
         df = pd.read_excel(arquivo)
         df.columns = (df.columns.str.strip().str.lower()
-                      .str.replace(" ","_").str.replace("*",""))
+                      .str.replace(r'\s+', '_', regex=True)
+                      .str.replace("*", "").str.replace(".", "", regex=False))
     except Exception as e:
         st.error(f"Erro ao ler arquivo: {e}"); return
 
@@ -3909,7 +3937,7 @@ def _atualizar_gps_massa():
         ok = 0; nao_encontrado = []; erro_coord = []
 
         for idx, row in df.iterrows():
-            cli_nome  = str(row.get("cliente_nome") or "").strip()
+            cli_nome  = str(row.get("cliente") or "").strip()
             loja_nome = str(row.get("nome_loja")    or "").strip()
 
             # Parse coordenadas — aceita float, int, string com virgula ou ponto
