@@ -24,6 +24,7 @@ UFS = ["SP","AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT",
 
 def _ir(p):
     st.session_state["pagina"] = p
+    st.session_state["_scroll_topo"] = True
     st.rerun()
 
 
@@ -175,13 +176,13 @@ def _tela_lista():
 
     col1, col2, col3 = st.columns([2,1,1])
     with col2:
-        if st.button("➕ Nova pesquisa", type="primary", use_container_width=True):
+        if st.button("➕ Nova pesquisa", type="primary", width="stretch"):
             _limpar_estado_cabecalho()
             st.session_state["pq_modo"] = "cabecalho"
             st.session_state.pop("pq_id", None)
             st.rerun()
     with col3:
-        if st.button("📊 Analise consolidada", use_container_width=True):
+        if st.button("📊 Analise consolidada", width="stretch"):
             st.session_state["pq_modo"] = "analise"
             st.rerun()
 
@@ -274,7 +275,7 @@ def _tela_lista():
                 )
             with col2:
                 # Ver: vai direto ao detalhe (resultado limpo)
-                if st.button("📋 Ver", key=f"ver_{pid}", use_container_width=True,
+                if st.button("📋 Ver", key=f"ver_{pid}", width="stretch",
                              help="Ver resultado da pesquisa"):
                     st.session_state["pq_id"]   = pid
                     st.session_state["pq_modo"] = "detalhe"
@@ -283,13 +284,13 @@ def _tela_lista():
                 # Continuar (rascunho) ou Reabrir (finalizado) — ação direta
                 if status == "rascunho":
                     if st.button("▶️ Editar", key=f"cont_{pid}",
-                                 use_container_width=True, help="Continuar coleta"):
+                                 width="stretch", help="Continuar coleta"):
                         st.session_state["pq_id"]   = pid
                         st.session_state["pq_modo"] = "coleta"
                         st.rerun()
                 else:
                     if st.button("🔓 Reabrir", key=f"reab_{pid}",
-                                 use_container_width=True, help="Reabrir para edição"):
+                                 width="stretch", help="Reabrir para edição"):
                         conn = conectar()
                         conn.execute(
                             "UPDATE pesquisa_preco SET status='rascunho' WHERE pesquisa_id=?",
@@ -300,7 +301,7 @@ def _tela_lista():
                         st.rerun()
             with col4:
                 if st.button("🗑️", key=f"del_{pid}", help="Excluir pesquisa",
-                             use_container_width=True):
+                             width="stretch"):
                     conn = conectar()
                     conn.execute("DELETE FROM pesquisa_preco_item WHERE pesquisa_id=?", (pid,))
                     conn.execute("DELETE FROM pesquisa_preco WHERE pesquisa_id=?", (pid,))
@@ -500,7 +501,7 @@ def _tela_cabecalho():
 
     btn_label = "▶️ Iniciar coleta" if tipo_pesquisa == "vinculada" else "▶️ Iniciar pesquisa livre"
     if st.button(btn_label, type="primary",
-                 use_container_width=True, key="btn_iniciar"):
+                 width="stretch", key="btn_iniciar"):
         pq_id = execute_write("""INSERT INTO pesquisa_preco
             (data_pesquisa, pdv_id, cliente_id, fornecedor_id, observacao, status)
             VALUES (?,?,?,?,?,'rascunho')
@@ -535,7 +536,7 @@ def _form_novo_cliente():
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Cadastrar e continuar", type="primary",
-                     use_container_width=True, key="btn_nc_salvar"):
+                     width="stretch", key="btn_nc_salvar"):
             st.session_state["_nc_acao"] = "salvar"
             st.session_state["_nc_fn"]   = fn
             st.session_state["_nc_cid"]  = cid
@@ -544,7 +545,7 @@ def _form_novo_cliente():
             st.session_state["_nc_ob"]   = ob
             st.rerun()
     with col2:
-        if st.button("Cancelar", use_container_width=True, key="btn_nc_cancelar"):
+        if st.button("Cancelar", width="stretch", key="btn_nc_cancelar"):
             st.session_state["_nc_acao"] = "cancelar"
             st.rerun()
 
@@ -578,7 +579,7 @@ def _form_novo_pdv(cli_id):
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Cadastrar PDV e continuar", type="primary",
-                     use_container_width=True, key="btn_np_salvar"):
+                     width="stretch", key="btn_np_salvar"):
             st.session_state["_np_acao"]    = "salvar"
             st.session_state["_np_cli_id"]  = cli_id
             st.session_state["_np_nl"]      = nl
@@ -593,7 +594,7 @@ def _form_novo_pdv(cli_id):
             st.session_state["_np_ob"]      = ob_
             st.rerun()
     with col2:
-        if st.button("Cancelar", use_container_width=True, key="btn_np_cancelar"):
+        if st.button("Cancelar", width="stretch", key="btn_np_cancelar"):
             st.session_state["_np_acao"] = "cancelar"
             st.rerun()
 
@@ -603,55 +604,65 @@ def _form_novo_pdv(cli_id):
 # ═══════════════════════════════════════════════════════
 
 
+def _foto_para_b64(fpath):
+    """
+    Retorna string base64 inline para exibição, independente de onde a foto está.
+    - Se já é base64 inline (data:image/...) → retorna direto.
+    - Se é path local que ainda existe (dev) → converte para base64.
+    - Caso contrário → retorna None (foto não disponível neste ambiente).
+    """
+    if not fpath:
+        return None
+    if fpath.startswith("data:image"):
+        return fpath
+    try:
+        import base64 as _b64
+        if os.path.exists(fpath):
+            _ext = fpath.rsplit(".", 1)[-1].lower()
+            _mime = "image/jpeg" if _ext in ("jpg", "jpeg") else f"image/{_ext}"
+            with open(fpath, "rb") as _f:
+                return f"data:{_mime};base64,{_b64.b64encode(_f.read()).decode()}"
+    except Exception:
+        pass
+    return None
+
+
 def _gerenciar_fotos(pq_id):
-    """Gerencia múltiplas fotos da gôndola para uma pesquisa."""
+    """Gerencia múltiplas fotos da gôndola — armazena base64 no banco (Railway-safe)."""
+    import base64 as _b64
     from datetime import datetime as _dt
-    import time
 
     fotos = query(
-        "SELECT foto_id, foto_path, legenda FROM pesquisa_foto WHERE pesquisa_id=? AND ativo=1 ORDER BY foto_id",
+        "SELECT foto_id, foto_path, legenda FROM pesquisa_foto "
+        "WHERE pesquisa_id=? AND ativo=1 ORDER BY foto_id",
         (pq_id,)) or []
-    # Exibe fotos já cadastradas em grade
+
+    # ── Fotos já cadastradas ──────────────────────────────────────────────
     if fotos:
         st.caption(f"{len(fotos)} foto(s) registrada(s)")
         n_cols = min(len(fotos), 3)
-        cols   = st.columns(n_cols)
+        cols = st.columns(n_cols)
         for i, (fid, fpath, fleg) in enumerate(fotos):
             with cols[i % n_cols]:
-                _img_src = None
-                if fpath:
-                    if fpath.startswith("data:image"):
-                        _img_src = fpath  # base64 inline
-                    elif os.path.exists(fpath):
-                        _img_src = fpath  # arquivo local
-                    _img_src = fdata
-                if _img_src:
-                    st.image(_img_src, caption=fleg or f"Foto {i+1}",
-                             use_container_width=True)
-                    st.caption(f"⚠️ Arquivo não encontrado: {fpath}")
-                # Botão excluir individual
-                if st.button("🗑️ Excluir", key=f"del_foto_{fid}",
-                             use_container_width=True):
-                    conn = conectar()
-                    conn.execute(
+                src = _foto_para_b64(fpath)
+                if src:
+                    st.image(src, caption=fleg or f"Foto {i+1}", width="stretch")
+                else:
+                    st.caption(f"📷 Foto {i+1} não disponível")
+                if st.button("🗑️ Excluir", key=f"del_foto_{fid}", width="stretch"):
+                    from database import execute_write
+                    execute_write(
                         "UPDATE pesquisa_foto SET ativo=0 WHERE foto_id=?", (fid,))
-                    conn.commit(); conn.close()
-                    # Remove arquivo do disco
-                    try:
-                        if fpath and os.path.exists(fpath):
-                            os.remove(fpath)
-                    except Exception:
-                        pass
                     st.rerun()
     else:
         st.caption("Nenhuma foto registrada ainda.")
 
     st.divider()
 
-    # Upload de nova(s) foto(s) — accept_multiple_files=True
+    # ── Upload de novas fotos ─────────────────────────────────────────────
     novas = st.file_uploader(
         "Adicionar foto(s) da gôndola",
-        type=["jpg","jpeg","png","webp"],
+        type=["jpg", "jpeg", "png", "webp"],
         accept_multiple_files=True,
         key=f"fotos_up_{pq_id}",
         help="Selecione uma ou mais fotos. Você pode adicionar legendas antes de salvar."
@@ -661,40 +672,27 @@ def _gerenciar_fotos(pq_id):
         st.caption("Adicione uma legenda opcional para cada foto antes de salvar:")
         legendas = []
         for i, arq in enumerate(novas):
-            leg = st.text_input(f"Legenda — {arq.name}",
-                                placeholder="Ex: Gôndola resfriados, Seção frios...",
-                                key=f"leg_foto_{pq_id}_{i}")
+            leg = st.text_input(
+                f"Legenda — {arq.name}",
+                placeholder="Ex: Gôndola resfriados, Seção frios...",
+                key=f"leg_foto_{pq_id}_{i}")
             legendas.append(leg)
 
         if st.button("✅ Salvar fotos", key=f"btn_salvar_fotos_{pq_id}",
-                     type="primary", use_container_width=True):
-            import base64 as _b64
-            pasta = os.path.join(os.path.dirname(__file__), "fotos_pesquisa")
-            os.makedirs(pasta, exist_ok=True)
-            conn  = conectar()
+                     type="primary", width="stretch"):
+            from database import execute_write
             saved = 0
             for i, arq in enumerate(novas):
-                ts       = int(time.time() * 1000)
-                nome_arq = f"pq{pq_id}_{ts}_{i}_{arq.name}"
-                caminho  = os.path.join(pasta, nome_arq)
-                caminho  = os.path.join(pasta, nome_arq)
-                _bytes   = arq.read()
-                _ext  = arq.name.rsplit(".", 1)[-1].lower()
-                _mime = "image/jpeg" if _ext in ("jpg","jpeg") else f"image/{_ext}"
-                _b64s = f"data:{_mime};base64,{_b64.b64encode(_bytes).decode()}"
-                # Sempre salva base64 como path principal (funciona Railway/celular)
-                _path_salvo = _b64s
-                # Tenta salvar arquivo local como cache (opcional)
-                try:
-                    with open(caminho, "wb") as f_out:
-                        f_out.write(_bytes)
-                except Exception:
-                    pass
-                conn.execute(
+                _bytes = arq.read()
+                _ext   = arq.name.rsplit(".", 1)[-1].lower()
+                _mime  = "image/jpeg" if _ext in ("jpg", "jpeg") else f"image/{_ext}"
+                # Salva direto como base64 inline — funciona em Railway e mobile
+                _b64s  = f"data:{_mime};base64,{_b64.b64encode(_bytes).decode()}"
+                execute_write(
                     """INSERT INTO pesquisa_foto
                        (pesquisa_id, foto_path, legenda, data_upload, ativo)
                        VALUES (?,?,?,?,1)""",
-                    (pq_id, _path_salvo,
+                    (pq_id, _b64s,
                      legendas[i].strip() or None,
                      _dt.now().strftime("%Y-%m-%d %H:%M")))
                 saved += 1
@@ -734,23 +732,23 @@ def _tela_coleta(pq_id):
         with st.expander(f"📷 Fotos da gôndola ({len(fotos_det)})"):
             cols_f = st.columns(min(len(fotos_det), 3))
             for i, (fid, fpath, fleg) in enumerate(fotos_det):
-                _isrc = fpath if fpath and (fpath.startswith("data:image") or os.path.exists(fpath)) else None
+                _isrc = _foto_para_b64(fpath)
                 if _isrc:
                     cols_f[i % 3].image(_isrc,
                         caption=fleg or f"Foto {i+1}",
-                        use_container_width=True)
+                        width="stretch")
 
     col1, col2, col3, col4 = st.columns([3,1,1,1])
     with col2:
-        if st.button("⬅ Lista", use_container_width=True):
+        if st.button("⬅ Lista", width="stretch"):
             st.session_state["pq_modo"] = "lista"; st.rerun()
     with col3:
-        if st.button("✏️ Cabeçalho", use_container_width=True,
+        if st.button("✏️ Cabeçalho", width="stretch",
                      help="Editar data, cliente, PDV ou fornecedor da pesquisa"):
             st.session_state[f"editar_cab_{pq_id}"] = True
             st.rerun()
     with col4:
-        if st.button("✅ Finalizar", type="primary", use_container_width=True):
+        if st.button("✅ Finalizar", type="primary", width="stretch"):
             conn = conectar()
             conn.execute("UPDATE pesquisa_preco SET status='finalizado' WHERE pesquisa_id=?", (pq_id,))
             conn.commit(); conn.close()
@@ -784,7 +782,7 @@ def _tela_coleta(pq_id):
     with col_m1:
         if st.button(
             "📋 Clássico" if st.session_state[modo_key] != "classico" else "📋 Clássico ✓",
-            use_container_width=True,
+            width="stretch",
             type="primary" if st.session_state[modo_key] == "classico" else "secondary",
             key="btn_modo_classico",
             help="Seleciona produto de referência e coleta concorrentes vinculados"
@@ -793,7 +791,7 @@ def _tela_coleta(pq_id):
     with col_m2:
         if st.button(
             "⚡ Rápido" if st.session_state[modo_key] != "campo" else "⚡ Rápido ✓",
-            use_container_width=True,
+            width="stretch",
             type="primary" if st.session_state[modo_key] == "campo" else "secondary",
             key="btn_modo_campo",
             help="Escanear EAN ou buscar por nome/categoria — modo rápido unificado"
@@ -980,7 +978,7 @@ def _coleta_modo_campo(pq_id, forn_id):
         )
     with col_btn:
         buscar = st.button("🔍", key=f"campo_btn_{pq_id}",
-                           use_container_width=True)
+                           width="stretch")
 
     busca = busca_input.strip() if busca_input else ""
 
@@ -1017,7 +1015,7 @@ def _coleta_modo_campo(pq_id, forn_id):
                 if sel_vinc and sel_vinc[0]:
                     if st.button("✅ Vincular EAN e registrar preço",
                                  key=f"campo_vinc_ok_{pq_id}",
-                                 type="primary", use_container_width=True):
+                                 type="primary", width="stretch"):
                         from database import conectar as _con
                         conn = _con()
                         conn.execute(
@@ -1033,7 +1031,7 @@ def _coleta_modo_campo(pq_id, forn_id):
         st.divider()
         st.markdown("**Ou buscar na base pública:**")
         if st.button("🌐 Buscar na Open Food Facts",
-                     key=f"campo_off_{pq_id}", use_container_width=True):
+                     key=f"campo_off_{pq_id}", width="stretch"):
             st.session_state[f"campo_buscar_off_{pq_id}"] = True
 
         if st.session_state.get(f"campo_buscar_off_{pq_id}"):
@@ -1097,7 +1095,7 @@ def _campo_busca_nome(pq_id, forn_id, busca):
         for pid, desc, cod, marca, ean in nossos:
             label = f"{marca} — {desc}" + (f" ({cod})" if cod else "")
             if st.button(label, key=f"campo_n_{pq_id}_{pid}",
-                        use_container_width=True):
+                        width="stretch"):
                 resultado = {"tipo":"nosso", "produto_id":pid,
                             "descricao":desc, "marca":marca, "ean":ean,
                             "pc_id":None}
@@ -1109,7 +1107,7 @@ def _campo_busca_nome(pq_id, forn_id, busca):
         for pc_id, desc, marca, ean in concs:
             label = f"{marca} — {desc}" + (f" | EAN:{ean}" if ean else "")
             if st.button(label, key=f"campo_c_{pq_id}_{pc_id}",
-                        use_container_width=True):
+                        width="stretch"):
                 resultado = {"tipo":"conc", "pc_id":pc_id,
                             "descricao":desc, "marca":marca, "ean":ean,
                             "auditavel":1}
@@ -1209,7 +1207,7 @@ def _campo_navegacao(pq_id, forn_id):
             _label = _lbl("n", pid, marca, desc)
             _pesquisado = _mp.get(("n", pid)) is not None
             if st.button(_label, key=f"campo_nav_n_{pq_id}_{pid}",
-                        use_container_width=True,
+                        width="stretch",
                         type="primary" if _pesquisado else "secondary"):
                 resultado = {"tipo":"nosso","produto_id":pid,
                             "descricao":desc,"marca":marca,"ean":None,"pc_id":None}
@@ -1223,7 +1221,7 @@ def _campo_navegacao(pq_id, forn_id):
             _label = _lbl("c", pc_id, marca, desc)
             _pesquisado = _mp.get(("c", pc_id)) is not None
             if st.button(_label, key=f"campo_nav_c_{pq_id}_{pc_id}",
-                        use_container_width=True,
+                        width="stretch",
                         type="primary" if _pesquisado else "secondary"):
                 resultado = {"tipo":"conc","pc_id":pc_id,
                             "descricao":desc,"marca":marca,
@@ -1285,7 +1283,7 @@ def _coleta_modo_ean(pq_id, forn_id):
         )
     with col_btn:
         buscar = st.button("🔍", key=f"ean_buscar_{pq_id}",
-                           use_container_width=True,
+                           width="stretch",
                            help="Buscar produto")
 
     ean = ean_input.strip().replace(" ","").replace(".","").replace("-","")
@@ -1330,7 +1328,7 @@ def _coleta_modo_ean(pq_id, forn_id):
             if sel_vinc and sel_vinc[0]:
                 if st.button("✅ Vincular EAN e registrar preço",
                              key=f"ean_vinc_ok_{pq_id}",
-                             type="primary", use_container_width=True):
+                             type="primary", width="stretch"):
                     from database import conectar as _con
                     conn = _con()
                     conn.execute(
@@ -1348,7 +1346,7 @@ def _coleta_modo_ean(pq_id, forn_id):
     st.divider()
     st.markdown("**Ou buscar na base pública:**")
     if st.button("🌐 Buscar na Open Food Facts",
-                 key=f"ean_off_{pq_id}", use_container_width=True):
+                 key=f"ean_off_{pq_id}", width="stretch"):
         st.session_state[f"ean_buscar_off_{pq_id}"] = True
 
     if st.session_state.get(f"ean_buscar_off_{pq_id}"):
@@ -1493,7 +1491,7 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
         st.markdown(f"### ⚠️ Produto já pesquisado")
         st.warning(f"**{label}** já coletado nesta visita — preço anterior: **{_preco_fmt}**. Atualize abaixo ou pule.")
         if st.button("❌ Não atualizar — próximo produto",
-                     key=f"{k}_nao", use_container_width=True):
+                     key=f"{k}_nao", width="stretch"):
             st.session_state.pop(f"ean_input_{pq_id}", None)
             st.session_state.pop(f"campo_busca_{pq_id}", None)
             st.session_state.pop(f"nav_produto_pendente_{pq_id}", None)
@@ -1555,7 +1553,7 @@ def _form_coleta_rapida_ean(pq_id, tipo, produto_id, pc_id, label, ean):
 
         _salvar = st.form_submit_button(
             f"💾 Salvar e próximo",
-            type="primary", use_container_width=True)
+            type="primary", width="stretch")
 
         if _salvar:
             _oferta_val = st.session_state.get(f"{k}_of", oferta)
@@ -1709,7 +1707,7 @@ def _form_cadastro_rapido_ean(pq_id, forn_id, ean, dados_off):
     ruptura     = col_ru.checkbox("Ruptura",  key=f"{k}_rup")
 
     if st.button("💾 Cadastrar produto e salvar preço",
-                 type="primary", use_container_width=True,
+                 type="primary", width="stretch",
                  key=f"{k}_salvar"):
         _nome = nova_marca.strip() if marca_sel=="➕ Nova marca..." else marca_sel
         if not _nome:
@@ -2054,7 +2052,7 @@ def _resolver_e_coletar(pq_id, forn_id, tipo_sel, id_sel, label_sel):
                 if st.button(f"→ {novo_tipo_v.capitalize()}",
                              key=f"chg_tipo_{pq_id}_{id_sel}_{prod_id_vinc}",
                              help=f"Alterar tipo de concorrência para {novo_tipo_v}",
-                             use_container_width=True):
+                             width="stretch"):
                     rel = query("""SELECT relacao_id FROM produto_concorrente_relacao
                         WHERE produto_id=? AND produto_concorrente_id=?""",
                         (prod_id_vinc, id_sel))
@@ -2293,13 +2291,13 @@ def _card_item_editavel(key_prefix, label, cor, item_id, dados_atuais, on_save):
                 with b1:
                     if st.button("✏️", key=f"btn_edit_{key_prefix}",
                                  help="Editar este registro",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state[f"edit_{key_prefix}"] = True
                         st.rerun()
                 with b2:
                     if st.button("🗑️", key=f"btn_del_{key_prefix}",
                                  help="Excluir este registro da pesquisa",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state[f"del_{key_prefix}"] = True
                         st.rerun()
 
@@ -2312,7 +2310,7 @@ def _card_item_editavel(key_prefix, label, cor, item_id, dados_atuais, on_save):
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🗑️ Confirmar exclusão", key=f"conf_del_{key_prefix}",
-                         type="primary", use_container_width=True):
+                         type="primary", width="stretch"):
                 if item_id:
                     conn = conectar()
                     conn.execute(
@@ -2324,7 +2322,7 @@ def _card_item_editavel(key_prefix, label, cor, item_id, dados_atuais, on_save):
                 st.rerun()
         with col2:
             if st.button("Cancelar", key=f"canc_del_{key_prefix}",
-                         use_container_width=True):
+                         width="stretch"):
                 st.session_state.pop(f"del_{key_prefix}", None)
                 st.rerun()
 
@@ -2624,7 +2622,7 @@ def _form_editar_cabecalho_pesquisa(pq_id, cli_id_atual, forn_id_atual, pdv_id_a
                                    placeholder="Ex: gôndola reformada, preço promocional...")
 
         salvar = st.form_submit_button("💾 Salvar alterações", type="primary",
-                                       use_container_width=True)
+                                       width="stretch")
 
     if salvar:
         novo_pdv_id = pdv_e[0]
@@ -2669,7 +2667,7 @@ def _tela_detalhe(pq_id):
         col_v1, col_v2 = st.columns(2)
         with col_v1:
             if st.button("📋 Registrar visita agora", type="primary",
-                         use_container_width=True, key="btn_reg_visita"):
+                         width="stretch", key="btn_reg_visita"):
                 # Pre-preenche dados da visita com info da pesquisa
                 st.session_state["vis_pre_cli_id"]  = cli_id if "cli_id" in dir() else None
                 st.session_state["vis_pre_pesq_id"] = pq_id
@@ -2678,7 +2676,7 @@ def _tela_detalhe(pq_id):
                 st.session_state["pagina"] = "visitas"
                 st.rerun()
         with col_v2:
-            if st.button("Continuar sem registrar", use_container_width=True,
+            if st.button("Continuar sem registrar", width="stretch",
                          key="btn_skip_visita"):
                 st.session_state.pop("pq_finalizada_id", None)
                 st.rerun()
@@ -2693,18 +2691,18 @@ def _tela_detalhe(pq_id):
         )
         if obs: st.caption(f"Observação: {obs}")
     with col_b:
-        if st.button("⬅ Voltar à lista", use_container_width=True, key="det_voltar"):
+        if st.button("⬅ Voltar à lista", width="stretch", key="det_voltar"):
             st.session_state["pq_modo"] = "lista"; st.rerun()
 
     # Botões de ação
     col1, col2, col3 = st.columns(3)
     with col1:
         if status == "rascunho" and st.button("▶️ Continuar coleta",
-                                              use_container_width=True, key="det_cont"):
+                                              width="stretch", key="det_cont"):
             st.session_state["pq_modo"] = "coleta"; st.rerun()
     with col2:
         if status == "finalizado" and st.button("🔓 Reabrir para edição",
-                                               use_container_width=True, key="det_reab"):
+                                               width="stretch", key="det_reab"):
             conn = conectar()
             conn.execute("UPDATE pesquisa_preco SET status='rascunho' WHERE pesquisa_id=?", (pq_id,))
             conn.commit(); conn.close()
@@ -2734,20 +2732,12 @@ def _tela_detalhe(pq_id):
         " WHERE pesquisa_id=? AND ativo=1 ORDER BY foto_id", (pq_id,)) or []
     if fotos_det:
         with st.expander(f"📷 Fotos da gôndola ({len(fotos_det)})", expanded=False):
-            import base64 as _b64
             imgs_ok = []
             for fid, fpath, fleg in fotos_det:
                 _caption = fleg or f"Foto {len(imgs_ok)+1}"
-                if fpath:
-                    if fpath.startswith("data:image"):
-                        imgs_ok.append({"src": fpath, "caption": _caption})
-                    elif os.path.exists(fpath):
-                        import base64 as _b64x
-                        _ext2 = fpath.rsplit(".", 1)[-1].lower()
-                        _mime2 = "image/jpeg" if _ext2 in ("jpg","jpeg") else f"image/{_ext2}"
-                        with open(fpath, "rb") as _lf:
-                            _lb64 = f"data:{_mime2};base64,{_b64x.b64encode(_lf.read()).decode()}"
-                        imgs_ok.append({"src": _lb64, "caption": _caption})
+                src = _foto_para_b64(fpath)
+                if src:
+                    imgs_ok.append({"src": src, "caption": _caption})
             if not imgs_ok:
                 st.caption("📷 Fotos não disponíveis neste dispositivo.")
             else:
@@ -2757,29 +2747,29 @@ def _tela_detalhe(pq_id):
                 if _cur is not None:
                     _im = imgs_ok[_cur]
                     st.markdown(f"**📷 {_im['caption']}** &nbsp; ({_cur+1}/{len(imgs_ok)})")
-                    st.image(_im["src"], use_container_width=True)
+                    st.image(_im["src"], width="stretch")
                     _lbn1, _lbn2, _lbn3 = st.columns([1, 2, 1])
                     with _lbn1:
                         if st.button("← Anterior", key=f"lb_prev_{pq_id}",
-                                     use_container_width=True, disabled=_cur==0):
+                                     width="stretch", disabled=_cur==0):
                             st.session_state[_lb_key] = _cur - 1; st.rerun()
                     with _lbn2:
                         if st.button("❌ Fechar visualização", key=f"lb_close_{pq_id}",
-                                     use_container_width=True):
+                                     width="stretch"):
                             st.session_state.pop(_lb_key, None); st.rerun()
                     with _lbn3:
                         if st.button("Próxima →", key=f"lb_next_{pq_id}",
-                                     use_container_width=True, disabled=_cur==len(imgs_ok)-1):
+                                     width="stretch", disabled=_cur==len(imgs_ok)-1):
                             st.session_state[_lb_key] = _cur + 1; st.rerun()
                     st.divider()
                 # Grade de thumbnails - clique seleciona
                 _cols = st.columns(4)
                 for _idx, _im in enumerate(imgs_ok):
                     with _cols[_idx % 4]:
-                        st.image(_im["src"], use_container_width=True,
+                        st.image(_im["src"], width="stretch",
                                  caption=_im["caption"])
                         if st.button("🔍 Ver", key=f"lb_open_{pq_id}_{_idx}",
-                                     use_container_width=True,
+                                     width="stretch",
                                      type="primary" if _cur==_idx else "secondary"):
                             if _cur == _idx:
                                 st.session_state.pop(_lb_key, None)
@@ -2844,7 +2834,7 @@ def _tela_detalhe(pq_id):
                 f"Use **🔓 Reabrir para edição** e refaça a coleta."
             )
             st.dataframe(pd.DataFrame(raw, columns=["item_id","produto_id","concorrente_id","preco","ruptura"]),
-                         use_container_width=True, hide_index=True)
+                         width="stretch", hide_index=True)
         else:
             st.info("Nenhum item registrado nesta pesquisa. Use 🔓 Reabrir para edição.")
         return
@@ -3074,7 +3064,7 @@ def _tela_detalhe(pq_id):
                         "Ruptura":          "Sim" if ru_c else "Não",
                         "Ponto extra":      tpe_c or "Não",
                     })
-                st.dataframe(pd.DataFrame(rows_tab), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(rows_tab), width="stretch", hide_index=True)
 
     # Resumo
     st.divider()
@@ -3150,7 +3140,7 @@ def _tela_detalhe(pq_id):
                             lambda v: f"R$ {v:,.2f}".replace(",","X").replace(".",",").replace("X",".")
                             if v and v > 0 else "—")
 
-                    st.dataframe(df_h, use_container_width=True, hide_index=True)
+                    st.dataframe(df_h, width="stretch", hide_index=True)
                     st.caption(f"Ultimas {len(df_h)} pesquisa(s) finalizadas neste PDV para {sel_prod_h[1]}")
 
     # Exportar
@@ -3537,7 +3527,7 @@ def _tela_analise_consolidada():
     st.header("Analise Consolidada de Pesquisas")
     col1, col2 = st.columns([1, 3])
     with col1:
-        if st.button("Voltar a lista", use_container_width=True):
+        if st.button("Voltar a lista", width="stretch"):
             st.session_state["pq_modo"] = "lista"; st.rerun()
 
     st.divider()
@@ -3597,7 +3587,7 @@ def _tela_analise_consolidada():
     cols = st.columns(4)
     for col,(k,v) in zip(cols, ABAS_AC.items()):
         ativa = st.session_state["ac_aba"] == k
-        if col.button(v, key=f"acnav_{k}", use_container_width=True,
+        if col.button(v, key=f"acnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["ac_aba"] = k; st.rerun()
     a = st.session_state["ac_aba"]
@@ -3766,7 +3756,7 @@ def _ac_por_produto(where_base, params_base, tipo_rel_where, cat_where, cat_para
                  "Ultimo preco","Preco medio","Min","Max","Pesquisas","Ultima data"]
     if preco_tab_unit:
         cols_show += ["Meu preco unit.","Dif. vs tab.","Score"]
-    st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
+    st.dataframe(df_show[cols_show], width="stretch", hide_index=True)
 
     col_xe, col_xp = st.columns(2)
     with col_xe:
@@ -3777,7 +3767,7 @@ def _ac_por_produto(where_base, params_base, tipo_rel_where, cat_where, cat_para
         st.download_button("⬇️ Exportar Excel", data=buf,
                            file_name=f"analise_produto_{prod_sel[1]}.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                           width="stretch")
     with col_xp:
         # Prepara df para o PDF — usa df original (antes da formatacao)
         df_pdf = df.copy()
@@ -3799,7 +3789,7 @@ def _ac_por_produto(where_base, params_base, tipo_rel_where, cat_where, cat_para
         st.download_button("⬇️ Exportar PDF", data=buf_pdf,
                            file_name=f"analise_produto_{prod_sel[1]}.pdf",
                            mime="application/pdf",
-                           use_container_width=True)
+                           width="stretch")
 
 
 # ── ABA 2: Por marca concorrente ──────────────────────
@@ -3939,7 +3929,7 @@ def _ac_por_marca(where_base, params_base, tipo_rel_where, cat_where, cat_params
             if tab_m_sel[0]:
                 cols_res += ["Meu unit."]
             cols_res += ["PDVs","Ultima data"]
-            st.dataframe(resumo[cols_res], use_container_width=True, hide_index=True)
+            st.dataframe(resumo[cols_res], width="stretch", hide_index=True)
 
             # Detalhe por PDV
             with st.expander("Ver detalhe por PDV"):
@@ -3951,7 +3941,7 @@ def _ac_por_marca(where_base, params_base, tipo_rel_where, cat_where, cat_params
                 if tab_m_sel[0]:
                     cols_det += ["Meu preco unit.","Dif. vs tab.","Score"]
                 cols_det += ["Data"]
-                st.dataframe(df_det[cols_det], use_container_width=True, hide_index=True)
+                st.dataframe(df_det[cols_det], width="stretch", hide_index=True)
 
     # Exportar
     df_exp = df.copy()
@@ -3970,7 +3960,7 @@ def _ac_por_marca(where_base, params_base, tipo_rel_where, cat_where, cat_params
         st.download_button("⬇️ Exportar Excel", data=buf,
                            file_name=f"analise_marca_{marca_sel[1]}.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                           width="stretch")
     with col_xp:
         filtros_desc = [
             f"Periodo: {st.session_state.get('ac_per','—')}",
@@ -3982,7 +3972,7 @@ def _ac_por_marca(where_base, params_base, tipo_rel_where, cat_where, cat_params
         st.download_button("⬇️ Exportar PDF", data=buf_pdf,
                            file_name=f"analise_marca_{marca_sel[1]}.pdf",
                            mime="application/pdf",
-                           use_container_width=True)
+                           width="stretch")
 
 
 # ── ABA 3: Por categoria ──────────────────────────────
@@ -4035,7 +4025,7 @@ def _ac_por_categoria(where_base, params_base, forn_id_global, fil_cat_global=No
     df_show = df.copy()
     for col in ["Preco medio","Preco min","Preco max"]:
         df_show[col] = df_show[col].apply(_brl)
-    st.dataframe(df_show, use_container_width=True, hide_index=True)
+    st.dataframe(df_show, width="stretch", hide_index=True)
 
     col_xe, col_xp = st.columns(2)
     with col_xe:
@@ -4046,14 +4036,14 @@ def _ac_por_categoria(where_base, params_base, forn_id_global, fil_cat_global=No
         st.download_button("⬇️ Exportar Excel", data=buf,
                            file_name=f"analise_categoria_{cat_sel[1]}.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                           width="stretch")
     with col_xp:
         filtros_desc = [f"Periodo: {st.session_state.get('ac_per','—')}"]
         buf_pdf = _gerar_pdf_por_categoria(df, cat_sel[1], filtros_desc)
         st.download_button("⬇️ Exportar PDF", data=buf_pdf,
                            file_name=f"analise_categoria_{cat_sel[1]}.pdf",
                            mime="application/pdf",
-                           use_container_width=True)
+                           width="stretch")
 
 
 # ── ABA 4: Por PDV ────────────────────────────────────
@@ -4203,7 +4193,7 @@ def _ac_por_pdv(where_base, params_base, tipo_rel_where, cat_where, cat_params, 
             cols_s = ["Data","Nosso produto","Marca","Produto concorrente","Tipo rel.","Preco conc."]
             if tab_pdv_sel[0]:
                 cols_s += ["Meu unit. (tab.)","Dif. vs tab.","Score"]
-            st.dataframe(df_show[cols_s], use_container_width=True, hide_index=True)
+            st.dataframe(df_show[cols_s], width="stretch", hide_index=True)
 
     # Exportar
     df_exp = df.copy()
@@ -4222,7 +4212,7 @@ def _ac_por_pdv(where_base, params_base, tipo_rel_where, cat_where, cat_params, 
         st.download_button("⬇️ Exportar Excel", data=buf,
                            file_name=f"analise_pdv_{slug}.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                           width="stretch")
     with col_xp:
         filtros_desc = [
             f"Periodo: {st.session_state.get('ac_per','—')}",
@@ -4234,4 +4224,4 @@ def _ac_por_pdv(where_base, params_base, tipo_rel_where, cat_where, cat_params, 
         st.download_button("⬇️ Exportar PDF", data=buf_pdf,
                            file_name=f"analise_pdv_{slug}.pdf",
                            mime="application/pdf",
-                           use_container_width=True)
+                           width="stretch")

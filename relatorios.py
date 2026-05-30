@@ -33,6 +33,7 @@ _VALOR_ITEM = """
 
 def _ir(p):
     st.session_state["pagina"] = p
+    st.session_state["_scroll_topo"] = True
     st.rerun()
 
 
@@ -119,7 +120,7 @@ def tela_relatorios():
         cols2 = st.columns(len(row))
         for col,(k,v) in zip(cols2, row):
             ativa = st.session_state["rel_aba"] == k
-            if col.button(v, key=f"rnav_{k}", use_container_width=True,
+            if col.button(v, key=f"rnav_{k}", width="stretch",
                           type="primary" if ativa else "secondary"):
                 st.session_state["rel_aba"] = k; st.rerun()
     st.divider()
@@ -180,7 +181,7 @@ def _rel_cliente():
     col3.metric("Total vendas", _fmt_brl(df["Total (R$)"].sum()))
 
     df["Total (R$)"] = df["Total (R$)"].apply(_fmt_brl)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
     df_exp = pd.DataFrame(dados, columns=["Cliente","Fornecedor","Pedidos","Caixas","Total (R$)"])
     _excel_download(df_exp, "vendas_por_cliente")
@@ -222,7 +223,7 @@ def _rel_fornecedor():
     st.bar_chart(df_chart.set_index("Fornecedor"))
 
     df["Total (R$)"] = df["Total (R$)"].apply(_fmt_brl)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
     df_exp = pd.DataFrame(dados, columns=["Fornecedor","Pedidos","Clientes","Caixas","Total (R$)"])
     _excel_download(df_exp, "vendas_por_fornecedor")
@@ -283,7 +284,7 @@ def _rel_produto():
     st.bar_chart(df_chart.set_index("Produto"))
 
     df["Total (R$)"] = df["Total (R$)"].apply(_fmt_brl)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
     df_exp = pd.DataFrame(dados,
                           columns=["Código","Produto","Fornecedor","Categoria",
@@ -340,7 +341,7 @@ def _rel_categoria():
     st.bar_chart(df_chart.set_index("Categoria"))
 
     df["Total (R$)"] = df["Total (R$)"].apply(_fmt_brl)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
     df_exp = pd.DataFrame(dados,
                           columns=["Categoria","Fornecedor","Produtos","Caixas","Total (R$)"])
@@ -403,7 +404,7 @@ def _rel_evolucao():
 
     df_show = df.copy()
     df_show["Total (R$)"] = df_show["Total (R$)"].apply(_fmt_brl)
-    st.dataframe(df_show, use_container_width=True, hide_index=True)
+    st.dataframe(df_show, width="stretch", hide_index=True)
 
     _excel_download(df, "evolucao_mensal")
 
@@ -505,7 +506,7 @@ def _rel_comparacao():
     df_show["Variação (%)"] = df_show["Variação (%)"].apply(
         lambda v: f"{v:+.1f}%" if v is not None else "—"
     )
-    st.dataframe(df_show, use_container_width=True, hide_index=True)
+    st.dataframe(df_show, width="stretch", hide_index=True)
 
     _excel_download(df, "comparacao_periodos")
 
@@ -578,7 +579,7 @@ def _rel_sem_pedido():
     col2.metric("Destes, nunca pediram", int(nunca))
 
     st.dataframe(df[["Cliente","Cidade","UF","Status","Ultimo pedido","Pedidos (historico)"]],
-                 use_container_width=True, hide_index=True)
+                 width="stretch", hide_index=True)
     _excel_download(df, "clientes_sem_pedido")
 
 
@@ -653,7 +654,7 @@ def _rel_ranking_pdv():
     st.bar_chart(df_chart.set_index("Label")[["Total (R$)"]])
 
     df["Total (R$)"] = df["Total (R$)"].apply(_fmt_brl)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
     df_exp = pd.DataFrame(dados,
                           columns=["Cliente","PDV","Cidade","UF","Pedidos","Caixas","Total (R$)"])
@@ -730,7 +731,7 @@ def _rel_cluster():
 
         st.dataframe(
             df_cob.style.map(_cor_cob, subset=["Cobertura %"]),
-            use_container_width=True, hide_index=True
+            width="stretch", hide_index=True
         )
         _excel_download(df_cob, "cobertura_cluster")
     else:
@@ -793,7 +794,7 @@ def _rel_cluster():
         lambda x: "⚠️ Sem pedido" if x == 0 else "")
 
     st.dataframe(df_display.drop(columns=["ID"]),
-                 use_container_width=True, hide_index=True)
+                 width="stretch", hide_index=True)
 
     # Exportação Excel com duas abas
     buf = io.BytesIO()
@@ -1220,7 +1221,7 @@ def _rel_cobertura():
                 col5.caption(cluster)
                 col6.caption(data_exib)
                 if col7.button("📞", key=f"cob_ir_{cid_r}_{titulo[:3]}",
-                               use_container_width=True,
+                               width="stretch",
                                help="Registrar contato"):
                     st.session_state["ct_aba"] = "novo"
                     st.session_state["nn_cli_id_pre"] = cid_r

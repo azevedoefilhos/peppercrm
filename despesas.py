@@ -201,7 +201,7 @@ def _form_nova_despesa():
 
     st.divider()
     salvar = st.button("💾 Salvar despesa", type="primary",
-                       use_container_width=True, key="nd_salvar")
+                       width="stretch", key="nd_salvar")
 
     if salvar:
         _valor_final = valor_calculado if (is_comb and valor_calculado) else valor
@@ -363,7 +363,7 @@ def _lista_despesas():
     } for r in despesas])
 
     sel = st.dataframe(
-        df_desp, use_container_width=True, hide_index=True,
+        df_desp, width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row",
         column_config={
             "ID":         st.column_config.NumberColumn(width="small"),
@@ -429,12 +429,12 @@ def _lista_despesas():
             st.warning(f"⚠️ Confirma exclusão da despesa **{row[2]}** de R$ {row[7]:,.2f}?")
             col_s, col_n = st.columns(2)
             if col_s.button("🗑️ Sim, excluir", key=f"del_desp_{did}",
-                            type="primary", use_container_width=True):
+                            type="primary", width="stretch"):
                 execute_write("UPDATE despesa SET ativo=False WHERE despesa_id=?", (did,))
                 st.success("Despesa excluída.")
                 st.rerun()
             if col_n.button("Cancelar", key=f"canc_desp_{did}",
-                            use_container_width=True):
+                            width="stretch"):
                 st.rerun()
 
     # Export Excel
@@ -498,8 +498,8 @@ def _form_editar_despesa(did, row):
 
         col_s, col_c = st.columns(2)
         _salvar   = col_s.form_submit_button("💾 Salvar alterações", type="primary",
-                                              use_container_width=True)
-        _cancelar = col_c.form_submit_button("✖️ Cancelar", use_container_width=True)
+                                              width="stretch")
+        _cancelar = col_c.form_submit_button("✖️ Cancelar", width="stretch")
 
         if _cancelar:
             st.rerun()
@@ -599,7 +599,7 @@ def _relatorio_despesas():
         "Reembolsável": f"R$ {r[3]:,.2f}",
         "Reembolsado":  f"R$ {r[4]:,.2f}",
     } for r in despesas])
-    st.dataframe(df_rel, use_container_width=True, hide_index=True)
+    st.dataframe(df_rel, width="stretch", hide_index=True)
 
     # PDF do relatório
     if st.button("📄 Gerar PDF para fornecedor", key="pdf_desp_rel"):
@@ -740,7 +740,7 @@ def tela_despesas():
     cols = st.columns(3)
     for col, (k, v) in zip(cols, ABAS.items()):
         ativa = st.session_state["desp_aba"] == k
-        if col.button(v, key=f"desp_nav_{k}", use_container_width=True,
+        if col.button(v, key=f"desp_nav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["desp_aba"] = k
             st.rerun()

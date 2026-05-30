@@ -15,6 +15,7 @@ STATUS_CORES  = {
 
 def _ir(p):
     st.session_state["pagina"] = p
+    st.session_state["_scroll_topo"] = True
     st.rerun()
 
 def _brl(v):
@@ -84,7 +85,7 @@ def tela_novo_pedido():
             prazo_vinc = st.text_input("Prazo específico (deixe vazio para usar o da tabela)",
                                        key="vinc_inline_prazo")
             salvar_vinc = st.form_submit_button("🔗 Vincular e continuar pedido",
-                                                type="primary", use_container_width=True)
+                                                type="primary", width="stretch")
 
         if salvar_vinc and forn_vinc:
             tab_id_vinc = tab_vinc[0] if tab_vinc and tab_vinc[0] else None
@@ -278,7 +279,7 @@ def tela_novo_pedido():
     col_s, col_l = st.columns(2)
     with col_s:
         if st.button("💾 Salvar Pedido", type="primary",
-                     use_container_width=True,
+                     width="stretch",
                      disabled=_abaixo_minimo):
             pid = _salvar_pedido(cli_id, forn_id, pdv_id, tab_id, prazo, frete,
                                  nr_cliente, nr_fornecedor,
@@ -311,7 +312,7 @@ def tela_novo_pedido():
                                data=buf.getvalue(),
                                file_name="pedido_rascunho.xlsx",
                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                               use_container_width=True)
+                               width="stretch")
 
 
 def _inicializar_grade(mix_ultimo, mix_restante):
@@ -396,7 +397,7 @@ def _bloco_busca_produto(cli_id, forn_id, pdv_id, tab_id, grade_key):
         with col_btn:
             st.write("")
             _buscar = st.button("🔍", key=f"btn_buscar_{cli_id}_{forn_id}",
-                                use_container_width=True, help="Buscar produto")
+                                width="stretch", help="Buscar produto")
 
         _termo = st.session_state.get(_bkey, "")
         if (_buscar or _termo) and len(_termo) >= 2:

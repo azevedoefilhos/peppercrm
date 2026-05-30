@@ -9,6 +9,7 @@ from database import conectar, query
 
 def _ir(p):
     st.session_state["pagina"] = p
+    st.session_state["_scroll_topo"] = True
     st.rerun()
 
 
@@ -28,7 +29,7 @@ def tela_concorrentes():
     cols = st.columns(4)
     for col,(k,v) in zip(cols, ABAS_CC.items()):
         ativa = st.session_state["cc_aba"] == k
-        if col.button(v, key=f"ccnav_{k}", use_container_width=True,
+        if col.button(v, key=f"ccnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["cc_aba"] = k; st.rerun()
     st.divider()
@@ -101,7 +102,7 @@ def _marcas():
             st.download_button("⬇️ Exportar Excel", data=buf,
                                file_name="marcas_concorrentes.xlsx",
                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                               use_container_width=True)
+                               width="stretch")
 
     if not dados_fil:
         st.info("Nenhuma marca encontrada para o filtro selecionado.")
@@ -126,13 +127,13 @@ def _marcas():
         with c5:
             b1, b2, b3 = st.columns(3)
             with b1:
-                if st.button("✏️", key=f"ed_{cid}", help="Editar", use_container_width=True):
+                if st.button("✏️", key=f"ed_{cid}", help="Editar", width="stretch"):
                     st.session_state["marca_editar_id"] = cid
                     st.session_state.pop("marca_confirmar_excluir", None)
                     st.session_state.pop("show_form_marca", None)
                     st.rerun()
             with b2:
-                if st.button("🗑️", key=f"ex_{cid}", help="Excluir", use_container_width=True):
+                if st.button("🗑️", key=f"ex_{cid}", help="Excluir", width="stretch"):
                     st.session_state["marca_confirmar_excluir"] = cid
                     st.session_state.pop("marca_editar_id", None)
                     st.session_state.pop("show_form_marca", None)
@@ -140,7 +141,7 @@ def _marcas():
             with b3:
                 tip = "Desativar" if ativo else "Reativar"
                 lbl = "🔇" if ativo else "🔔"
-                if st.button(lbl, key=f"tog_{cid}", help=tip, use_container_width=True):
+                if st.button(lbl, key=f"tog_{cid}", help=tip, width="stretch"):
                     conn = conectar()
                     conn.execute("UPDATE concorrente SET ativo=? WHERE concorrente_id=?",
                                  (0 if ativo else 1, cid))
@@ -286,10 +287,10 @@ def _confirmacao_excluir_marca(cid, marca):
     st.warning(msg)
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Confirmar exclusão", key=f"conf_ex_{cid}", type="primary", use_container_width=True):
+        if st.button("Confirmar exclusão", key=f"conf_ex_{cid}", type="primary", width="stretch"):
             _excluir_marca(cid)
     with col2:
-        if st.button("Cancelar", key=f"canc_ex_{cid}", use_container_width=True):
+        if st.button("Cancelar", key=f"canc_ex_{cid}", width="stretch"):
             st.session_state.pop("marca_confirmar_excluir", None); st.rerun()
 
 
@@ -380,7 +381,7 @@ def _produtos_e_relacoes():
     elif fil_aud == "🚫 Não auditáveis":
         where.append("COALESCE(pc.auditavel,1)=0")
     if fil_busca.strip():
-        _term = fil_busca.strip().replace("%","%%").replace("_","\_")
+        _term = fil_busca.strip().replace("%","%%").replace("_",r"\_")
         b = f"%{_term}%"
         where.append("(pc.descricao LIKE ? OR pc.descricao_curta LIKE ? OR conc.marca_concorrente LIKE ?)")
         params.extend([b, b, b])
@@ -437,7 +438,7 @@ def _produtos_e_relacoes():
         st.download_button("⬇️ Exportar Excel", data=buf,
                            file_name="produtos_concorrentes.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                           width="stretch")
 
     # ── Lista ─────────────────────────────────────────────────────────────
     hc = st.columns([1.4, 1.0, 1.0, 2.8, 0.7, 0.5, 1.0])
@@ -462,7 +463,7 @@ def _produtos_e_relacoes():
         # Auditável clicável para alternar
         aud_ico = "📊" if auditavel else "🚫"
         if c[4].button(aud_ico, key=f"togaud_{pc_id}",
-                       use_container_width=True,
+                       width="stretch",
                        help="Clique para alternar auditável/não auditável"):
             from database import conectar as _con
             conn = _con()
@@ -475,14 +476,14 @@ def _produtos_e_relacoes():
             b1, b2 = st.columns(2)
             with b1:
                 if st.button("✏️", key=f"edpc_{pc_id}", help="Editar",
-                             use_container_width=True):
+                             width="stretch"):
                     st.session_state["pc_editar_id"] = pc_id
                     st.session_state.pop("pc_excluir_id", None)
                     st.session_state.pop("show_form_pc", None)
                     st.rerun()
             with b2:
                 if st.button("🗑️", key=f"expc_{pc_id}", help="Excluir",
-                             use_container_width=True):
+                             width="stretch"):
                     st.session_state["pc_excluir_id"] = pc_id
                     st.session_state.pop("pc_editar_id", None)
                     st.session_state.pop("show_form_pc", None)
@@ -712,7 +713,7 @@ def _form_editar_produto_relacao(pc_id, concs, cats, forns):
                         novo_tipo = "indireto" if tipo_rel == "direto" else "direto"
                         label_btn = "→ Indireto" if tipo_rel == "direto" else "→ Direto"
                         if st.button(label_btn, key=f"chg_rel_{rel_id}",
-                                     use_container_width=True,
+                                     width="stretch",
                                      help=f"Alterar para {novo_tipo}"):
                             conn = conectar()
                             conn.execute("""UPDATE produto_concorrente_relacao
@@ -724,7 +725,7 @@ def _form_editar_produto_relacao(pc_id, concs, cats, forns):
                     with b2:
                         if not st.session_state.get(f"conf_del_rel_{rel_id}"):
                             if st.button("🗑️", key=f"del_rel_{rel_id}",
-                                         use_container_width=True,
+                                         width="stretch",
                                          help="Remover vínculo"):
                                 st.session_state[f"conf_del_rel_{rel_id}"] = True
                                 st.rerun()
@@ -733,7 +734,7 @@ def _form_editar_produto_relacao(pc_id, concs, cats, forns):
                             _r1, _r2 = st.columns(2)
                             with _r1:
                                 if st.button("✅ Sim", key=f"conf_rel_ok_{rel_id}",
-                                             type="primary", use_container_width=True):
+                                             type="primary", width="stretch"):
                                     conn = conectar()
                                     conn.execute("DELETE FROM produto_concorrente_relacao WHERE relacao_id=?", (rel_id,))
                                     conn.commit(); conn.close()
@@ -741,7 +742,7 @@ def _form_editar_produto_relacao(pc_id, concs, cats, forns):
                                     st.rerun()
                             with _r2:
                                 if st.button("❌ Não", key=f"conf_rel_no_{rel_id}",
-                                             use_container_width=True):
+                                             width="stretch"):
                                     st.session_state.pop(f"conf_del_rel_{rel_id}", None)
                                     st.rerun()
         else:
@@ -793,7 +794,7 @@ def _confirmacao_excluir_produto(pc_id, desc):
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Confirmar exclusão", key=f"conf_expc_{pc_id}",
-                     type="primary", use_container_width=True):
+                     type="primary", width="stretch"):
             conn = conectar()
             conn.execute("DELETE FROM produto_concorrente_relacao WHERE produto_concorrente_id=?", (pc_id,))
             conn.execute("DELETE FROM pesquisa_preco_item WHERE produto_concorrente_id=?", (pc_id,))
@@ -802,7 +803,7 @@ def _confirmacao_excluir_produto(pc_id, desc):
             st.session_state.pop("pc_excluir_id", None)
             st.success("Excluído!"); st.rerun()
     with col2:
-        if st.button("Cancelar", key=f"canc_expc_{pc_id}", use_container_width=True):
+        if st.button("Cancelar", key=f"canc_expc_{pc_id}", width="stretch"):
             st.session_state.pop("pc_excluir_id", None); st.rerun()
 
 
@@ -870,7 +871,7 @@ def _gestao_por_ean():
             col_a, col_b = st.columns(2)
             if auditavel:
                 if col_a.button("🚫 Marcar como não auditável", key="ean_naud",
-                                use_container_width=True):
+                                width="stretch"):
                     conn = query.__self__ if hasattr(query,'__self__') else None
                     from database import conectar as _con
                     conn = _con()
@@ -881,7 +882,7 @@ def _gestao_por_ean():
                     st.rerun()
             else:
                 if col_a.button("📊 Marcar como auditável", key="ean_aud",
-                                use_container_width=True):
+                                width="stretch"):
                     from database import conectar as _con
                     conn = _con()
                     conn.execute("UPDATE produto_concorrente SET auditavel=1 WHERE produto_concorrente_id=?",
@@ -928,7 +929,7 @@ def _gestao_por_ean():
                 if sel_sem and sel_sem[0]:
                     st.info(f"Vai vincular EAN **{ean}** a: **{sel_sem[1]}**")
                     if st.button("✅ Confirmar vinculação", key="ean_vinc_ok",
-                                 type="primary", use_container_width=True):
+                                 type="primary", width="stretch"):
                         from database import conectar as _con
                         conn = _con()
                         conn.execute(
@@ -966,7 +967,7 @@ def _gestao_por_ean():
                         f"⚠️ EAN atual: **{prod_info[2]}**  →  Novo EAN: **{ean}**  "
                         f"| Produto: {prod_info[1]}")
                     if st.button("✅ Confirmar correção de EAN", key="ean_cor_ok",
-                                 type="primary", use_container_width=True):
+                                 type="primary", width="stretch"):
                         from database import conectar as _con
                         conn = _con()
                         conn.execute(
@@ -1036,7 +1037,7 @@ def _gestao_por_ean():
                                             key="ean_tipo_rel")
 
         if st.button("💾 Cadastrar concorrente", type="primary",
-                     use_container_width=True, key="ean_salvar"):
+                     width="stretch", key="ean_salvar"):
             _nome = nova_marca.strip() if marca_sel=="➕ Nova marca..." else marca_sel
             _desc = st.session_state.get("ean_desc","").strip()
             if not _desc:
@@ -1154,7 +1155,7 @@ def _gestao_por_ean():
         c[3].caption(cat_n)
         aud_ico = "📊" if aud else "🚫"
         if c[4].button(aud_ico, key=f"ean_tog_{pcid}",
-                       use_container_width=True,
+                       width="stretch",
                        help="Clique para alternar auditável/não auditável"):
             from database import conectar as _con
             conn = _con()
@@ -1195,7 +1196,7 @@ def _importar_concorrentes():
             data=buf_tpl,
             file_name="template_importacao_concorrentes.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
+            width="stretch"
         )
 
     st.divider()
@@ -1297,7 +1298,7 @@ def _importar_concorrentes():
         cols_show = ["marca","descricao_curta","peso","unidade_medida",
                      "auditavel","tipo_relacao","produto_specialli_vinculado"]
         cols_show = [c for c in cols_show if c in df.columns]
-        st.dataframe(df[cols_show].head(30), use_container_width=True,
+        st.dataframe(df[cols_show].head(30), width="stretch",
                      hide_index=True)
         if len(df) > 30:
             st.caption(f"Mostrando 30 de {len(df)} linhas.")
@@ -1362,7 +1363,7 @@ def _importar_concorrentes():
     # ── Botão de importação ───────────────────────────────────────────────
     st.divider()
     if st.button(f"📥 Importar {n_importar} produto(s)",
-                 type="primary", use_container_width=True,
+                 type="primary", width="stretch",
                  key="btn_importar_conc"):
 
         from database import conectar as _con

@@ -10,6 +10,7 @@ from database import query
 
 def _ir(p):
     st.session_state["pagina"] = p
+    st.session_state["_scroll_topo"] = True
     st.rerun()
 
 
@@ -47,7 +48,7 @@ def tela_analise_competitiva():
     cols = st.columns(4)
     for col,(k,v) in zip(cols, ABAS_ANA.items()):
         ativa = st.session_state["ana_aba"] == k
-        if col.button(v, key=f"ananav_{k}", use_container_width=True,
+        if col.button(v, key=f"ananav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["ana_aba"] = k; st.rerun()
     st.divider()
@@ -108,7 +109,7 @@ def _marcas_categorias():
     ).reset_index().sort_values("Total", ascending=False)
     resumo_marca["% Diretos"] = resumo_marca.apply(
         lambda r: _pct(r["Diretos"], r["Total"]), axis=1)
-    st.dataframe(resumo_marca, use_container_width=True, hide_index=True)
+    st.dataframe(resumo_marca, width="stretch", hide_index=True)
 
     st.divider()
 
@@ -117,7 +118,7 @@ def _marcas_categorias():
     cats_disp = ["Todas"] + sorted(df["Categoria"].unique().tolist())
     cat_fil = st.selectbox("Filtrar por categoria", cats_disp, key="ac_cat_fil")
     df_fil = df if cat_fil == "Todas" else df[df["Categoria"] == cat_fil]
-    st.dataframe(df_fil, use_container_width=True, hide_index=True)
+    st.dataframe(df_fil, width="stretch", hide_index=True)
 
     st.divider()
 
@@ -125,7 +126,7 @@ def _marcas_categorias():
     st.markdown("**Presença de marcas por categoria (total de produtos)**")
     pivot = df.pivot_table(index="Marca", columns="Categoria",
                            values="Total", aggfunc="sum", fill_value=0)
-    st.dataframe(pivot, use_container_width=True)
+    st.dataframe(pivot, width="stretch")
 
     # — Exportar --
     buf = io.BytesIO()
@@ -226,7 +227,7 @@ def _presenca_pdv():
     if tipo_fil != "Todos":
         df_show = df_show[df_show["Tipo"] == tipo_fil]
 
-    st.dataframe(df_show, use_container_width=True, hide_index=True)
+    st.dataframe(df_show, width="stretch", hide_index=True)
     st.caption(f"{len(df_show)} produto(s) encontrado(s) nos filtros")
 
     st.divider()
@@ -254,7 +255,7 @@ def _presenca_pdv():
                                columns=["Marca","PDVs com presença","Produtos encontrados"])
         df_marc["Presença %"] = df_marc["PDVs com presença"].apply(
             lambda v: _pct(v, total_pdvs))
-        st.dataframe(df_marc, use_container_width=True, hide_index=True)
+        st.dataframe(df_marc, width="stretch", hide_index=True)
 
     st.divider()
 
@@ -289,7 +290,7 @@ def _presenca_pdv():
     if rupturas:
         df_rupt = pd.DataFrame(rupturas,
                                columns=["PDV","Cidade","Nosso produto","Concorrente presente","Ocorrências"])
-        st.dataframe(df_rupt, use_container_width=True, hide_index=True)
+        st.dataframe(df_rupt, width="stretch", hide_index=True)
         st.caption(f"{len(rupturas)} situacoes de ruptura detectadas.")
     else:
         st.success("Nenhuma ruptura registrada nas pesquisas.")
@@ -409,7 +410,7 @@ def _meu_produto_vs():
         lambda t: "Direto" if t=="direto" else "Indireto")
 
     st.markdown("**Comparativo de presença nos PDVs**")
-    st.dataframe(df_concs, use_container_width=True, hide_index=True)
+    st.dataframe(df_concs, width="stretch", hide_index=True)
 
     # Frentes de gôndola (facing) -- comparativo
     st.divider()
@@ -444,7 +445,7 @@ def _meu_produto_vs():
 
     if facing and any(r[1] for r in facing):
         df_f = pd.DataFrame(facing, columns=["Produto","Media frentes","Min","Max","Registros"])
-        st.dataframe(df_f, use_container_width=True, hide_index=True)
+        st.dataframe(df_f, width="stretch", hide_index=True)
     else:
         st.caption("Nenhum dado de frentes registrado ainda.")
 
@@ -478,7 +479,7 @@ def _meu_produto_vs():
 
     if ponto:
         df_p = pd.DataFrame(ponto, columns=["Produto","Com ponto extra","Total registros","% com ponto extra"])
-        st.dataframe(df_p, use_container_width=True, hide_index=True)
+        st.dataframe(df_p, width="stretch", hide_index=True)
 
 
 # ==============================================================
@@ -543,7 +544,7 @@ def _oportunidades():
 
     if op1:
         df1 = pd.DataFrame(op1, columns=["PDV","Cidade","Nosso produto","Concorrente","Prod. concorrente","Detectado N vezes"])
-        st.dataframe(df1, use_container_width=True, hide_index=True)
+        st.dataframe(df1, width="stretch", hide_index=True)
         st.caption(f"{len(op1)} oportunidade(s) de entrada imediata identificada(s).")
     else:
         st.success("Nosso produto esta presente em todos os PDVs onde ha concorrente direto.")
@@ -578,7 +579,7 @@ def _oportunidades():
 
     if op2:
         df2 = pd.DataFrame(op2, columns=["PDV","Cidade","Marcas concorrentes","Produtos concorrentes","Pesquisas"])
-        st.dataframe(df2, use_container_width=True, hide_index=True)
+        st.dataframe(df2, width="stretch", hide_index=True)
     else:
         st.info("Sem dados de concorrentes nas pesquisas.")
 
@@ -604,7 +605,7 @@ def _oportunidades():
 
     if op3:
         df3 = pd.DataFrame(op3, columns=["Codigo","Produto","Categoria"])
-        st.dataframe(df3, use_container_width=True, hide_index=True)
+        st.dataframe(df3, width="stretch", hide_index=True)
         st.caption(f"{len(op3)} produto(s) sem concorrente mapeado. Considere pesquisar esses itens no campo.")
     else:
         st.success("Todos os nossos produtos tem ao menos um concorrente mapeado.")
@@ -639,7 +640,7 @@ def _oportunidades():
     if op4:
         df4 = pd.DataFrame(op4,
             columns=["Marca","PDVs presentes","Com ponto extra","Sem ponto extra","% sem ponto extra"])
-        st.dataframe(df4, use_container_width=True, hide_index=True)
+        st.dataframe(df4, width="stretch", hide_index=True)
     else:
         st.info("Sem dados suficientes.")
 

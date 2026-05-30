@@ -41,7 +41,7 @@ def tela_metas():
     cols = st.columns(3)
     for col,(k,v) in zip(cols, ABAS_MT.items()):
         ativa = st.session_state["mt_nav_aba"] == k
-        if col.button(v, key=f"mtnav_{k}", use_container_width=True,
+        if col.button(v, key=f"mtnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["mt_nav_aba"] = k; st.rerun()
     st.divider()
@@ -257,7 +257,7 @@ def _definir_metas():
     cols = st.columns(2)
     for col,(k,v) in zip(cols, ABAS_DEF.items()):
         ativa = st.session_state["def_aba"] == k
-        if col.button(v, key=f"defnav_{k}", use_container_width=True,
+        if col.button(v, key=f"defnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["def_aba"] = k; st.rerun()
     st.divider()
@@ -436,9 +436,9 @@ def _form_meta():
 
     col_s, col_c = st.columns(2)
     salvar  = col_s.button("💾 Salvar meta", type="primary",
-                            use_container_width=True, key="mt_salvar")
+                            width="stretch", key="mt_salvar")
     if mid:
-        excluir = col_c.button("🗑️ Remover meta", use_container_width=True,
+        excluir = col_c.button("🗑️ Remover meta", width="stretch",
                                 key="mt_excluir")
     else:
         excluir = False
@@ -525,7 +525,7 @@ def _historico_metas():
         })
 
     df = pd.DataFrame(rows)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
     buf = io.BytesIO()
     df.to_excel(buf, index=False, sheet_name="Histórico Metas")
@@ -687,7 +687,7 @@ def _tela_meta_mix():
                                             key=f"mm_ed_obs_{mmid}")
                     col_s2, col_c2 = st.columns(2)
                     if col_s2.button("💾 Salvar", key=f"mm_ed_save_{mmid}",
-                                     type="primary", use_container_width=True):
+                                     type="primary", width="stretch"):
                         conn = conectar()
                         conn.execute("""UPDATE meta_mix SET
                             descricao=?, meta_clientes=?, meta_qtd=?, observacao=?
@@ -700,19 +700,19 @@ def _tela_meta_mix():
                         st.session_state["mm_msg"] = "✅ Meta atualizada."
                         st.rerun()
                     if col_c2.button("Cancelar", key=f"mm_ed_cancel_{mmid}",
-                                     use_container_width=True):
+                                     width="stretch"):
                         st.session_state.pop(_key_ed, None); st.rerun()
                 else:
                     col_ed, col_del = c4.columns(2)
                     if col_ed.button("✏️", key=f"mm_ed_btn_{mmid}",
-                                     help="Editar meta", use_container_width=True):
+                                     help="Editar meta", width="stretch"):
                         st.session_state[_key_ed] = True; st.rerun()
                     # Exclusão com confirmação
                     _key_del = f"mm_del_confirm_{mmid}"
                     if st.session_state.get(_key_del):
                         if col_del.button("✅", key=f"mm_del_ok_{mmid}",
                                           help="Confirmar exclusão",
-                                          use_container_width=True):
+                                          width="stretch"):
                             conn = conectar()
                             conn.execute("UPDATE meta_mix SET ativo=0 WHERE meta_mix_id=?",
                                         (mmid,))
@@ -724,7 +724,7 @@ def _tela_meta_mix():
                     else:
                         if col_del.button("🗑️", key=f"mm_del_{mmid}",
                                           help="Remover meta",
-                                          use_container_width=True):
+                                          width="stretch"):
                             st.session_state[_key_del] = True; st.rerun()
 
     st.divider()
@@ -805,7 +805,7 @@ def _tela_meta_mix():
                 f"Edite-a no painel acima em vez de criar outra.")
 
     if st.button("💾 Salvar meta", type="primary",
-                 use_container_width=True, key="mm_salvar"):
+                 width="stretch", key="mm_salvar"):
         if not ref_desc.strip() and tipo_m == "Livre":
             st.session_state["mm_err"] = "Preencha a descrição da meta."
             st.rerun()

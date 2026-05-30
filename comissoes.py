@@ -9,6 +9,7 @@ from database import conectar, query, get_percentual_comissao
 
 def _ir(p):
     st.session_state["pagina"] = p
+    st.session_state["_scroll_topo"] = True
     st.rerun()
 
 
@@ -45,7 +46,7 @@ def tela_comissoes():
     cols = st.columns(4)
     for col,(k,v) in zip(cols, ABAS_COM.items()):
         ativa = st.session_state["com_aba"] == k
-        if col.button(v, key=f"comnav_{k}", use_container_width=True,
+        if col.button(v, key=f"comnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["com_aba"] = k; st.rerun()
     st.divider()
@@ -83,7 +84,7 @@ def _tela_configurar():
         df = pd.DataFrame(dados, columns=["Fornecedor","% Comissao","Observacao","Ativo"])
         df["Ativo"] = df["Ativo"].map({1:"✅",0:"❌"})
         df["% Comissao"] = df["% Comissao"].apply(lambda v: f"{v:.2f}%".replace(".",","))
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)
 
     st.divider()
     st.subheader("Cadastrar / atualizar comissao")
@@ -226,12 +227,12 @@ def _tela_por_pedido():
             lambda s: f"{ICONE_PAG.get(s,'')} {s}")
         return d
 
-    st.dataframe(_fmt_df(df_validos), use_container_width=True, hide_index=True)
+    st.dataframe(_fmt_df(df_validos), width="stretch", hide_index=True)
 
     if not df_recusados.empty:
         with st.expander(f"Pedidos recusados/cancelados ({len(df_recusados)}) — nao somados"):
             st.caption("Estes pedidos aparecem como referencia mas NAO entram nos totais acima.")
-            st.dataframe(_fmt_df(df_recusados), use_container_width=True, hide_index=True)
+            st.dataframe(_fmt_df(df_recusados), width="stretch", hide_index=True)
 
     # Ajuste de percentual
     st.divider()
@@ -517,7 +518,7 @@ def _tela_relatorio():
     df_show = df_f.copy()
     for col in ["Base (R$)","Previsto (R$)","Pago (R$)","Diferenca (R$)"]:
         df_show[col] = df_show[col].apply(_fmt_brl)
-    st.dataframe(df_show, use_container_width=True, hide_index=True)
+    st.dataframe(df_show, width="stretch", hide_index=True)
 
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as w:

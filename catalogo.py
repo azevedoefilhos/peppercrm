@@ -32,7 +32,7 @@ def tela_catalogo():
     cols = st.columns(2)
     for col, (k, v) in zip(cols, ABAS.items()):
         ativa = st.session_state["cat_aba"] == k
-        if col.button(v, key=f"catnav_{k}", use_container_width=True,
+        if col.button(v, key=f"catnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["cat_aba"] = k; st.rerun()
     st.divider()
@@ -129,7 +129,7 @@ def _tela_catalogo():
     st.divider()
     col_btn, col_prev = st.columns([1, 2])
     gerar = col_btn.button("📄 Gerar catálogo PDF", type="primary",
-                            use_container_width=True, key="cat_gerar")
+                            width="stretch", key="cat_gerar")
 
     if gerar:
         with st.spinner("Gerando catálogo..."):
@@ -155,7 +155,7 @@ def _tela_catalogo():
         st.download_button(
             f"⬇️ Baixar catálogo — {forn_sel[1]}",
             data=buf, file_name=nome_arq, mime="application/pdf",
-            use_container_width=True
+            width="stretch"
         )
         st.success("Catálogo gerado! Clique acima para baixar.")
 
@@ -461,7 +461,7 @@ def _tela_mensagens():
     cols = st.columns(2)
     for col, (k, v) in zip(cols, ABAS_MSG.items()):
         ativa = st.session_state["msg_aba"] == k
-        if col.button(v, key=f"msgnav_{k}", use_container_width=True,
+        if col.button(v, key=f"msgnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["msg_aba"] = k; st.rerun()
     st.divider()
@@ -638,14 +638,14 @@ def _tela_enviar_mensagem():
         )
 
         if col_copia.button("📋 Copiar mensagem", key="ms_copiar",
-                            use_container_width=True):
+                            width="stretch"):
             st.code(corpo_edit, language=None)
             st.caption("Selecione o texto acima e copie.")
 
         # Após abrir o WhatsApp — botão de confirmar envio
         st.caption("Após enviar no WhatsApp, clique abaixo para confirmar o registro:")
         if st.button("✅ Confirmar envio e registrar", key="ms_confirmar",
-                     type="primary", use_container_width=True):
+                     type="primary", width="stretch"):
             if registrar and dest_id:
                 # Registra em contato_registro + contato_interacao
                 _forns = st.session_state.get("ms_forns_sel", [])
@@ -758,7 +758,7 @@ def _tela_gerenciar_modelos():
 
             col_s, col_d = st.columns(2)
             if col_s.button("💾 Salvar", key=f"em_save_{mid}",
-                            use_container_width=True, type="primary"):
+                            width="stretch", type="primary"):
                 conn = conectar()
                 conn.execute("""UPDATE mensagem_modelo SET
                     nome=?, assunto=?, corpo=? WHERE mensagem_id=?""",
@@ -768,7 +768,7 @@ def _tela_gerenciar_modelos():
                 st.session_state["cat_msg"] = "✅ Modelo atualizado."
                 st.rerun()
             if col_d.button("🗑️ Excluir", key=f"em_del_{mid}",
-                            use_container_width=True):
+                            width="stretch"):
                 conn = conectar()
                 conn.execute("UPDATE mensagem_modelo SET ativo=0 WHERE mensagem_id=?",
                              (mid,))

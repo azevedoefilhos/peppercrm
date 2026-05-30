@@ -10,6 +10,7 @@ from database import conectar, query
 
 def _ir(p):
     st.session_state["pagina"] = p
+    st.session_state["_scroll_topo"] = True
     st.rerun()
 
 def _brl(v):
@@ -54,7 +55,7 @@ def tela_visitas():
                 st.session_state.pop("vis_id", None)
                 st.rerun()
         with col2:
-            if st.button("Voltar ao menu", use_container_width=True):
+            if st.button("Voltar ao menu", width="stretch"):
                 _ir("home")
         _tela_detalhe(st.session_state.get("vis_id"))
 
@@ -73,15 +74,15 @@ def _lista_visitas():
 
     col1, col2, col3, col4 = st.columns([2,1,1,1])
     with col2:
-        if st.button("Nova visita", type="primary", use_container_width=True):
+        if st.button("Nova visita", type="primary", width="stretch"):
             st.session_state["vis_modo"] = "nova"
             st.rerun()
     with col3:
-        if st.button("Roteiro", use_container_width=True):
+        if st.button("Roteiro", width="stretch"):
             st.session_state["vis_modo"] = "roteiro"
             st.rerun()
     with col4:
-        if st.button("Promotores", use_container_width=True):
+        if st.button("Promotores", width="stretch"):
             st.session_state["vis_modo"] = "promotores"
             st.rerun()
 
@@ -180,7 +181,7 @@ def _lista_visitas():
         buf.seek(0)
         st.download_button("Exportar Excel", data=buf, file_name="visitas.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                           width="stretch")
 
     # Cabecalho da lista
     hc = st.columns([1.0, 2.5, 1.8, 1.2, 0.5, 0.5, 0.5, 0.8])
@@ -198,7 +199,7 @@ def _lista_visitas():
         c[5].caption("🔍" if pesq else "—")
         c[6].caption("📦" if ped else "—")
         with c[7]:
-            if st.button("Ver", key=f"vis_ver_{vid}", use_container_width=True):
+            if st.button("Ver", key=f"vis_ver_{vid}", width="stretch"):
                 st.session_state["vis_id"]  = vid
                 st.session_state["vis_modo"] = "detalhe"
                 st.rerun()
@@ -323,7 +324,7 @@ as coordenadas aparecem na URL apos o simbolo @
     obs = st.text_area("Observacoes adicionais", height=60, key="vis_obs")
 
     st.divider()
-    if st.button("Registrar visita", type="primary", use_container_width=True):
+    if st.button("Registrar visita", type="primary", width="stretch"):
         if not resumo.strip():
             st.error("O resumo da visita e obrigatorio."); return
 
@@ -653,7 +654,7 @@ def _tela_promotores():
     cols = st.columns(4)
     for col,(k,v) in zip(cols, ABAS_VIS.items()):
         ativa = st.session_state["vis_aba"] == k
-        if col.button(v, key=f"visnav_{k}", use_container_width=True,
+        if col.button(v, key=f"visnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["vis_aba"] = k; st.rerun()
     st.divider()
@@ -676,7 +677,7 @@ def _tela_cadastro_promotores():
         df = pd.DataFrame(proms,
                           columns=["ID","Nome","Fone","Cidade","UF","Ativo"])
         df["Ativo"] = df["Ativo"].map({1:"Sim",0:"Nao"})
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)
 
         # Edicao rapida
         prom_sel = st.selectbox("Editar promotor", [(None,"— selecione")] +
@@ -806,7 +807,7 @@ def _tela_att_promotor():
             c[5].caption(freq or "—")
             c[6].caption("✅" if ativo else "❌")
             with c[7]:
-                if st.button("✏️", key=f"ed_att_p_{att_id}", use_container_width=True):
+                if st.button("✏️", key=f"ed_att_p_{att_id}", width="stretch"):
                     st.session_state["att_prom_editar"] = att_id
                     st.rerun()
 
@@ -923,7 +924,7 @@ def _tela_att_vendedor():
             c[4].caption(freq or "—")
             c[5].caption("✅" if ativo else "❌")
             with c[6]:
-                if st.button("🗑️", key=f"del_av_{av_id}", use_container_width=True,
+                if st.button("🗑️", key=f"del_av_{av_id}", width="stretch",
                              help="Remover PDV da carteira"):
                     conn = conectar()
                     conn.execute("DELETE FROM att_vendedor WHERE att_vendedor_id=?", (av_id,))

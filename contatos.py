@@ -84,7 +84,7 @@ def tela_contatos():
     cols = st.columns(len(ABAS))
     for col, (k, v) in zip(cols, ABAS.items()):
         ativa = st.session_state["ct_aba"] == k
-        if col.button(v, key=f"ctnav_{k}", use_container_width=True,
+        if col.button(v, key=f"ctnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["ct_aba"] = k
             st.session_state.pop("ct_topico_aberto", None)
@@ -271,7 +271,7 @@ def _lista_topicos():
                     disabled=_disabled_custom,
                     label_visibility="visible")
             if not _disabled_custom and st.button("🗑️ Limpar datas", key="pdf_limpar",
-                                                   use_container_width=True):
+                                                   width="stretch"):
                 st.session_state.pop("pdf_ini", None)
                 st.session_state.pop("pdf_fim", None)
                 st.rerun()
@@ -325,7 +325,7 @@ def _lista_topicos():
 
         # Botão exportar — validação só aqui
         _exportar_pdf = st.button("⬇️ Gerar e Baixar PDF", key="pdf_con_gerar",
-                                  use_container_width=True, type="primary")
+                                  width="stretch", type="primary")
         if _exportar_pdf:
             # Valida datas personalizadas incompletas
             if _usa_custom and bool(_ini_set) != bool(_fim_set):
@@ -347,7 +347,7 @@ def _lista_topicos():
                 file_name=f"contatos_{_forn_fn}_{_hoje_fn}.pdf",
                 mime="application/pdf",
                 key="pdf_con_dl",
-                use_container_width=True)
+                width="stretch")
 
     # Pré-carrega fornecedores de todos os tópicos de uma vez — elimina N+1
     _ids_topicos = [row[0] for row in topicos]
@@ -446,7 +446,7 @@ def _lista_topicos():
 
                     col_sv, col_cx = st.columns(2)
                     if col_sv.button("✅ Salvar", key=f"ct_sv_{cid}",
-                                     use_container_width=True):
+                                     width="stretch"):
                         # Atualiza status global do tópico com o pior status entre fornecedores
                         _status_ord = {s: i for i, s in enumerate(STATUS_TOPICO)}
                         _pior_status = min(
@@ -460,7 +460,7 @@ def _lista_topicos():
                         st.session_state["ct_msg"] = f"✅ '{assunto[:30]}' atualizado."
                         st.rerun()
                     if col_cx.button("✖️", key=f"ct_cx_{cid}",
-                                     use_container_width=True):
+                                     width="stretch"):
                         st.session_state.pop(_edit_key, None)
                         st.rerun()
 
@@ -492,7 +492,7 @@ def _lista_topicos():
 
             with c4:
                 label = "▲" if aberto else "▼"
-                if st.button(label, key=f"tog_{cid}", use_container_width=True,
+                if st.button(label, key=f"tog_{cid}", width="stretch",
                              help="Ver histórico e interações"):
                     if aberto:
                         st.session_state.pop("ct_topico_aberto", None)
@@ -504,7 +504,7 @@ def _lista_topicos():
                 # Exclusão com confirmação inline
                 if st.session_state.get(f"ct_del_confirm_{cid}"):
                     if st.button("✅", key=f"ct_del_ok_{cid}",
-                                 use_container_width=True,
+                                 width="stretch",
                                  help="Confirmar exclusão"):
                         conn = conectar()
                         conn.execute(
@@ -520,7 +520,7 @@ def _lista_topicos():
                         st.rerun()
                 else:
                     if st.button("🗑️", key=f"ct_del_{cid}",
-                                 use_container_width=True,
+                                 width="stretch",
                                  help="Excluir este registro"):
                         st.session_state[f"ct_del_confirm_{cid}"] = True
                         st.rerun()
@@ -1204,7 +1204,7 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
                 file_name=f"historico_{st.session_state.get(_pdf_nome_key,cid)}_{_forn_nome_ativo[:10]}.pdf",
                 mime="application/pdf",
                 key=f"pdf_dl_{cid}_{_forn_id_ativo}",
-                use_container_width=True)
+                width="stretch")
     st.divider()
 
     cr = query("""SELECT cr.*, c.nome_fantasia, f.nome_fantasia
@@ -1270,7 +1270,7 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
 
         col_s, col_d = st.columns(2)
         if col_s.button("💾 Salvar alterações do tópico", key=f"esv_{cid}",
-                        use_container_width=True, type="primary"):
+                        width="stretch", type="primary"):
             _fs = st.session_state.get(_kf, [])
             conn = conectar()
             conn.execute("""UPDATE contato_registro SET
@@ -1292,7 +1292,7 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
             st.rerun()
 
         if col_d.button("🗑️ Encerrar / arquivar tópico", key=f"edel_{cid}",
-                        use_container_width=True):
+                        width="stretch"):
             conn = conectar()
             conn.execute("UPDATE contato_registro SET ativo=0 WHERE contato_id=?", (cid,))
             conn.commit(); conn.close()
@@ -1372,7 +1372,7 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
 
                 col_ei_s, col_ei_d = st.columns(2)
                 if col_ei_s.button("💾 Salvar", key=f"ei_save_{iid}",
-                                   type="primary", use_container_width=True):
+                                   type="primary", width="stretch"):
                     _ed  = st.session_state.get(f"ei_dt_{iid}", ei_data)
                     _ev  = st.session_state.get(f"ei_via_{iid}", ei_via)
                     _ep  = st.session_state.get(f"ei_pe_{iid}", ei_pess).strip()
@@ -1394,7 +1394,7 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
 
                 if not st.session_state.get(f"conf_ei_del_{iid}"):
                     if col_ei_d.button("🗑️ Remover", key=f"ei_del_{iid}",
-                                       use_container_width=True):
+                                       width="stretch"):
                         st.session_state[f"conf_ei_del_{iid}"] = True
                         st.rerun()
                 else:
@@ -1402,7 +1402,7 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
                     _i1, _i2 = st.columns(2)
                     with _i1:
                         if st.button("✅ Sim", key=f"conf_ei_ok_{iid}",
-                                     type="primary", use_container_width=True):
+                                     type="primary", width="stretch"):
                             conn = conectar()
                             conn.execute("UPDATE contato_interacao SET ativo=0 WHERE interacao_id=?", (iid,))
                             conn.commit(); conn.close()
@@ -1410,7 +1410,7 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
                             st.rerun()
                     with _i2:
                         if st.button("❌ Não", key=f"conf_ei_no_{iid}",
-                                     use_container_width=True):
+                                     width="stretch"):
                             st.session_state.pop(f"conf_ei_del_{iid}", None)
                             st.rerun()
     else:
@@ -1434,7 +1434,7 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
     ]:
         ativa = st.session_state[_mk] == modo
         if [col_m1,col_m2,col_m3][["sel","livre","cad"].index(modo)].button(
-                btn_lbl, key=btn_key, use_container_width=True,
+                btn_lbl, key=btn_key, width="stretch",
                 type="primary" if ativa else "secondary"):
             st.session_state[_mk] = modo; st.rerun()
 
@@ -1494,7 +1494,7 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
     result_i = st.text_area("Resultado / próximo passo", key=f"ni_res_{cid}", height=55)
 
     if st.button("💾 Salvar interação", key=f"ni_save_{cid}",
-                 type="primary", use_container_width=True):
+                 type="primary", width="stretch"):
         novo_ct_id = None
         if st.session_state.get(_mk) == "cad" and cli_id:
             _nc = st.session_state.get(f"ncn_{cid}","").strip()
@@ -1650,15 +1650,15 @@ def _form_novo_topico():
     col_m1, col_m2, col_m3 = st.columns(3)
     if col_m1.button("👤 Já cadastrada", key="nn_modo_sel",
                      type="primary" if st.session_state[_mk]=="sel" else "secondary",
-                     use_container_width=True):
+                     width="stretch"):
         st.session_state[_mk] = "sel"; st.rerun()
     if col_m2.button("✏️ Digitar nome", key="nn_modo_livre",
                      type="primary" if st.session_state[_mk]=="livre" else "secondary",
-                     use_container_width=True):
+                     width="stretch"):
         st.session_state[_mk] = "livre"; st.rerun()
     if col_m3.button("➕ Cadastrar nova", key="nn_modo_cad",
                      type="primary" if st.session_state[_mk]=="cad" else "secondary",
-                     use_container_width=True,
+                     width="stretch",
                      help="Cadastra a pessoa no cliente e registra o contato"):
         st.session_state[_mk] = "cad"; st.rerun()
 
@@ -1717,8 +1717,8 @@ def _form_novo_topico():
     st.divider()
     col_s, col_l = st.columns([2,1])
     salvar = col_s.button("💾 Salvar registro", type="primary",
-                          use_container_width=True, key="nn_salvar")
-    limpar = col_l.button("🗑️ Limpar tudo", use_container_width=True, key="nn_limpar")
+                          width="stretch", key="nn_salvar")
+    limpar = col_l.button("🗑️ Limpar tudo", width="stretch", key="nn_limpar")
 
     if limpar:
         for k in ["nn_assunto","nn_desc","nn_result","nn_pessoa_livre",
@@ -1856,7 +1856,7 @@ def _agenda():
             col2.write(f"{TIPO_ICONE.get(tipo,'📞')} {entidade}")
             col3.caption(f"{VIA_ICONE.get(via,'')} {assunto[:55]}")
             if col4.button("📋 Abrir", key=f"ag_{cid}",
-                           use_container_width=True):
+                           width="stretch"):
                 st.session_state["ct_aba"] = "lista"
                 st.session_state["ct_topico_aberto"] = cid
                 st.rerun()
@@ -1928,7 +1928,7 @@ def _por_entidade():
             c2.caption(f"{STATUS_ICONE.get(status,'')} {status}")
             c3.caption(followup or "—")
             if c4.button("▼" if not aberto else "▲",
-                         key=f"he_tog_{cid}", use_container_width=True):
+                         key=f"he_tog_{cid}", width="stretch"):
                 if aberto:
                     st.session_state.pop("ct_topico_aberto", None)
                 else:
@@ -2277,7 +2277,7 @@ def _prospeccao():
         if c not in df_res.columns:
             df_res[c] = "—"
     df_res = df_res[cols_show]
-    st.dataframe(df_res, use_container_width=True, hide_index=True,
+    st.dataframe(df_res, width="stretch", hide_index=True,
                  column_config={
                      "Cliente":           st.column_config.TextColumn(width="medium"),
                      "Situação":          st.column_config.TextColumn(width="medium"),
@@ -2301,7 +2301,7 @@ def _prospeccao():
                 data=buf_pr.getvalue(),
                 file_name=f"prospeccao_{_forn_nm}_{_hoje_str}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True)
+                width="stretch")
         except Exception as _ex:
             st.error(f"Erro Excel: {_ex}")
 
@@ -2309,7 +2309,7 @@ def _prospeccao():
     with col_pdf:
         _pdf_key = f"prosp_pdf_{hash(str(list(df_res['Cliente'])))}"
         if _pdf_key not in st.session_state:
-            if st.button("📄 Gerar PDF", key="pr_pdf_btn", use_container_width=True):
+            if st.button("📄 Gerar PDF", key="pr_pdf_btn", width="stretch"):
                 with st.spinner("Gerando PDF..."):
                     st.session_state[_pdf_key] = _gerar_pdf_prospeccao(
                         df_res, forn_sel[1] if forn_id else "Todos",
@@ -2321,7 +2321,7 @@ def _prospeccao():
                 data=st.session_state[_pdf_key],
                 file_name=f"prospeccao_{_forn_nm}_{_hoje_str}.pdf",
                 mime="application/pdf",
-                use_container_width=True)
+                width="stretch")
 
 
 def _por_fornecedor():
@@ -2377,7 +2377,7 @@ def _por_fornecedor():
             col2.caption(f"{STATUS_ICONE.get(status,'')} {status}")
             col3.caption(tipo)
             if col4.button("▼" if not aberto else "▲",
-                           key=f"pf_tog_{cid}", use_container_width=True):
+                           key=f"pf_tog_{cid}", width="stretch"):
                 if aberto:
                     st.session_state.pop("ct_topico_aberto", None)
                 else:

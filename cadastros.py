@@ -14,6 +14,7 @@ from database import conectar, query
 
 def _ir(p):
     st.session_state["pagina"] = p
+    st.session_state["_scroll_topo"] = True
     st.rerun()
 
 def _sucesso(msg):
@@ -42,7 +43,7 @@ def tela_fornecedores():
     cols = st.columns(3)
     for col,(k,v) in zip(cols, ABAS_FORN.items()):
         ativa = st.session_state["forn_aba"] == k
-        if col.button(v, key=f"fnav_{k}", use_container_width=True,
+        if col.button(v, key=f"fnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["forn_aba"] = k; st.rerun()
     st.divider()
@@ -52,7 +53,7 @@ def tela_fornecedores():
         if dados:
             df = pd.DataFrame(dados, columns=["ID", "Fantasia", "Cidade", "UF", "CNPJ", "Ativo"])
             df["Ativo"] = df["Ativo"].map({1: "✅", 0: "❌"})
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width="stretch", hide_index=True)
             st.divider()
             st.subheader("Editar fornecedor")
             ids = [(r[0], r[1]) for r in dados]
@@ -157,7 +158,7 @@ def _tela_contatos_fornecedor():
     """, (forn_id,))
     if contatos:
         st.dataframe(pd.DataFrame(contatos, columns=["ID","Nome","Departamento","Fone","E-mail"]),
-                     use_container_width=True, hide_index=True)
+                     width="stretch", hide_index=True)
     else:
         st.info("Nenhum contato cadastrado para este fornecedor.")
     st.subheader("Adicionar contato")
@@ -226,7 +227,7 @@ def tela_produtos():
     cols = st.columns(len(ABAS_PROD))
     for col,(k,v) in zip(cols, ABAS_PROD.items()):
         ativa = st.session_state["prod_aba"] == k
-        if col.button(v, key=f"pnav_{k}", use_container_width=True,
+        if col.button(v, key=f"pnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["prod_aba"] = k; st.rerun()
     st.divider()
@@ -305,13 +306,6 @@ def _lista_produtos():
             val_coringa = "Todos"
             st.empty()
 
-    with col_exp_x:
-        if st.button("⬇️ Excel", key="exp_prod_xlsx", use_container_width=True):
-            st.session_state["exp_prod_trigger"] = "excel"
-    with col_exp_p:
-        if st.button("⬇️ PDF", key="exp_prod_pdf", use_container_width=True):
-            st.session_state["exp_prod_trigger"] = "pdf"
-
     # ── APLICA TODOS OS FILTROS em cascata ────────────────────────────────
     df = df_forn_cat.copy()
 
@@ -327,21 +321,24 @@ def _lista_produtos():
                 df["Codigo"].str.contains(b, case=False, na=False))
         df = df[mask]
 
-    # ── EXPORTAÇÃO ────────────────────────────────────────────────────────
-    trigger = st.session_state.pop("exp_prod_trigger", None)
-    if trigger == "excel":
-        buf = io.BytesIO()
-        df.to_excel(buf, index=False, sheet_name="Produtos")
-        buf.seek(0)
-        nome_arq = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}.xlsx"
-        st.download_button("📥 Baixar Excel", data=buf, file_name=nome_arq,
+    # ── EXPORTAÇÃO 1 CLIQUE — df já filtrado ─────────────────────────────
+    # Gera buffers FORA dos with col — garante ExcelWriter fechado antes do getvalue()
+    nome_base = f"produtos_{sel_forn.replace(' ','_') if sel_forn != 'Todos' else 'todos'}"
+    _buf_x = io.BytesIO()
+    with pd.ExcelWriter(_buf_x, engine="openpyxl") as _wprod:
+        df.to_excel(_wprod, index=False, sheet_name="Produtos")
+    _buf_p = _exportar_produtos_pdf(df, sel_forn)
+
+    with col_exp_x:
+        st.download_button("⬇️ Excel", data=_buf_x.getvalue(),
+                           file_name=f"{nome_base}.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
-    elif trigger == "pdf":
-        buf = _exportar_produtos_pdf(df, sel_forn)
-        nome_arq = f"produtos_{sel_forn.replace(' ','_') if sel_forn!='Todos' else 'todos'}.pdf"
-        st.download_button("📥 Baixar PDF", data=buf, file_name=nome_arq,
-                           mime="application/pdf", use_container_width=True)
+                           key="exp_prod_xlsx", width="stretch")
+    with col_exp_p:
+        st.download_button("⬇️ PDF", data=_buf_p,
+                           file_name=f"{nome_base}.pdf",
+                           mime="application/pdf",
+                           key="exp_prod_pdf", width="stretch")
 
     # ── CONTADOR CONTEXTUAL ───────────────────────────────────────────────
     filtros_ativos = []
@@ -380,13 +377,13 @@ def _lista_produtos():
         c7.caption(str(um) if um else "—")
         with c8:
             if st.button("✏️", key=f"ed_prod_{pid}", help="Editar produto",
-                         use_container_width=True):
+                         width="stretch"):
                 st.session_state["prod_editar_id"] = pid
                 st.session_state.pop("prod_excluir_id", None)
                 st.rerun()
         with c9:
             if st.button("🗑️", key=f"del_prod_{pid}", help="Excluir produto",
-                         use_container_width=True):
+                         width="stretch"):
                 st.session_state["prod_excluir_id"] = pid
                 st.session_state.pop("prod_editar_id", None)
                 st.rerun()
@@ -437,9 +434,9 @@ def _confirmacao_excluir_produto(pid, desc_c, codigo):
         st.write("")
         st.write("")
         confirmar = st.button("✅ Confirmar exclusão", key=f"conf_del_prod_{pid}",
-                              type="primary", use_container_width=True)
+                              type="primary", width="stretch")
         cancelar  = st.button("Cancelar", key=f"canc_del_prod_{pid}",
-                              use_container_width=True)
+                              width="stretch")
 
     if confirmar:
         if senha != "EXCLUIR123":
@@ -716,8 +713,8 @@ def _form_novo_produto():
 
     col_btn1, col_btn2, _ = st.columns([1, 1, 3])
     salvar  = col_btn1.button("💾 Salvar produto", type="primary",
-                              use_container_width=True, key="np_salvar")
-    limpar  = col_btn2.button("🗑️ Limpar campos", use_container_width=True,
+                              width="stretch", key="np_salvar")
+    limpar  = col_btn2.button("🗑️ Limpar campos", width="stretch",
                               key="np_limpar")
 
     if limpar:
@@ -878,7 +875,7 @@ def _importar_produtos_excel():
         mask_sem_cod = df["codigo_produto"].isna() | (df["codigo_produto"].astype(str).str.strip() == "")
         df.loc[mask_sem_cod, "codigo_produto"] = df.loc[mask_sem_cod, "descricao"].apply(_slug)
         st.caption(f"Preview — {len(df)} produto(s):")
-        st.dataframe(df.head(10), use_container_width=True)
+        st.dataframe(df.head(10), width="stretch")
     except Exception as e:
         _erro(f"Erro ao ler o arquivo: {e}"); return
 
@@ -1012,7 +1009,7 @@ def tela_tabelas_preco():
     cols = st.columns(5)
     for col,(k,v) in zip(cols, ABAS_TAB.items()):
         ativa = st.session_state["tab_preco_aba"] == k
-        if col.button(v, key=f"tpnav_{k}", use_container_width=True,
+        if col.button(v, key=f"tpnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["tab_preco_aba"] = k; st.rerun()
     st.divider()
@@ -1063,23 +1060,13 @@ def _lista_tabelas():
     # Aplica filtro de tipo sobre o já filtrado por fornecedor
     df_vis = df_forn if sel_tipo == "Todos" else df_forn[df_forn["Tipo"] == sel_tipo]
 
-    col_exp_tx, col_exp_tp = st.columns(2)
-    with col_exp_tx:
-        if st.button("⬇️ Excel", key="exp_tab_xlsx", use_container_width=True):
-            st.session_state["exp_tab_trigger"] = "excel"
-    with col_exp_tp:
-        if st.button("⬇️ PDF", key="exp_tab_pdf", use_container_width=True):
-            st.session_state["exp_tab_trigger"] = "pdf"
-
-
-
-    trigger_t = st.session_state.pop("exp_tab_trigger", None)
-    if trigger_t:
-        # Busca itens das tabelas filtradas com dados completos do produto
+    def _itens_tabelas_filtradas():
+        """Busca itens das tabelas visíveis — chamada no momento do export."""
         tab_ids = tuple(df_vis["ID"].tolist())
-        if tab_ids:
-            ph = ",".join("?" * len(tab_ids))
-            itens = query(f"""
+        if not tab_ids:
+            return pd.DataFrame()
+        ph = ",".join("?" * len(tab_ids))
+        itens = query(f"""
                 SELECT tp.nome_tabela, f.nome_fantasia,
                        p.codigo_produto, p.descricao_curta,
                        COALESCE(p.sub_categoria,'—'), COALESCE(p.grupo,'—'),
@@ -1097,34 +1084,50 @@ def _lista_tabelas():
                 WHERE tpi.tabela_preco_id IN ({ph})
                 ORDER BY tp.nome_tabela, p.descricao_curta
             """, tuple(tab_ids))
+        return pd.DataFrame(itens or [], columns=[
+            "Tabela","Fornecedor","Codigo","Produto",
+            "Sub-cat.","Grupo","UM","Un/Cx","Peso un.(kg)",
+            "Preco cx.(R$)","Preco un.(R$)","Preco/kg(R$)",
+            "Desc.max(%)","Observacao"])
 
-            df_itens = pd.DataFrame(itens or [], columns=[
-                "Tabela","Fornecedor","Codigo","Produto",
-                "Sub-cat.","Grupo","UM","Un/Cx","Peso un.(kg)",
-                "Preco cx.(R$)","Preco un.(R$)","Preco/kg(R$)",
-                "Desc.max(%)","Observacao"])
+    nome_tab_base = f"tabela_precos_{sel_t.replace(' ','_') if sel_t != 'Todos' else 'todas'}"
 
-            if trigger_t == "excel":
-                buf_t = io.BytesIO()
-                with pd.ExcelWriter(buf_t, engine="openpyxl") as w:
-                    df_vis[["Fornecedor","Tabela","Tipo","Prazo","Frete","Inicio","Fim","Ativo","Itens"]].to_excel(
-                        w, index=False, sheet_name="Tabelas")
-                    df_itens.to_excel(w, index=False, sheet_name="Itens")
-                buf_t.seek(0)
-                nome_t = f"tabela_precos_{sel_t.replace(' ','_') if sel_t!='Todos' else 'todas'}.xlsx"
-                st.download_button("📥 Baixar Excel da tabela", data=buf_t,
-                                   file_name=nome_t,
-                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                   use_container_width=True)
-            elif trigger_t == "pdf":
-                buf_tp = _exportar_tabela_pdf(df_itens, sel_t)
-                nome_tp = f"tabela_precos_{sel_t.replace(' ','_') if sel_t!='Todos' else 'todas'}.pdf"
-                st.download_button("📥 Baixar PDF da tabela", data=buf_tp,
-                                   file_name=nome_tp, mime="application/pdf",
-                                   use_container_width=True)
+    # Gera buffers fora dos with col
+    _df_itens_exp = _itens_tabelas_filtradas()
+    _buf_tx_bytes = None
+    _buf_tp       = None
+    try:
+        _buf_tx = io.BytesIO()
+        with pd.ExcelWriter(_buf_tx, engine="openpyxl") as _w:
+            _df_itens_exp.to_excel(_w, index=False, sheet_name="Itens")
+            df_vis[["Fornecedor","Tabela","Tipo","Prazo","Frete","Inicio","Fim","Ativo","Itens"]].to_excel(
+                _w, index=False, sheet_name="Resumo")
+            _w.book.active = _w.book["Itens"]
+        _buf_tx_bytes = _buf_tx.getvalue()
+    except Exception as _ex_tx:
+        st.warning(f"Erro ao gerar Excel: {_ex_tx}")
+
+    try:
+        _buf_tp = _exportar_tabela_pdf(_df_itens_exp, sel_t)
+    except Exception as _ex_tp:
+        st.warning(f"Erro ao gerar PDF: {_ex_tp}")
+
+    col_exp_tx, col_exp_tp = st.columns(2)
+    with col_exp_tx:
+        if _buf_tx_bytes:
+            st.download_button("⬇️ Excel (itens + resumo)", data=_buf_tx_bytes,
+                               file_name=f"{nome_tab_base}.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                               key="exp_tab_xlsx", width="stretch")
+    with col_exp_tp:
+        if _buf_tp:
+            st.download_button("⬇️ PDF", data=_buf_tp,
+                               file_name=f"{nome_tab_base}.pdf",
+                               mime="application/pdf",
+                               key="exp_tab_pdf", width="stretch")
 
     st.dataframe(df_vis[["ID","Fornecedor","Tabela","Tipo","Prazo","Frete","Inicio","Fim","Ativo","Itens"]],
-                 use_container_width=True, hide_index=True)
+                 width="stretch", hide_index=True)
 
     st.divider()
 
@@ -1293,13 +1296,13 @@ def _lista_tabelas():
                 b1, b2 = st.columns(2)
                 with b1:
                     if st.button("✏️", key=f"ed_tpi_{iid}", help="Editar",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state["tpi_editar_id"] = iid
                         st.session_state.pop("tpi_excluir_id", None)
                         st.rerun()
                 with b2:
                     if st.button("🗑️", key=f"ex_tpi_{iid}", help="Remover da tabela",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state["tpi_excluir_id"] = iid
                         st.session_state.pop("tpi_editar_id", None)
                         st.rerun()
@@ -1345,7 +1348,7 @@ def _lista_tabelas():
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("🗑️ Confirmar remoção", key=f"conf_ex_tpi_{iid}",
-                                 type="primary", use_container_width=True):
+                                 type="primary", width="stretch"):
                         conn = conectar()
                         conn.execute("DELETE FROM tabela_preco_item WHERE tabela_preco_item_id=?", (iid,))
                         conn.commit(); conn.close()
@@ -1355,7 +1358,7 @@ def _lista_tabelas():
                         st.rerun()
                 with col2:
                     if st.button("Cancelar", key=f"canc_ex_tpi_{iid}",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state.pop("tpi_excluir_id", None)
                         st.rerun()
 
@@ -1641,7 +1644,7 @@ def _historico_precos():
                 lambda v: _brl_fmt(v) if v else "—")
             st.dataframe(
                 df_det[["Data vigência","Tabela","R$ Cx","R$ Kg"]],
-                use_container_width=True, hide_index=True)
+                width="stretch", hide_index=True)
 
 
 def _importar_tabela_excel():
@@ -1700,7 +1703,7 @@ def _importar_tabela_excel():
         col_a, col_b = st.columns(2)
         with col_a:
             if st.button("🔄 Importar outro arquivo", key="btn_nova_imp_tab",
-                         use_container_width=True):
+                         width="stretch"):
                 st.rerun()
         with col_b:
             if n_ok == 0:
@@ -1721,7 +1724,7 @@ def _importar_tabela_excel():
         df["preco_caixa"] = pd.to_numeric(df["preco_caixa"], errors="coerce")
         df = df[df["preco_caixa"] > 0]
         st.caption(f"Preview — {len(df)} item(ns) encontrado(s) no arquivo:")
-        st.dataframe(df.head(10), use_container_width=True)
+        st.dataframe(df.head(10), width="stretch")
         if len(df) > 10:
             st.caption(f"... e mais {len(df)-10} linha(s) não exibida(s).")
     except Exception as e:
@@ -1860,7 +1863,7 @@ def tela_clientes():
         cols = st.columns(len(row))
         for col,(k,v) in zip(cols, row):
             ativa = st.session_state["cli_aba"] == k
-            if col.button(v, key=f"cnav_{k}", use_container_width=True,
+            if col.button(v, key=f"cnav_{k}", width="stretch",
                           type="primary" if ativa else "secondary"):
                 st.session_state["cli_aba"] = k; st.rerun()
     st.divider()
@@ -1971,7 +1974,7 @@ def _lista_clientes():
             st.selectbox("Aplicar em clientes com status",
                          ["Todos"] + STATUS_CLI_OPTS, key="massa_cli_filtro")
         st.button("✅ Aplicar agora", key="btn_massa_cli",
-                  type="primary", use_container_width=True)
+                  type="primary", width="stretch")
 
     # Processa FORA do expander, no nivel principal da funcao
     if st.session_state.get("btn_massa_cli"):
@@ -2005,40 +2008,49 @@ def _lista_clientes():
         st.info("Nenhum cliente encontrado.")
         return
 
-    col_ct, col_exp = st.columns([3,1])
-    col_ct.caption(f"{len(dados)} cliente(s)")
-    with col_exp:
-        if st.button("⬇️ Exportar Excel", key="exp_cli_xlsx", use_container_width=True):
-            st.session_state["exp_cli_trigger"] = True
+    # Export: mesma query de dados + campos extras, mesmos filtros, sem f-string dinâmica
+    _where_exp = []
+    _params_exp = list(params_q)  # copia dos filtros já usados em dados
+    if fil_status != "Todos":
+        _where_exp.append("c.status=?")
+    if fil_busca.strip():
+        _where_exp.append("c.nome_fantasia ILIKE ?")
+    _where_exp_sql = ("WHERE " + " AND ".join(_where_exp)) if _where_exp else ""
 
-    if st.session_state.pop("exp_cli_trigger", False):
-        dados_exp = query("""
-            SELECT c.cliente_id, c.nome_fantasia, c.razao_social,
+    _dados_exp = query("""
+            SELECT c.cliente_id, c.nome_fantasia,
+                   COALESCE(c.razao_social,'—'),
                    COALESCE(c.perfil,'—'), COALESCE(c.fone,'—'),
                    COALESCE(c.cnpj,'—'), COALESCE(c.site,'—'),
                    COALESCE(c.instagram,'—'),
                    COALESCE(c.endereco,'—'), COALESCE(c.bairro,'—'),
                    COALESCE(c.cidade,'—'), COALESCE(c.estado,'—'),
                    COALESCE(a.nome,'—') AS associacao,
-                   COALESCE(c.status,'Ativo'), COALESCE(c.observacao,''),
+                   COALESCE(c.status,'Ativo'),
+                   COALESCE(c.observacao,''),
                    COUNT(DISTINCT p.pdv_id) AS pdvs
             FROM cliente c
             LEFT JOIN associacao a ON c.associacao_id=a.associacao_id
-            LEFT JOIN pdv p ON c.cliente_id=p.cliente_id
+            LEFT JOIN pdv p ON c.cliente_id=p.cliente_id AND p.ativo IS NOT FALSE
+            """ + _where_exp_sql + """
             GROUP BY c.cliente_id
             ORDER BY c.nome_fantasia
-        """)
-        df_exp = pd.DataFrame(dados_exp, columns=[
-            "ID","Nome fantasia","Razao social","Perfil","Fone","CNPJ","Site","Instagram",
-            "Endereco","Bairro","Cidade","UF","Associacao","Status","Observacao","PDVs"])
-        buf_exp = io.BytesIO()
-        df_exp.to_excel(buf_exp, index=False, sheet_name="Clientes")
-        buf_exp.seek(0)
-        st.download_button("📥 Baixar lista de clientes",
-                           data=buf_exp,
+    """, tuple(_params_exp)) or []
+    _df_cli_exp = pd.DataFrame(_dados_exp, columns=[
+        "ID","Nome fantasia","Razao social","Perfil","Fone","CNPJ","Site","Instagram",
+        "Endereco","Bairro","Cidade","UF","Associacao","Status","Observacao","PDVs"])
+    _buf_cli = io.BytesIO()
+    with pd.ExcelWriter(_buf_cli, engine="openpyxl") as _wcli:
+        _df_cli_exp.to_excel(_wcli, index=False, sheet_name="Clientes")
+    _buf_cli_bytes = _buf_cli.getvalue()
+
+    col_ct, col_exp = st.columns([3,1])
+    col_ct.caption(f"{len(dados)} cliente(s)")
+    with col_exp:
+        st.download_button("⬇️ Exportar Excel", data=_buf_cli_bytes,
                            file_name="clientes_peppercrm.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                           key="exp_cli_xlsx", width="stretch")
 
     h1,h2,h3,h4,h5,h6 = st.columns([0.4,2.8,1.2,0.6,1.5,1.2])
     for col, txt in zip([h1,h2,h3,h4,h5,h6],
@@ -2058,13 +2070,13 @@ def _lista_clientes():
             b1, b2 = st.columns(2)
             with b1:
                 if st.button("✏️", key=f"ed_cli_{cid}", help="Editar",
-                             use_container_width=True):
+                             width="stretch"):
                     st.session_state["cli_editar_id"] = cid
                     st.session_state.pop("cli_excluir_id", None)
                     st.rerun()
             with b2:
                 if st.button("🗑️", key=f"ex_cli_{cid}", help="Excluir",
-                             use_container_width=True):
+                             width="stretch"):
                     st.session_state["cli_excluir_id"] = cid
                     st.session_state.pop("cli_editar_id", None)
                     st.rerun()
@@ -2103,7 +2115,7 @@ def _confirmacao_excluir_cliente(cid, nome):
     col1, col2 = st.columns(2)
     with col1:
         if st.button("🗑️ Confirmar exclusão", key=f"conf_ex_cli_{cid}",
-                     type="primary", use_container_width=True):
+                     type="primary", width="stretch"):
             conn = conectar()
             # Remove dependências sem pedido
             conn.execute("DELETE FROM mix_cliente WHERE cliente_id=?", (cid,))
@@ -2118,7 +2130,7 @@ def _confirmacao_excluir_cliente(cid, nome):
             st.session_state.pop("cli_excluir_id", None)
             st.success(f"Cliente excluido!"); st.rerun()
     with col2:
-        if st.button("Cancelar", key=f"canc_ex_cli_{cid}", use_container_width=True):
+        if st.button("Cancelar", key=f"canc_ex_cli_{cid}", width="stretch"):
             st.session_state.pop("cli_excluir_id", None); st.rerun()
 
 
@@ -2273,7 +2285,7 @@ def _tela_vinculos_cliente():
             c3.caption(prazo_v or "—")
             c4.caption("✅" if ativo_v else "❌")
             with c5:
-                if st.button("✏️ Editar", key=f"ed_vinc_{cf_id}", use_container_width=True):
+                if st.button("✏️ Editar", key=f"ed_vinc_{cf_id}", width="stretch"):
                     st.session_state["vinc_editar_id"] = cf_id
                     st.rerun()
 
@@ -2411,7 +2423,7 @@ def _tela_pdvs():
             with col_btn_pad:
                 st.write("")
                 if st.button("✅ Aplicar", key="btn_pad_tipo",
-                             use_container_width=True, type="primary"):
+                             width="stretch", type="primary"):
                     if tipo_certo.strip() and tipo_errado:
                         conn = conectar()
                         conn.execute(
@@ -2429,7 +2441,7 @@ def _tela_pdvs():
             st.divider()
             # Exibe tabela atual de tipos para referência
             df_tipos = pd.DataFrame(tipos_existentes, columns=["Tipo","Qtd PDVs"])
-            st.dataframe(df_tipos, use_container_width=True, hide_index=True)
+            st.dataframe(df_tipos, width="stretch", hide_index=True)
 
     # ── FILTROS ──────────────────────────────────────────────────────────
     col_f1, col_f2, col_f3, col_f4 = st.columns(4)
@@ -2461,7 +2473,7 @@ def _tela_pdvs():
                          ["Todos"] + STATUS_PDV_OPTS, key="massa_pdv_f2")
         st.caption("Os filtros acima serão respeitados.")
         st.button("✅ Aplicar agora", key="btn_massa_pdv2",
-                  type="primary", use_container_width=True)
+                  type="primary", width="stretch")
 
     if st.session_state.get("btn_massa_pdv2"):
         _executar_massa_pdv(
@@ -2496,16 +2508,8 @@ def _tela_pdvs():
     if pdvs:
         df = pd.DataFrame(pdvs, columns=["ID","Cliente","Nr.","Nome","Tipo","Setor",
                                           "Cidade","Status","cli_id"])
-        col_ct2, col_exp2 = st.columns([3,1])
-        col_ct2.caption(f"{len(pdvs)} PDV(s) encontrado(s)")
-        with col_exp2:
-            if st.button("⬇️ Exportar Excel", key="exp_pdv_xlsx",
-                         use_container_width=True):
-                st.session_state["exp_pdv_trigger"] = True
-
-        if st.session_state.pop("exp_pdv_trigger", False):
-            # Exportação respeita os filtros ativos
-            dados_pdv_exp = query(f"""
+        # Gera Excel de PDVs FORA do with col — garante ExcelWriter fechado antes do getvalue()
+        _dados_pdv_exp = query(f"""
                 SELECT p.pdv_id, c.nome_fantasia AS cliente,
                        COALESCE(p.numero_loja,'—'), p.nome_loja,
                        COALESCE(p.tipo_pdv,'—'), COALESCE(p.setor,'—'),
@@ -2522,29 +2526,31 @@ def _tela_pdvs():
                 WHERE {' AND '.join(where_p)}
                 ORDER BY c.nome_fantasia, p.nome_loja
             """, tuple(params_p))
-            df_pdv_exp = pd.DataFrame(dados_pdv_exp, columns=[
-                "ID","Cliente","Nr. Loja","Nome loja","Tipo PDV","Setor",
-                "Endereco","Bairro","Cidade","UF","CNPJ","Gerente","Fone gerente",
-                "Horario recebimento","Status","Observacao","Latitude","Longitude"])
-            buf_pdv = io.BytesIO()
-            df_pdv_exp.to_excel(buf_pdv, index=False, sheet_name="PDVs")
-            buf_pdv.seek(0)
-            # Nome do arquivo reflete os filtros
-            sufixo = "_".join(filter(None, [
-                fil_tipo if fil_tipo!="Todos" else "",
-                fil_cid if fil_cid!="Todas" else "",
-                fil_pdv_st if fil_pdv_st!="Todos" else ""
-            ])) or "todos"
-            st.download_button(
-                "📥 Baixar PDVs filtrados",
-                data=buf_pdv,
-                file_name=f"pdvs_{sufixo[:30]}.xlsx",
+        _df_pdv_exp = pd.DataFrame(_dados_pdv_exp or [], columns=[
+            "ID","Cliente","Nr. Loja","Nome loja","Tipo PDV","Setor",
+            "Endereco","Bairro","Cidade","UF","CNPJ","Gerente","Fone gerente",
+            "Horario recebimento","Status","Observacao","Latitude","Longitude"])
+        _sufixo = "_".join(filter(None, [
+            fil_tipo if fil_tipo != "Todos" else "",
+            fil_cid  if fil_cid  != "Todas" else "",
+            fil_pdv_st if fil_pdv_st != "Todos" else ""
+        ])) or "todos"
+        _buf_pdv = io.BytesIO()
+        with pd.ExcelWriter(_buf_pdv, engine="openpyxl") as _wpdv:
+            _df_pdv_exp.to_excel(_wpdv, index=False, sheet_name="PDVs")
+
+        col_ct2, col_exp2 = st.columns([3,1])
+        col_ct2.caption(f"{len(pdvs)} PDV(s) encontrado(s)")
+        with col_exp2:
+            st.download_button("⬇️ Exportar Excel",
+                data=_buf_pdv.getvalue(),
+                file_name=f"pdvs_{_sufixo[:30]}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True)
+                key="exp_pdv_xlsx", width="stretch")
 
         df["Status"] = df["Status"].apply(_status_icone)
         st.dataframe(df[["Cliente","Nr.","Nome","Tipo","Setor","Cidade","Status"]],
-                     use_container_width=True, hide_index=True)
+                     width="stretch", hide_index=True)
 
         st.divider()
         st.subheader("Editar PDV")
@@ -2556,7 +2562,7 @@ def _tela_pdvs():
         with col_del:
             st.write(""); st.write("")
             if st.button("🗑️ Excluir", key="btn_excluir_pdv",
-                         use_container_width=True,
+                         width="stretch",
                          help="Excluir o PDV selecionado"):
                 st.session_state["pdv_excluir_id"] = sel[0]
                 st.rerun()
@@ -2572,7 +2578,7 @@ def _tela_pdvs():
                     st.rerun()
             else:
                 if st.button("✏️ Editar PDV selecionado", key=f"btn_editar_pdv_{sel[0]}",
-                             type="primary", use_container_width=True):
+                             type="primary", width="stretch"):
                     st.session_state[_editar_key] = True
                     st.rerun()
     else:
@@ -2719,7 +2725,7 @@ def _confirmacao_excluir_pdv(pdv_id, pdv_label):
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Confirmar exclusao", key=f"conf_del_pdv_{pdv_id}",
-                     type="primary", use_container_width=True):
+                     type="primary", width="stretch"):
             conn = conectar()
             # Remove vinculos de atendimento
             conn.execute("DELETE FROM att_promotor WHERE pdv_id=?", (pdv_id,))
@@ -2737,7 +2743,7 @@ def _confirmacao_excluir_pdv(pdv_id, pdv_label):
             st.rerun()
     with col2:
         if st.button("Cancelar", key=f"canc_del_pdv_{pdv_id}",
-                     use_container_width=True):
+                     width="stretch"):
             st.session_state.pop("pdv_excluir_id", None)
             st.rerun()
 
@@ -2930,7 +2936,7 @@ def _tela_mix_pdv():
     if mix_atual:
         df_mix = pd.DataFrame(mix_atual, columns=["ID","Código","Descrição","Ativo"])
         df_mix["Ativo"] = df_mix["Ativo"].map({1: "✅", 0: "❌"})
-        st.dataframe(df_mix, use_container_width=True, hide_index=True)
+        st.dataframe(df_mix, width="stretch", hide_index=True)
         st.caption(f"{len(mix_atual)} produto(s) no mix")
     else:
         st.info("Nenhum produto no mix. Adicione abaixo.")
@@ -3065,7 +3071,7 @@ def _tela_contatos_cliente():
             c[5].caption(obs_ct or "—")
             with c[6]:
                 if st.button("✏️", key=f"ed_ct_{cid_ct}",
-                             use_container_width=True, help="Editar contato"):
+                             width="stretch", help="Editar contato"):
                     if st.session_state.get("cc_editar") == cid_ct:
                         st.session_state.pop("cc_editar", None)
                     else:
@@ -3073,7 +3079,7 @@ def _tela_contatos_cliente():
                     st.rerun()
             with c[7]:
                 if st.button("🗑️", key=f"del_ct_{cid_ct}",
-                             use_container_width=True, help="Remover contato"):
+                             width="stretch", help="Remover contato"):
                     conn = conectar()
                     conn.execute("UPDATE contato_cliente SET ativo=0 WHERE contato_cliente_id=?",
                                  (cid_ct,))
@@ -3092,7 +3098,7 @@ def _tela_contatos_cliente():
                     e_obs   = ec2.text_input("Observação", value=obs_ct or "", key=f"e_obs_{cid_ct}")
                     cs, cc  = st.columns(2)
                     if cs.button("💾 Salvar", key=f"sv_ct_{cid_ct}", type="primary",
-                                 use_container_width=True):
+                                 width="stretch"):
                         if not e_nome.strip():
                             st.warning("Nome é obrigatório.")
                         else:
@@ -3111,7 +3117,7 @@ def _tela_contatos_cliente():
                             st.session_state["_cc_msg_ok"] = f"✅ Contato '{e_nome}' atualizado!"
                             st.rerun()
                     if cc.button("✖️ Cancelar", key=f"canc_ct_{cid_ct}",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state.pop("cc_editar", None)
                         st.rerun()
     else:
@@ -3170,7 +3176,7 @@ def _tela_associacoes():
         df = pd.DataFrame(assocs, columns=["ID","Nome","Tipo","Cidade","UF",
                                             "Fone","Contato","Ativo","Membros"])
         df["Ativo"] = df["Ativo"].map({1:"Sim",0:"Nao"})
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)
 
         # Seleciona para ver membros
         opts = [(a[0], f"{a[1]} ({a[8]} membro(s))") for a in assocs]
@@ -3183,7 +3189,7 @@ def _tela_associacoes():
             if membros:
                 st.dataframe(pd.DataFrame(membros,
                     columns=["ID","Cliente","Cidade","Status"]),
-                    use_container_width=True, hide_index=True)
+                    width="stretch", hide_index=True)
             else:
                 st.info("Nenhum membro cadastrado ainda.")
     else:
@@ -3234,7 +3240,7 @@ def _tela_importar_clientes_pdvs():
     cols = st.columns(5)
     for col,(k,v) in zip(cols, ABAS_IMP.items()):
         ativa = st.session_state["imp_aba"] == k
-        if col.button(v, key=f"impnav_{k}", use_container_width=True,
+        if col.button(v, key=f"impnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["imp_aba"] = k; st.rerun()
     st.divider()
@@ -3276,7 +3282,7 @@ def _baixar_templates():
         st.download_button("Baixar template Clientes", data=buf,
                            file_name="template_importacao_clientes.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                           width="stretch")
 
     with col2:
         st.markdown("**Template de PDVs**")
@@ -3306,7 +3312,7 @@ def _baixar_templates():
         st.download_button("Baixar template PDVs", data=buf,
                            file_name="template_importacao_pdvs.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                           width="stretch")
 
 
 def _importar_clientes_excel():
@@ -3333,7 +3339,7 @@ def _importar_clientes_excel():
                       .str.replace(" ","_").str.replace("*",""))
         df = df.where(pd.notnull(df), None)
         st.caption(f"Preview — {len(df)} linha(s):")
-        st.dataframe(df.head(10), use_container_width=True)
+        st.dataframe(df.head(10), width="stretch")
     except Exception as e:
         _erro(f"Erro ao ler arquivo: {e}"); return
 
@@ -3432,7 +3438,7 @@ def _importar_pdvs_excel():
                       .str.replace(" ","_").str.replace("*",""))
         df = df.where(pd.notnull(df), None)
         st.caption(f"Preview — {len(df)} linha(s):")
-        st.dataframe(df.head(10), use_container_width=True)
+        st.dataframe(df.head(10), width="stretch")
     except Exception as e:
         _erro(f"Erro ao ler arquivo: {e}"); return
 
@@ -3635,7 +3641,7 @@ def _tela_sugestao_setores_ia():
         return
 
     st.caption(f"{len(df_orig)} PDV(s) carregado(s). Preview:")
-    st.dataframe(df_orig.head(10), use_container_width=True, hide_index=True)
+    st.dataframe(df_orig.head(10), width="stretch", hide_index=True)
 
     # Parametros
     col1, col2 = st.columns(2)
@@ -3664,7 +3670,7 @@ def _tela_sugestao_setores_ia():
     lista_txt = "\n".join(linhas_pdv)
 
     if st.button("Analisar e sugerir setores com IA", type="primary",
-                 use_container_width=True, key="btn_ia_setor"):
+                 width="stretch", key="btn_ia_setor"):
 
         # Verifica se a chave de API esta configurada
         # Busca chave direto no banco — sem dependencia de importacao
@@ -3803,7 +3809,7 @@ Certifique-se de que todo PDV apareca em exatamente um setor.
                 required=True,
             )
         },
-        use_container_width=True,
+        width="stretch",
         hide_index=False,
         key="editor_setores_ia"
     )
@@ -3813,7 +3819,7 @@ Certifique-se de que todo PDV apareca em exatamente um setor.
     st.caption("O arquivo exportado ja tera a coluna 'setor' preenchida e estara no formato correto para importacao.")
 
     if st.button("Gerar Excel com setores", type="primary",
-                 use_container_width=True, key="btn_gerar_excel_setor"):
+                 width="stretch", key="btn_gerar_excel_setor"):
         # Aplica setor editado no df original completo
         df_final = df_base.copy()
         df_final["setor"] = df_editado["setor_sugerido"].values
@@ -3840,7 +3846,7 @@ Certifique-se de que todo PDV apareca em exatamente um setor.
             data=buf,
             file_name="pdvs_com_setores.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
+            width="stretch"
         )
         st.success(
             "Excel gerado! Va ate a aba 'Importar PDVs', suba este arquivo "
@@ -3895,10 +3901,10 @@ def _atualizar_gps_massa():
         st.error(f"Colunas ausentes: {', '.join(faltam)}"); return
 
     st.caption(f"{len(df)} linha(s) carregada(s). Preview:")
-    st.dataframe(df.head(10), use_container_width=True)
+    st.dataframe(df.head(10), width="stretch")
 
     if st.button("Atualizar GPS", type="primary",
-                 use_container_width=True, key="btn_gps_massa"):
+                 width="stretch", key="btn_gps_massa"):
         conn = conectar()
         ok = 0; nao_encontrado = []; erro_coord = []
 
@@ -4061,10 +4067,10 @@ def _tela_pdvs_por_setor():
     # ── Exportação (respeita filtro de tipos) ────────────
     col_ex, col_ep, _ = st.columns([1, 1, 3])
     with col_ex:
-        if st.button("⬇️ Excel", key="exp_setor_xlsx", use_container_width=True):
+        if st.button("⬇️ Excel", key="exp_setor_xlsx", width="stretch"):
             st.session_state["exp_setor_trigger"] = "excel"
     with col_ep:
-        if st.button("⬇️ PDF", key="exp_setor_pdf", use_container_width=True):
+        if st.button("⬇️ PDF", key="exp_setor_pdf", width="stretch"):
             st.session_state["exp_setor_trigger"] = "pdf"
 
     trigger_setor = st.session_state.pop("exp_setor_trigger", None)
@@ -4089,7 +4095,7 @@ def _tela_pdvs_por_setor():
                                data=buf_s,
                                file_name=f"pdvs_setor_{tipos_slug}.xlsx",
                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                               use_container_width=True)
+                               width="stretch")
 
         elif trigger_setor == "pdf":
             try:
@@ -4160,7 +4166,7 @@ def _tela_pdvs_por_setor():
                                    data=buf_pdf,
                                    file_name=f"pdvs_setor_{tipos_slug}.pdf",
                                    mime="application/pdf",
-                                   use_container_width=True)
+                                   width="stretch")
             except ImportError:
                 st.error("Instale reportlab: pip install reportlab")
 
@@ -4261,7 +4267,7 @@ def _tela_central_compras():
                                       "Contato","Fone","Email","Cidade CD","Ativo"])
         df_cc["Ativo"] = df_cc["Ativo"].map({1:"✅",0:"❌"})
         st.dataframe(df_cc.drop(columns=["ID"]),
-                     use_container_width=True, hide_index=True)
+                     width="stretch", hide_index=True)
     else:
         st.info("Nenhuma central de compras cadastrada ainda.")
 

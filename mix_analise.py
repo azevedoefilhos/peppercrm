@@ -11,6 +11,7 @@ from database import query, _cache_fornecedores
 
 def _ir(p):
     st.session_state["pagina"] = p
+    st.session_state["_scroll_topo"] = True
     st.rerun()
 
 
@@ -34,7 +35,7 @@ def tela_mix_analise():
     cols = st.columns(3)
     for col,(k,v) in zip(cols, ABAS_MIX.items()):
         ativa = st.session_state["mix_aba"] == k
-        if col.button(v, key=f"mxnav_{k}", use_container_width=True,
+        if col.button(v, key=f"mxnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["mix_aba"] = k; st.rerun()
     st.divider()
@@ -259,7 +260,7 @@ def _executar_analise(cli_id, forn_id, pdv_id, data_corte, pdv_label):
 
     if df_data:
         df = pd.DataFrame(df_data)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)
         st.caption(f"{len(df_data)} produto(s) exibido(s)")
 
         # Exportar
@@ -355,7 +356,7 @@ def _visao_geral():
     col3.metric("PDVs com cobertura < 40%",
                 len(df[df["Cobertura (%)"] < 40]))
 
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
     # Gráfico de barras — cobertura por PDV
     if len(df) <= 20:
@@ -460,4 +461,4 @@ def _tabela_sugestao(lista):
         "Preço/Cx":     _fmt_brl(r["preco"]),
         "Último ped.":  r["ultima_data"] or "Nunca",
     } for r in lista])
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)

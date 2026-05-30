@@ -32,6 +32,7 @@ ICONE_STATUS = {
 
 def _ir(p):
     st.session_state["pagina"] = p
+    st.session_state["_scroll_topo"] = True
     st.rerun()
 
 def _brl(v):
@@ -59,11 +60,11 @@ def tela_ver_pedidos():
                 st.session_state.pop("pedido_ativo_id", None)
                 st.rerun()
         with col2:
-            if st.button("📋 Historico", use_container_width=True):
+            if st.button("📋 Historico", width="stretch"):
                 st.session_state["vp_modo"] = "historico"
                 st.rerun()
         with col3:
-            if st.button("⬅ Voltar ao menu", use_container_width=True):
+            if st.button("⬅ Voltar ao menu", width="stretch"):
                 _ir("home")
         _tela_editar_pedido()
 
@@ -74,7 +75,7 @@ def tela_ver_pedidos():
                 st.session_state["vp_modo"] = "detalhe"
                 st.rerun()
         with col2:
-            if st.button("Lista de pedidos", use_container_width=True):
+            if st.button("Lista de pedidos", width="stretch"):
                 st.session_state["vp_modo"] = "lista"
                 st.session_state.pop("pedido_ativo_id", None)
                 st.rerun()
@@ -159,7 +160,7 @@ def _lista_pedidos():
         buf.seek(0)
         st.download_button("⬇️ Exportar Excel", data=buf, file_name="pedidos.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
+                           width="stretch")
 
     df = pd.DataFrame(dados, columns=[
         "ID","Data","Cliente","PDV","Fornecedor",
@@ -167,7 +168,7 @@ def _lista_pedidos():
     df["Total"] = df["Total"].apply(lambda v: _brl(v))
     df["Status"] = df["Status"].apply(lambda s: f"{ICONE_STATUS.get(s,'⚪')} {s}")
     st.dataframe(df[["ID","Data","Cliente","PDV","Fornecedor","Status","Itens","Total","Entrega"]],
-                 use_container_width=True, hide_index=True)
+                 width="stretch", hide_index=True)
 
     st.divider()
     ids = [(r[0], f"Pedido #{r[0]} — {r[2]} / {r[4]} — {r[1]}") for r in dados]
@@ -292,7 +293,7 @@ def _tela_editar_pedido():
             wa_url  = f"https://wa.me/{numero_wa}?text={msg_enc}" if numero_wa                       else f"https://wa.me/?text={msg_enc}"
 
             st.link_button("Enviar pelo WhatsApp",
-                           wa_url, use_container_width=True)
+                           wa_url, width="stretch")
             with st.expander("Ver texto do pedido"):
                 st.text(msg)
 
@@ -306,7 +307,7 @@ def _tela_editar_pedido():
                 data=buf,
                 file_name=f"pedido_{ped_id}_{cli_slug}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
+                width="stretch",
             )
 
     with col_sp:
@@ -319,7 +320,7 @@ def _tela_editar_pedido():
                 data=buf_pdf,
                 file_name=f"pedido_{ped_id}_{cli_slug}.pdf",
                 mime="application/pdf",
-                use_container_width=True,
+                width="stretch",
             )
 
     st.divider()
@@ -807,12 +808,12 @@ def _tela_itens_pedido(ped_id, ped, editavel):
                                            key=f"st_{item_id}", label_visibility="collapsed")
             col_sv, col_rm = st.columns(2)
             with col_sv:
-                if st.button("💾 Salvar", key=f"sv_{item_id}", use_container_width=True):
+                if st.button("💾 Salvar", key=f"sv_{item_id}", width="stretch"):
                     _salvar_item(ped_id, item_id, qtd, nova_qtd,
                                  desconto, novo_desc, preco_tab,
                                  status_item, novo_status)
             with col_rm:
-                if st.button("🗑️ Remover", key=f"rm_{item_id}", use_container_width=True):
+                if st.button("🗑️ Remover", key=f"rm_{item_id}", width="stretch"):
                     _remover_item(ped_id, item_id, desc_c)
         else:
             cols[3].caption(str(qtd))
@@ -953,7 +954,7 @@ def _tela_historico():
     df["Antes"]     = df["Antes"].fillna("—")
     df["Depois"]    = df["Depois"].fillna("—")
     df["Observacao"] = df["Observacao"].fillna("—")
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     st.caption(f"{len(histórico)} registro(s) de alteração")
 
     # Exportar histórico

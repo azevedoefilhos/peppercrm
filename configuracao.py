@@ -7,6 +7,7 @@ from database import conectar, query
 
 def _ir(p):
     st.session_state["pagina"] = p
+    st.session_state["_scroll_topo"] = True
     st.rerun()
 
 
@@ -38,7 +39,7 @@ def tela_configuracao():
     cols = st.columns(3)
     for col,(k,v) in zip(cols, ABAS_CFG.items()):
         ativa = st.session_state["cfg_aba"] == k
-        if col.button(v, key=f"cfgnav_{k}", use_container_width=True,
+        if col.button(v, key=f"cfgnav_{k}", width="stretch",
                       type="primary" if ativa else "secondary"):
             st.session_state["cfg_aba"] = k; st.rerun()
     st.divider()
@@ -249,7 +250,7 @@ def _tela_vendedores():
         df = pd.DataFrame(vendedores,
                           columns=["ID", "Nome", "Fone", "E-mail", "CPF", "Ativo"])
         df["Ativo"] = df["Ativo"].map({1: "✅", 0: "❌"})
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)
 
         # Editar vendedor
         st.divider()

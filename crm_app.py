@@ -17,40 +17,70 @@ def _nome_empresa():
 
 st.set_page_config(page_title="PepperCRM", layout="wide")
 
-# Scroll para topo a cada rerun
-st.components.v1.html("<script>window.parent.document.querySelector('section.main').scrollTo(0,0);</script>", height=0)
-
 if "pagina"         not in st.session_state: st.session_state["pagina"]         = "home"
 if "id_selecionado" not in st.session_state: st.session_state["id_selecionado"] = None
 # estado do módulo de pesquisa
 if "pq_modo"        not in st.session_state: st.session_state["pq_modo"]        = "lista"
 
 
+# Mapa de reset: ao navegar para uma página, estas chaves de session_state
+# são resetadas para o valor padrão — garante que a aba principal seja exibida.
+# Chaves intencionalmente definidas pelo caller (ex: ct_aba, pq_modo) NÃO entram aqui.
+_RESET_ABAS = {
+    "fornecedores":        {"forn_aba": "lista"},
+    "produtos":            {"prod_aba": "lista"},
+    "tabelas_preco":       {"tab_preco_aba": "lista"},
+    "clientes":            {"cli_aba": "lista"},
+    "comissoes":           {"com_aba": "cfg"},
+    "relatorios":          {"rel_aba": "cli"},
+    "visitas":             {"vis_aba": "prom", "vis_modo": "lista"},
+    "mix_analise":         {"mix_aba": "pdv"},
+    "metas":               {"mt_nav_aba": "painel", "def_aba": "fat"},
+    "analise_competitiva": {"ana_aba": "mc"},
+    "concorrentes":        {"cc_aba": "marcas"},
+    "ver_pedidos":         {"vp_modo": "lista"},
+    "configuracao":        {"cfg_aba": "sis"},
+    "despesas":            {"desp_aba": "nova"},
+    "catalogo":            {"cat_aba": "catalogo"},
+}
+
+
 def ir(p):
+    """Navega para a página p, reseta abas do destino e sinaliza scroll ao topo."""
     st.session_state["pagina"] = p
     st.session_state["_scroll_topo"] = True
+    # Reset das abas do módulo destino (não interfere com chaves do caller)
+    for chave, default in _RESET_ABAS.get(p, {}).items():
+        st.session_state[chave] = default
     st.rerun()
 
 
 def _scroll_topo():
-    """Rola para o topo — injeta CSS anchor e JS via markdown."""
+    """Rola para o topo — âncora HTML + scrollIntoView (funciona no mobile)."""
     if st.session_state.pop("_scroll_topo", False):
         import streamlit.components.v1 as components
-        # Tenta múltiplos seletores para cobrir versões diferentes do Streamlit
+        # Injeta âncora invisível no topo do iframe e usa scrollIntoView,
+        # que respeita o viewport do mobile sem depender de window.parent.
         components.html("""
+<div id="__pepper_topo" style="position:absolute;top:0;left:0;height:1px;width:1px;"></div>
 <script>
 (function(){
-    var sels = [
-        'section[data-testid="stMain"]',
-        'section.main',
-        '.main .block-container',
-        'section[data-testid="stAppViewContainer"] > div:first-child'
-    ];
-    for (var i=0; i<sels.length; i++){
-        var el = window.parent.document.querySelector(sels[i]);
-        if (el){ el.scrollTop = 0; break; }
-    }
-    window.parent.scrollTo(0,0);
+    // Tenta scrollIntoView no próprio iframe (funciona no mobile/Safari)
+    var anchor = document.getElementById('__pepper_topo');
+    if (anchor) { anchor.scrollIntoView({behavior:'instant',block:'start'}); }
+    // Fallback: tenta também via window.parent para desktop
+    try {
+        var sels = [
+            'section[data-testid="stMain"]',
+            'section.main',
+            '.main .block-container'
+        ];
+        for (var i=0; i<sels.length; i++){
+            var el = window.parent.document.querySelector(sels[i]);
+            if (el){ el.scrollTop = 0; break; }
+        }
+        window.parent.scrollTo(0,0);
+    } catch(e){}
 })();
 </script>
 """, height=0, scrolling=False)
@@ -256,7 +286,7 @@ def _dashboard():
                 col_a.caption(assunto[:55])
                 col_d.caption(f"⏰ {dias}d")
                 if col_btn.button("Abrir", key=f"dfv_{cid_fw}",
-                                  use_container_width=True, type="primary"):
+                                  width="stretch", type="primary"):
                     st.session_state["ct_aba"]           = "lista"
                     st.session_state["ct_topico_aberto"] = cid_fw
                     ir("contatos")
@@ -270,7 +300,7 @@ def _dashboard():
                 col_e.write(f"**{entidade}**")
                 col_a.caption(assunto[:55])
                 if col_btn.button("Abrir", key=f"dfh_{cid_fh}",
-                                  use_container_width=True):
+                                  width="stretch"):
                     st.session_state["ct_aba"]           = "lista"
                     st.session_state["ct_topico_aberto"] = cid_fh
                     ir("contatos")
@@ -286,12 +316,12 @@ def _dashboard():
     with col1:
         st.metric("Contatos este mês",    qtd_contatos_mes,
                   help="Registros em Contatos & Negociações no mês atual")
-        if st.button("Ver contatos", key="da_ct", use_container_width=True):
+        if st.button("Ver contatos", key="da_ct", width="stretch"):
             ir("contatos")
     with col2:
         st.metric("Negociações abertas",  qtd_negoc_abertas,
                   help="Tópicos do tipo Negociação ainda não concluídos")
-        if st.button("Ver negociações", key="da_neg", use_container_width=True):
+        if st.button("Ver negociações", key="da_neg", width="stretch"):
             st.session_state["ct_aba"]  = "lista"
             st.session_state["fl_tipo"] = "Negociação"
             ir("contatos")
@@ -302,12 +332,12 @@ def _dashboard():
     with col4:
         st.metric("Visitas este mês",     qtd_visitas_mes,
                   help="Visitas registradas no módulo de Visitas no mês atual")
-        if st.button("Ver visitas", key="da_vis", use_container_width=True):
+        if st.button("Ver visitas", key="da_vis", width="stretch"):
             ir("visitas")
     with col5:
         st.metric("Pesquisas de preço",   qtd_pesquisas_mes,
                   help="Pesquisas realizadas em PDVs no mês atual")
-        if st.button("Ver pesquisas", key="da_pq", use_container_width=True):
+        if st.button("Ver pesquisas", key="da_pq", width="stretch"):
             ir("pesquisa")
 
     # ─── Mini barra de progresso: clientes contatados ────────────────────
@@ -328,19 +358,19 @@ def _dashboard():
     with col1:
         st.metric("Pedidos em aberto", qtd_abertos)
         if qtd_abertos:
-            if st.button("Ver pedidos", key="d_ab", use_container_width=True):
+            if st.button("Ver pedidos", key="d_ab", width="stretch"):
                 ir("ver_pedidos")
     with col2:
         st.metric("Pedidos este mês",  qtd_mes)
         st.caption(brl(total_mes))
     with col3:
         st.metric("Comissão do mês",   brl(comissao_mes))
-        if st.button("Detalhar", key="d_com", use_container_width=True):
+        if st.button("Detalhar", key="d_com", width="stretch"):
             ir("comissoes")
     with col4:
         st.metric("Entregas em 7 dias", qtd_entregas)
         if qtd_entregas:
-            if st.button("Ver", key="d_ent", use_container_width=True):
+            if st.button("Ver", key="d_ent", width="stretch"):
                 ir("ver_pedidos")
 
     # ═════════════════════════════════════════════════════════════════════
@@ -353,22 +383,22 @@ def _dashboard():
         st.metric("Follow-ups vencidos", total_venc,
                   delta=f"-{total_venc}" if total_venc else None,
                   delta_color="inverse")
-        if st.button("📞 Ver e agir", key="d_fu", use_container_width=True):
+        if st.button("📞 Ver e agir", key="d_fu", width="stretch"):
             ir("contatos")
     with col2:
         st.metric("Follow-ups hoje",     total_hoje)
         if total_hoje:
-            if st.button("📌 Ver hoje", key="d_fh", use_container_width=True):
+            if st.button("📌 Ver hoje", key="d_fh", width="stretch"):
                 ir("contatos")
     with col3:
         st.metric("Sem pedido (30d)",    qtd_sem_pedido)
         if qtd_sem_pedido:
-            if st.button("Ver oportunidades", key="d_sp", use_container_width=True):
+            if st.button("Ver oportunidades", key="d_sp", width="stretch"):
                 ir("relatorios")
     with col4:
         st.metric("Rupturas (30d)",      qtd_rupturas)
         if qtd_rupturas:
-            if st.button("Ver pesquisas", key="d_ru", use_container_width=True):
+            if st.button("Ver pesquisas", key="d_ru", width="stretch"):
                 ir("pesquisa")
 
     # ─── Prospectos cadastrados ───────────────────────────────────────────
@@ -391,7 +421,7 @@ def _dashboard():
                     st.info(msg_a)
             with col_btn:
                 if link_a and st.button("Ver", key=f"alerta_{key_a}",
-                                        use_container_width=True):
+                                        width="stretch"):
                     if link_a == "contatos":
                         st.session_state["ct_aba"] = "lista"
                     ir(link_a)
@@ -404,7 +434,7 @@ def _dashboard():
         if det_ped:
             st.dataframe(pd.DataFrame(det_ped,
                 columns=["#","Data","Cliente","Fornecedor","Status"]),
-                use_container_width=True, hide_index=True)
+                width="stretch", hide_index=True)
 
 
 pagina = st.session_state["pagina"]
@@ -450,7 +480,7 @@ def _tela_busca_global():
             col1.write(f"**{nome}**")
             col2.caption(status or "—")
             col3.caption(cidade or "—")
-            if col4.button("Abrir", key=f"bg_cli_{cid}", use_container_width=True):
+            if col4.button("Abrir", key=f"bg_cli_{cid}", width="stretch"):
                 ir("clientes")
 
     # ── Produtos ─────────────────────────────────────────────────────────
@@ -470,7 +500,7 @@ def _tela_busca_global():
             col1.write(f"**{desc}**" + ("" if ativo else " *(inativo)*"))
             col2.caption(cod or "—")
             col3.caption(forn or "—")
-            if col4.button("Abrir", key=f"bg_prod_{pid}", use_container_width=True):
+            if col4.button("Abrir", key=f"bg_prod_{pid}", width="stretch"):
                 ir("produtos")
 
     # ── Contatos & Negociações ────────────────────────────────────────────
@@ -494,7 +524,7 @@ def _tela_busca_global():
             col1.write(f"**{assunto[:55]}**")
             col2.caption(entidade[:25])
             col3.caption(f"{tipo} · {status}")
-            if col4.button("Abrir", key=f"bg_ct_{cid}", use_container_width=True):
+            if col4.button("Abrir", key=f"bg_ct_{cid}", width="stretch"):
                 st.session_state["ct_aba"]           = "lista"
                 st.session_state["ct_topico_aberto"] = cid
                 ir("contatos")
@@ -520,7 +550,7 @@ def _tela_busca_global():
             col2.caption(forn[:20])
             col3.caption(data)
             col4.caption(status)
-            if col5.button("Abrir", key=f"bg_ped_{pid}", use_container_width=True):
+            if col5.button("Abrir", key=f"bg_ped_{pid}", width="stretch"):
                 ir("ver_pedidos")
 
     if not encontrou:
@@ -532,33 +562,35 @@ if pagina == "home":
     with col_t: st.title(f"{_nome_empresa()}")
     with col_b:
         st.write("")
-        if st.button("🔍 Busca", use_container_width=True): ir("busca_global")
+        if st.button("🔍 Busca", width="stretch"): ir("busca_global")
     with col_c:
         st.write("")
-        if st.button("⚙️ Config.", use_container_width=True): ir("configuracao")
+        if st.button("⚙️ Config.", width="stretch"): ir("configuracao")
     _dashboard()
     st.divider()
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Cadastros")
-        if st.button("🏭 Fornecedores",     use_container_width=True): ir("fornecedores")
-        if st.button("📦 Produtos",         use_container_width=True): ir("produtos")
-        if st.button("💲 Tabelas de Preço", use_container_width=True): ir("tabelas_preco")
-        if st.button("👥 Clientes",         use_container_width=True): ir("clientes")
+        if st.button("🏭 Fornecedores",     width="stretch"): ir("fornecedores")
+        if st.button("📦 Produtos",         width="stretch"): ir("produtos")
+        if st.button("💲 Tabelas de Preço", width="stretch"): ir("tabelas_preco")
+        if st.button("👥 Clientes",         width="stretch"): ir("clientes")
+        if st.button("📒 Catálogo",         width="stretch"): ir("catalogo")
     with col2:
         st.subheader("Comercial")
-        if st.button("🧾 Novo Pedido",    use_container_width=True): ir("pedido")
-        if st.button("📊 Ver Pedidos",    use_container_width=True): ir("ver_pedidos")
-        if st.button("📈 Relatórios",     use_container_width=True): ir("relatorios")
-        if st.button("💰 Comissões",      use_container_width=True): ir("comissoes")
-        if st.button("📋 Visitas",        use_container_width=True): ir("visitas")
-        if st.button("🎯 Mix / Oferta",   use_container_width=True): ir("mix_analise")
-        if st.button("🔍 Pesquisa PDV",   use_container_width=True):
+        if st.button("🧾 Novo Pedido",    width="stretch"): ir("pedido")
+        if st.button("📊 Ver Pedidos",    width="stretch"): ir("ver_pedidos")
+        if st.button("📈 Relatórios",     width="stretch"): ir("relatorios")
+        if st.button("💰 Comissões",      width="stretch"): ir("comissoes")
+        if st.button("📋 Visitas",        width="stretch"): ir("visitas")
+        if st.button("🎯 Mix / Oferta",   width="stretch"): ir("mix_analise")
+        if st.button("🔍 Pesquisa PDV",   width="stretch"):
             st.session_state["pq_modo"] = "lista"; ir("pesquisa")
-        if st.button("🏷️ Concorrentes",   use_container_width=True): ir("concorrentes")
-        if st.button("📊 Inteligência Competitiva", use_container_width=True): ir("analise_competitiva")
-        if st.button("📞 Contatos & Negociações",   use_container_width=True): ir("contatos")
-        if st.button("🎯 Metas",                          use_container_width=True): ir("metas")
+        if st.button("🏷️ Concorrentes",   width="stretch"): ir("concorrentes")
+        if st.button("📊 Inteligência Competitiva", width="stretch"): ir("analise_competitiva")
+        if st.button("📞 Contatos & Negociações",   width="stretch"): ir("contatos")
+        if st.button("🎯 Metas",                    width="stretch"): ir("metas")
+        if st.button("💸 Despesas",                 width="stretch"): ir("despesas")
 
 
 elif pagina == "configuracao":  from configuracao import tela_configuracao; tela_configuracao()
@@ -577,4 +609,6 @@ elif pagina == "concorrentes":        from concorrentes import tela_concorrentes
 elif pagina == "analise_competitiva": from analise_competitiva import tela_analise_competitiva; tela_analise_competitiva()
 elif pagina == "contatos":            from contatos import tela_contatos; tela_contatos()
 elif pagina == "metas":               from metas import tela_metas; tela_metas()
+elif pagina == "catalogo":            from catalogo import tela_catalogo; tela_catalogo()
+elif pagina == "despesas":            from despesas import tela_despesas; tela_despesas()
 elif pagina == "busca_global":        _tela_busca_global()
