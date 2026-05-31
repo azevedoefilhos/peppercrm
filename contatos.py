@@ -532,15 +532,17 @@ def _lista_topicos():
                     f"Clique ✅ para confirmar ou recarregue a página para cancelar.")
 
             if aberto:
-                _painel_topico(cid, status, prioridade, tipo)
+                _painel_topico(cid, status, prioridade, tipo,
+                               forn_presel=fil_forn[0] if fil_forn[0] else None)
 
 
 # ═══════════════════════════════════════════════════════
 # 2. PAINEL DO TÓPICO — linha do tempo + nova interação
 # ═══════════════════════════════════════════════════════
-def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual):
+def _painel_topico(cid, status_atual, prioridade_atual, tipo_atual, forn_presel=None):
     """Delega para o painel completo que já existe mais abaixo no módulo."""
-    _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual)
+    _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual,
+                            forn_presel=forn_presel)
 
 
 def _gerar_pdf_topico(cid, fornecedor_id=None):
@@ -1134,7 +1136,7 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
     return buf.read()
 
 
-def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
+def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual, forn_presel=None):
     """Painel completo com separação por fornecedor."""
     st.divider()
 
@@ -1174,9 +1176,16 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual):
     col_fsel, col_pdf = st.columns([3, 2])
     with col_fsel:
         if len(_forn_opts) > 1:
+            # Pré-seleciona o fornecedor do filtro da lista, se disponível
+            _presel_idx = 0
+            if forn_presel:
+                _ids_opts = [ft[0] for ft in _forn_opts]
+                if forn_presel in _ids_opts:
+                    _presel_idx = _ids_opts.index(forn_presel)
             _fsel_idx = st.selectbox(
                 "📋 Ver interações de:",
                 range(len(_forn_opts)),
+                index=_presel_idx,
                 format_func=lambda i: _forn_opts[i][1],
                 key=f"forn_sel_painel_{cid}")
         else:
@@ -1948,7 +1957,7 @@ def _por_entidade():
                 _painel_topico(cid, status,
                                query("SELECT prioridade FROM contato_registro WHERE contato_id=?",
                                      (cid,))[0][0], tipo,
-                               fornecedor_id=_forn_int)
+                               forn_presel=_forn_int)
 
 
 # ═══════════════════════════════════════════════════════

@@ -58,30 +58,30 @@ def _excel_download(df: pd.DataFrame, nome: str):
 
 def _filtro_periodo(col_data, label="Período"):
     """Retorna (data_ini, data_fim) como strings AAAA-MM-DD."""
+    from datetime import date as _date
     opcoes = ["Mês atual", "Mês anterior", "Trimestre atual",
               "Ano atual", "Personalizado"]
     op = st.selectbox(label, opcoes, key=f"periodo_{label}")
 
+    _hoje = _date.today()
+    _hoje_str = f"'{_hoje.isoformat()}'"
+
     if op == "Mês atual":
-        return (
-            "date('now','start of month')",
-            "'2026-05-18'",
-        )
+        _ini = _date(_hoje.year, _hoje.month, 1)
+        return (f"'{_ini.isoformat()}'", _hoje_str)
     elif op == "Mês anterior":
-        return (
-            "date('now','start of month','-1 month')",
-            "date('now','start of month','-1 day')",
-        )
+        _ini_mes = _date(_hoje.year, _hoje.month, 1)
+        from datetime import timedelta as _td
+        _fim_ant = _ini_mes - _td(days=1)
+        _ini_ant = _date(_fim_ant.year, _fim_ant.month, 1)
+        return (f"'{_ini_ant.isoformat()}'", f"'{_fim_ant.isoformat()}'")
     elif op == "Trimestre atual":
-        return (
-            "date('now','start of month','-2 months')",
-            "'2026-05-18'",
-        )
+        from datetime import timedelta as _td
+        _ini = (_hoje - _td(days=90)).replace(day=1)
+        return (f"'{_ini.isoformat()}'", _hoje_str)
     elif op == "Ano atual":
-        return (
-            "'2026-01-01'",
-            "'2026-05-18'",
-        )
+        _ini = _date(_hoje.year, 1, 1)
+        return (f"'{_ini.isoformat()}'", _hoje_str)
     else:
         col1, col2 = st.columns(2)
         with col1:

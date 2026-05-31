@@ -169,45 +169,72 @@ def _painel_unificado():
                     c4.metric("Pedidos", f"{pedidos}" + (f"/{meta_p}" if meta_p else ""))
                     st.progress(pct/100)
 
-        # ── Metas de mix ──────────────────────────────────────────────────
+        # ── Metas de mix — realizado em batch (sem N+1) ──────────────────
         if metas_mix:
             st.caption("🎯 **Mix de produtos**")
+
+            ids_produto   = tuple(r[2] for r in metas_mix if r[1]=="produto"   and r[2])
+            ids_categoria = tuple(r[2] for r in metas_mix if r[1]=="categoria" and r[2])
+            ids_linha     = tuple(r[2] for r in metas_mix if r[1]=="linha"     and r[2])
+
+            @st.cache_data(ttl=60, show_spinner=False)
+            def _real_mix_batch(fid_, ano_, mes_, ids_prod, ids_cat, ids_lin):
+                ano_s = str(ano_)
+                mes_s = f"{mes_:02d}"
+                result = {}
+                if ids_prod:
+                    ph = ",".join(["?"]*len(ids_prod))
+                    rows = query(f"""SELECT pi.produto_id,
+                            COUNT(DISTINCT p.cliente_id),
+                            COALESCE(SUM(pi.quantidade),0)
+                        FROM pedido p JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
+                        WHERE pi.produto_id IN ({ph})
+                          AND EXTRACT(YEAR  FROM p.data_pedido)=?
+                          AND EXTRACT(MONTH FROM p.data_pedido)=?
+                          AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
+                        GROUP BY pi.produto_id""",
+                        tuple(ids_prod) + (ano_s, mes_s))
+                    for r in (rows or []):
+                        result[("produto", r[0])] = (int(r[1] or 0), int(r[2] or 0))
+                if ids_cat:
+                    ph = ",".join(["?"]*len(ids_cat))
+                    rows = query(f"""SELECT pr.categoria_id,
+                            COUNT(DISTINCT p.cliente_id),
+                            COALESCE(SUM(pi.quantidade),0)
+                        FROM pedido p JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
+                        JOIN produto pr ON pi.produto_id=pr.produto_id
+                        WHERE pr.categoria_id IN ({ph}) AND p.fornecedor_id=?
+                          AND EXTRACT(YEAR  FROM p.data_pedido)=?
+                          AND EXTRACT(MONTH FROM p.data_pedido)=?
+                          AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
+                        GROUP BY pr.categoria_id""",
+                        tuple(ids_cat) + (fid_, ano_s, mes_s))
+                    for r in (rows or []):
+                        result[("categoria", r[0])] = (int(r[1] or 0), int(r[2] or 0))
+                if ids_lin:
+                    ph = ",".join(["?"]*len(ids_lin))
+                    rows = query(f"""SELECT pr.linha_id,
+                            COUNT(DISTINCT p.cliente_id),
+                            COALESCE(SUM(pi.quantidade),0)
+                        FROM pedido p JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
+                        JOIN produto pr ON pi.produto_id=pr.produto_id
+                        WHERE pr.linha_id IN ({ph}) AND p.fornecedor_id=?
+                          AND EXTRACT(YEAR  FROM p.data_pedido)=?
+                          AND EXTRACT(MONTH FROM p.data_pedido)=?
+                          AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
+                        GROUP BY pr.linha_id""",
+                        tuple(ids_lin) + (fid_, ano_s, mes_s))
+                    for r in (rows or []):
+                        result[("linha", r[0])] = (int(r[1] or 0), int(r[2] or 0))
+                return result
+
+            realizados = _real_mix_batch(
+                fid, ano_sel, mes_sel,
+                ids_produto, ids_categoria, ids_linha)
+
             for row in metas_mix:
                 mmid, tipo, ref_id, desc, meta_qtd, meta_cli, obs = row
-                real_cli=0; real_qtd=0
-
-                if tipo=="produto" and ref_id:
-                    r = query("""SELECT COUNT(DISTINCT p.cliente_id),
-                                    COALESCE(SUM(pi.quantidade),0)
-                                 FROM pedido p JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
-                                 WHERE pi.produto_id=?
-                                   AND EXTRACT(YEAR FROM p.data_pedido)=?
-                                   AND EXTRACT(MONTH FROM p.data_pedido)=?
-                                   AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')""",
-                              (ref_id,str(ano_sel),f"{mes_sel:02d}"))
-                    if r: real_cli,real_qtd=r[0][0],int(r[0][1] or 0)
-                elif tipo=="categoria" and ref_id:
-                    r = query("""SELECT COUNT(DISTINCT p.cliente_id),
-                                    COALESCE(SUM(pi.quantidade),0)
-                                 FROM pedido p JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
-                                 JOIN produto pr ON pi.produto_id=pr.produto_id
-                                 WHERE pr.categoria_id=? AND p.fornecedor_id=?
-                                   AND EXTRACT(YEAR FROM p.data_pedido)=?
-                                   AND EXTRACT(MONTH FROM p.data_pedido)=?
-                                   AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')""",
-                              (ref_id,fid,str(ano_sel),f"{mes_sel:02d}"))
-                    if r: real_cli,real_qtd=r[0][0],int(r[0][1] or 0)
-                elif tipo=="linha" and ref_id:
-                    r = query("""SELECT COUNT(DISTINCT p.cliente_id),
-                                    COALESCE(SUM(pi.quantidade),0)
-                                 FROM pedido p JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
-                                 JOIN produto pr ON pi.produto_id=pr.produto_id
-                                 WHERE pr.linha_id=? AND p.fornecedor_id=?
-                                   AND EXTRACT(YEAR FROM p.data_pedido)=?
-                                   AND EXTRACT(MONTH FROM p.data_pedido)=?
-                                   AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')""",
-                              (ref_id,fid,str(ano_sel),f"{mes_sel:02d}"))
-                    if r: real_cli,real_qtd=r[0][0],int(r[0][1] or 0)
+                real_cli, real_qtd = realizados.get((tipo, ref_id), (0, 0))
 
                 tipo_ico = {"produto":"📦","categoria":"🏷️","linha":"📋","livre":"🎯"}.get(tipo,"🎯")
                 with st.container(border=True):
