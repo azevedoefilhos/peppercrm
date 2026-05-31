@@ -2144,7 +2144,7 @@ def _form_novo_cliente():
         with col1:
             fantasia = st.text_input("Nome fantasia *")
             razao    = st.text_input("Razao social")
-            perfil   = st.selectbox("Perfil / tipo", ["Empório","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolao","Hortifruti","Acougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associacao","Outro"])
+            perfil   = st.selectbox("Perfil / tipo", ["Empório","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolão","Hortifruti","Açougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associação","Outro"])
             fone     = st.text_input("Fone / WhatsApp", placeholder="Ex: 13988776655")
             cnpj     = st.text_input("CNPJ")
             site     = st.text_input("Site")
@@ -2192,7 +2192,7 @@ def _form_editar_cliente(cli_id):
     assoc_opts = [(None, "— Nenhuma")] + [(a[0], a[1]) for a in assocs]
     assoc_ids  = [a[0] for a in assoc_opts]
     idx_assoc  = assoc_ids.index(c["associacao_id"]) if c["associacao_id"] in assoc_ids else 0
-    perfis_e   = ["Empório","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolao","Hortifruti","Acougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associacao","Outro"]
+    perfis_e   = ["Empório","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolão","Hortifruti","Açougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associação","Outro"]
     perfil_at  = c["perfil"] if c["perfil"] and c["perfil"] in perfis_e else perfis_e[0]
 
     with st.form(f"edit_cli_{cli_id}"):
@@ -2610,9 +2610,9 @@ def _form_novo_pdv(cli_id):
             "Mini Mercado",
             "Mercearia",
             "Empório",
-            "Sacolao",
+            "Sacolão",
             "Hortifruti",
-            "Acougue",
+            "Açougue",
             "Casa de Carnes",
             "Peixaria",
             "Padaria",
@@ -2622,7 +2622,7 @@ def _form_novo_pdv(cli_id):
             "Restaurante",
             "Lanchonete",
             "Bar / Boteco",
-            "Clube / Associacao",
+            "Clube / Associação",
             "Outro"
         ]
     with st.form(f"novo_pdv_{cli_id}", clear_on_submit=True):
@@ -2759,9 +2759,9 @@ def _form_editar_pdv(pdv_id):
             "Mini Mercado",
             "Mercearia",
             "Empório",
-            "Sacolao",
+            "Sacolão",
             "Hortifruti",
-            "Acougue",
+            "Açougue",
             "Casa de Carnes",
             "Peixaria",
             "Padaria",
@@ -2771,7 +2771,7 @@ def _form_editar_pdv(pdv_id):
             "Restaurante",
             "Lanchonete",
             "Bar / Boteco",
-            "Clube / Associacao",
+            "Clube / Associação",
             "Outro"
         ]
     conn = conectar()
