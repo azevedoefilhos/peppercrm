@@ -5,6 +5,7 @@ import streamlit as st
 import pandas as pd
 import io
 from database import conectar, query, get_percentual_comissao
+from resultado_operacional import tela_resultado_operacional
 
 
 def _ir(p):
@@ -41,9 +42,9 @@ def tela_comissoes():
     if st.button("⬅ Voltar"):
         _ir("home")
 
-    ABAS_COM = {"cfg":"Configurar %","ped":"Comissões","pag":"Pagamentos","rel":"Relatório"}
+    ABAS_COM = {"cfg":"Configurar %","ped":"Comissões","pag":"Pagamentos","rel":"Relatório","res":"📊 Resultado"}
     if "com_aba" not in st.session_state: st.session_state["com_aba"] = "cfg"
-    cols = st.columns(4)
+    cols = st.columns(5)
     for col,(k,v) in zip(cols, ABAS_COM.items()):
         ativa = st.session_state["com_aba"] == k
         if col.button(v, key=f"comnav_{k}", width="stretch",
@@ -55,6 +56,7 @@ def tela_comissoes():
     elif a=="ped":_tela_por_pedido()
     elif a=="pag":_tela_pagamentos()
     elif a=="rel":_tela_relatorio()
+    elif a=="res":tela_resultado_operacional()
 
 
 # ═══════════════════════════════════════════════════════

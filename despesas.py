@@ -6,6 +6,7 @@ import pandas as pd
 import io
 from datetime import date, timedelta
 from database import query, execute_write, conectar, _check_supabase, _pg_connect
+from resultado_operacional import tela_resultado_operacional
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -733,11 +734,12 @@ def tela_despesas():
 
     ABAS = {"nova":"➕ Nova despesa",
             "lista":"📋 Despesas",
-            "relatorio":"📊 Relatório"}
+            "relatorio":"📊 Relatório",
+            "resultado":"💰 Resultado"}
     if "desp_aba" not in st.session_state:
         st.session_state["desp_aba"] = "nova"
 
-    cols = st.columns(3)
+    cols = st.columns(4)
     for col, (k, v) in zip(cols, ABAS.items()):
         ativa = st.session_state["desp_aba"] == k
         if col.button(v, key=f"desp_nav_{k}", width="stretch",
@@ -750,3 +752,4 @@ def tela_despesas():
     if   a == "nova":      _form_nova_despesa()
     elif a == "lista":     _lista_despesas()
     elif a == "relatorio": _relatorio_despesas()
+    elif a == "resultado": tela_resultado_operacional()

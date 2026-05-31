@@ -41,6 +41,7 @@ _RESET_ABAS = {
     "ver_pedidos":         {"vp_modo": "lista"},
     "configuracao":        {"cfg_aba": "sis"},
     "despesas":            {"desp_aba": "nova"},
+    "resultado_operacional": {},
     "catalogo":            {"cat_aba": "catalogo"},
 }
 
@@ -590,6 +591,8 @@ if pagina == "home":
         if st.button("📊 Ver Pedidos",    width="stretch"): ir("ver_pedidos")
         if st.button("📈 Relatórios",     width="stretch"): ir("relatorios")
         if st.button("💰 Comissões",      width="stretch"): ir("comissoes")
+        if st.button("💸 Despesas",       width="stretch"): ir("despesas")
+        if st.button("📊 Resultado Operacional", width="stretch"): ir("resultado_operacional")
         if st.button("📋 Visitas",        width="stretch"): ir("visitas")
         if st.button("🎯 Mix / Oferta",   width="stretch"): ir("mix_analise")
         if st.button("🔍 Pesquisa PDV",   width="stretch"):
@@ -598,7 +601,6 @@ if pagina == "home":
         if st.button("📊 Inteligência Competitiva", width="stretch"): ir("analise_competitiva")
         if st.button("📞 Contatos & Negociações",   width="stretch"): ir("contatos")
         if st.button("🎯 Metas",                    width="stretch"): ir("metas")
-        if st.button("💸 Despesas",                 width="stretch"): ir("despesas")
 
 
 elif pagina == "configuracao":  from configuracao import tela_configuracao; tela_configuracao()
@@ -619,4 +621,9 @@ elif pagina == "contatos":            from contatos import tela_contatos; tela_c
 elif pagina == "metas":               from metas import tela_metas; tela_metas()
 elif pagina == "catalogo":            from catalogo import tela_catalogo; tela_catalogo()
 elif pagina == "despesas":            from despesas import tela_despesas; tela_despesas()
+elif pagina == "resultado_operacional":
+    from resultado_operacional import tela_resultado_operacional
+    st.header("📊 Resultado Operacional")
+    if st.button("⬅ Voltar"): ir("home")
+    tela_resultado_operacional()
 elif pagina == "busca_global":        _tela_busca_global()
