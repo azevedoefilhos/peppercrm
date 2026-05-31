@@ -57,6 +57,8 @@ def _tela_dados_sistema():
     st.subheader("Dados do sistema")
     st.caption("Informações gerais sobre esta instalação do PepperCRM.")
 
+    _criar_tabela_configuracao()
+
     conn = conectar()
     cfg = conn.execute(
         "SELECT * FROM configuracao ORDER BY config_id DESC LIMIT 1"
@@ -342,8 +344,50 @@ def _form_editar_vendedor(vend_id):
 
 def get_nome_empresa():
     """Retorna o nome da empresa configurada, ou 'PepperCRM' como padrão."""
-    rows = query("SELECT empresa_nome FROM configuracao ORDER BY config_id DESC LIMIT 1")
-    return rows[0][0] if rows and rows[0][0] else "PepperCRM"
+    try:
+        _criar_tabela_configuracao()
+        rows = query("SELECT empresa_nome FROM configuracao ORDER BY config_id DESC LIMIT 1")
+        return rows[0][0] if rows and rows[0][0] else "PepperCRM"
+    except Exception:
+        return "PepperCRM"
+
+
+def _criar_tabela_configuracao():
+    """Cria tabela configuracao se não existir — Railway e SQLite."""
+    from database import _check_supabase, execute_write
+    from datetime import date
+    if _check_supabase():
+        execute_write("""
+            CREATE TABLE IF NOT EXISTS configuracao (
+                config_id           SERIAL PRIMARY KEY,
+                modo_operacao       TEXT DEFAULT 'REPRESENTANTE',
+                empresa_nome        TEXT,
+                versao_sistema      TEXT DEFAULT '1.0',
+                data_instalacao     TEXT,
+                anthropic_api_key   TEXT,
+                senha_exclusao      TEXT DEFAULT 'EXCLUIR123'
+            )
+        """)
+    else:
+        execute_write("""
+            CREATE TABLE IF NOT EXISTS configuracao (
+                config_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                modo_operacao       TEXT DEFAULT 'REPRESENTANTE',
+                empresa_nome        TEXT,
+                versao_sistema      TEXT DEFAULT '1.0',
+                data_instalacao     TEXT,
+                anthropic_api_key   TEXT,
+                senha_exclusao      TEXT DEFAULT 'EXCLUIR123'
+            )
+        """)
+    # Insere registro padrão se vazia
+    rows = query("SELECT COUNT(*) FROM configuracao")
+    if rows and rows[0][0] == 0:
+        execute_write(
+            "INSERT INTO configuracao (modo_operacao, empresa_nome, versao_sistema, data_instalacao, senha_exclusao) VALUES (?,?,?,?,?)",
+            ('REPRESENTANTE', 'Azevedo e Filhos Representação Comercial',
+             '1.0', str(date.today()), 'EXCLUIR123')
+        )
 
 
 def get_representante():
