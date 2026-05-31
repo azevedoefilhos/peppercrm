@@ -2144,7 +2144,7 @@ def _form_novo_cliente():
         with col1:
             fantasia = st.text_input("Nome fantasia *")
             razao    = st.text_input("Razao social")
-            perfil   = st.selectbox("Perfil / tipo", ["Emporio","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolao","Hortifruti","Acougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associacao","Outro"])
+            perfil   = st.selectbox("Perfil / tipo", ["Empório","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolao","Hortifruti","Acougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associacao","Outro"])
             fone     = st.text_input("Fone / WhatsApp", placeholder="Ex: 13988776655")
             cnpj     = st.text_input("CNPJ")
             site     = st.text_input("Site")
@@ -2192,7 +2192,7 @@ def _form_editar_cliente(cli_id):
     assoc_opts = [(None, "— Nenhuma")] + [(a[0], a[1]) for a in assocs]
     assoc_ids  = [a[0] for a in assoc_opts]
     idx_assoc  = assoc_ids.index(c["associacao_id"]) if c["associacao_id"] in assoc_ids else 0
-    perfis_e   = ["Emporio","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolao","Hortifruti","Acougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associacao","Outro"]
+    perfis_e   = ["Empório","Supermercado","Hipermercado","Atacadista","Mini Mercado","Mercearia","Sacolao","Hortifruti","Acougue","Casa de Carnes","Peixaria","Padaria","Confeitaria","Delicatessen","Hamburgueria","Restaurante","Lanchonete","Bar / Boteco","Clube / Associacao","Outro"]
     perfil_at  = c["perfil"] if c["perfil"] and c["perfil"] in perfis_e else perfis_e[0]
 
     with st.form(f"edit_cli_{cli_id}"):
@@ -2392,6 +2392,8 @@ def _tela_vinculos_cliente():
 def _tela_pdvs():
     msg_pdv = st.session_state.pop("_massa_pdv_msg", None)
     if msg_pdv: st.success(msg_pdv)
+    msg_edit = st.session_state.pop("_pdv_msg_ok", None)
+    if msg_edit: st.success(msg_edit)
 
     st.subheader("PDVs (lojas)")
     st.caption("Cadastre as lojas de cada cliente. Clientes sem PDV recebem os pedidos diretamente.")
@@ -2607,7 +2609,7 @@ def _form_novo_pdv(cli_id):
             "Atacadista",
             "Mini Mercado",
             "Mercearia",
-            "Emporio",
+            "Empório",
             "Sacolao",
             "Hortifruti",
             "Acougue",
@@ -2756,7 +2758,7 @@ def _form_editar_pdv(pdv_id):
             "Atacadista",
             "Mini Mercado",
             "Mercearia",
-            "Emporio",
+            "Empório",
             "Sacolao",
             "Hortifruti",
             "Acougue",
@@ -2853,11 +2855,9 @@ def _form_editar_pdv(pdv_id):
               obs or None, status_pdv_e,
               1 if status_pdv_e=="Ativo" else 0, pdv_id))
         conn.commit(); conn.close()
-        st.session_state[f"pdv_salvo_{pdv_id}"] = True
+        st.session_state["_pdv_msg_ok"] = f"✅ PDV **{nome_loja}** atualizado com sucesso!"
+        st.session_state["_scroll_topo"] = True
         st.rerun()
-
-    if st.session_state.pop(f"pdv_salvo_{pdv_id}", False):
-        st.success(f"PDV atualizado com sucesso!")
 
 
 # ─────────────────────────────────────────────────────
@@ -3259,7 +3259,7 @@ def _importar_clientes_excel():
     _df_tpl_cli = pd.DataFrame([{
         "Nome Fantasia": "Emporio Exemplo",
         "Razao Social":  "Emporio Exemplo Comercio Ltda",
-        "Perfil":        "Emporio",
+        "Perfil":        "Empório",
         "Fone":          "13988776655",
         "CNPJ":          "",
         "Site":          "",
@@ -3611,7 +3611,7 @@ def _tela_sugestao_setores_ia():
             "cliente_nome":        "Emporio Exemplo",
             "numero_loja":         "",
             "nome_loja":           "Loja Gonzaga",
-            "tipo_pdv":            "Emporio",
+            "tipo_pdv":            "Empório",
             "setor":               "",
             "endereco":            "Av. Ana Costa 500",
             "bairro":              "Gonzaga",
