@@ -28,114 +28,108 @@ resultado_operacional.py
 - query() também traduz automaticamente
 - NUNCA usar julianday() — calcular datas em Python e passar como parâmetro
 - NUNCA usar f-string com {where_sql} dentro de query() — o tradutor pg pode corromper
-- use_container_width=True DEPRECIADO — usar width="stretch" em todos os widgets
+- width="stretch" em todos os widgets (use_container_width DEPRECIADO e removido)
 - Exportar campos vazios como '' (string vazia), nunca '—'
 - Importadores: applymap converte '—','–','-','--' para None antes de gravar
 - comissao.ativo é INTEGER no Railway — usar com.ativo = 1, NUNCA com.ativo = TRUE
 - Queries com ROUND() + GROUP BY no PostgreSQL: colunas fora de agregação devem
   estar no GROUP BY ou usar MAX()/SUM() — PostgreSQL é mais estrito que SQLite
-- Módulo resultado_operacional.py: queries bifurcadas com _q(sql_sqlite, sql_pg, params)
-  pois strftime() do SQLite não é traduzido corretamente pelo tradutor quando dentro
-  de COALESCE() ou EXTRACT()
+- resultado_operacional.py: queries bifurcadas com _q(sql_sqlite, sql_pg, params)
+  pois strftime() do SQLite não é traduzido corretamente dentro de COALESCE()
+- NUNCA mexer no crm_app.py sem testar localmente primeiro — arquivo crítico
+- Streamlit local: versão 1.55.0 — Railway fixado em 1.55.0 no requirements.txt
 
 ## Ferramentas de trabalho
 - atualizar.ps1: copia arquivos .py atualizados, faz git commit e push para Railway
   - Coloque arquivos .py na mesma pasta do .ps1 e execute com botão direito → PowerShell
-  - Não reinicia o app local — use IniciarPepperCRM.vbs para isso
-  - Se reportar "Nada para commitar", o arquivo em disco é idêntico ao do git —
-    confirme que o download foi copiado corretamente antes de rodar
+  - Se reportar "Nada para commitar", confirme que o download foi copiado corretamente
 - IniciarPepperCRM.vbs: abre o app local (localhost:8501)
 - Para ver logs/erros: abrir PyCharm terminal e rodar `streamlit run crm_app.py`
 - Reiniciar Streamlit obrigatório após substituir arquivos: Ctrl+C → streamlit run crm_app.py
+- Sequences do PostgreSQL: rodar corrigir_sequence.py se aparecer UniqueViolation
 
 ## Estrutura de navegação
 - Módulos com _ir() padronizado com _scroll_topo = True em todos os módulos
 - _RESET_ABAS em crm_app.py: ao navegar, abas do módulo destino resetam automaticamente
-- Catálogo e Despesas adicionados ao menu principal
-- resultado_operacional adicionado ao menu principal entre Despesas e Visitas
-
-## Export/Import — padrão estabelecido
-- Export e template usam MESMOS nomes amigáveis (ex: "Nome Fantasia", não "nome_fantasia")
-- Importador normaliza: str.lower().str.replace(r'\s+','_') → "Nome Fantasia" vira "nome_fantasia"
-- Export de clientes: ID, Nome Fantasia, Razao Social, Perfil, Fone, CNPJ, Site, Instagram,
-  Endereco, Bairro, Cidade, Estado, Associacao, Status, Observacao (sem PDVs)
-- Export de PDVs: ID, Cliente, Nr Loja, Nome Loja, Tipo PDV, Setor, Endereco, Bairro,
-  Cidade, Estado, CNPJ, Gerente, Fone Gerente, Horario Recebimento, Status, Observacao,
-  Latitude, Longitude
-- Importador de clientes: busca por ID primeiro (se válido no banco), fallback por nome
-- Importador de PDVs: busca por ID+cliente primeiro, fallback por cliente+nome_loja
-- Templates ficam na própria aba de importação (não numa aba separada)
-- row.get("associacao") — não mais "associacao_nome"
-- row.get("cliente") — não mais "cliente_nome"
-- row.get("nr_loja") — não mais "numero_loja"
+- Menu no dashboard: Cadastros (col1) + Comercial (col2) — ANTES do dashboard
+- Dashboard fica DEPOIS do menu para não bloquear navegação durante carregamento
 
 ## Tipos de PDV e perfil de cliente — lista padronizada (com acentos corretos)
 Empório, Supermercado, Hipermercado, Atacadista, Mini Mercado, Mercearia,
 Sacolão, Hortifruti, Açougue, Casa de Carnes, Peixaria, Padaria, Confeitaria,
 Delicatessen, Hamburgueria, Restaurante, Lanchonete, Bar / Boteco,
 Clube / Associação, Outro
-- Banco Railway já corrigido (scripts corrigir_emporio.py e corrigir_acentos_pdv.py rodados)
+- Banco Railway já corrigido (corrigir_emporio.py e corrigir_acentos_pdv.py rodados)
+
+## Export/Import — padrão estabelecido
+- Export e template usam MESMOS nomes amigáveis (ex: "Nome Fantasia", não "nome_fantasia")
+- Importador normaliza: str.lower().str.replace(r'\s+','_')
+- row.get("associacao"), row.get("cliente"), row.get("nr_loja")
+- Templates ficam na própria aba de importação
 
 ## Ver Pedidos — melhorias implementadas (30/05/2026)
-- Data de entrega prevista e data de entrega efetiva separadas (campos date_input)
-- Data efetiva retroativa: max_value=hoje, pode informar data passada
-- Prazo de pagamento herdado automaticamente da tabela de preço vinculada ao pedido
-- Vencimento do boleto calculado automaticamente (extrai dias do prazo, soma à entrega)
-- Ao confirmar status ENTREGUE: campo de data efetiva + checkbox de prorrogação de comissão
+- Data de entrega prevista e efetiva separadas
+- Prazo de pagamento herdado da tabela de preço
+- Vencimento do boleto calculado automaticamente
 - Prorrogação de comissão: salva data_pagamento_original, nova data e motivo
-- Migração necessária: migrar_comissao_prorrogacao.py (já rodado no Railway em 31/05/2026)
 
-## Banco — colunas adicionadas
-- comissao_pagamento.data_pagamento_original TEXT (migrado em 31/05/2026)
-- comissao_pagamento.motivo_prorrogacao TEXT (migrado em 31/05/2026)
+## Banco — colunas e migrações realizadas
+- comissao_pagamento.data_pagamento_original TEXT (migrado 31/05/2026)
+- comissao_pagamento.motivo_prorrogacao TEXT (migrado 31/05/2026)
+- corrigir_sequence.py: corrige sequences desincronizadas (UniqueViolation)
 
-## Resultado Operacional (novo módulo — 31/05/2026)
+## Resultado Operacional (implementado 31/05/2026)
 - Arquivo: resultado_operacional.py
-- Acesso: menu principal ("📊 Resultado Operacional") + aba em Comissões + aba em Despesas
-- Visão "previsto": comissões de pedidos ENTREGUE com pagto PENDENTE/PAGO_PARCIAL
-- Visão "realizado": comissões efetivamente pagas (status PAGO/PAGO_PARCIAL por data_pagamento)
-- Queries bifurcadas: _q(sql_sqlite, sql_pg, params) — NÃO usa tradutor para este módulo
-- PostgreSQL: usa subquery com MAX(p.comissao_percentual) para resolver GROUP BY
-- Tabela despesa criada automaticamente se não existir (_garantir_tabela_despesa)
-- Gráfico: barras agrupadas (comissões x despesas) + linha de saldo — últimos 12 meses fixos
-- Breakdown por fornecedor e por categoria de despesa com gráfico de pizza
+- Acesso: menu principal + aba em Comissões + aba em Despesas
+- Visão "previsto": comissões ENTREGUE com pagto PENDENTE/PAGO_PARCIAL
+- Visão "realizado": comissões pagas por data_pagamento
+- Queries bifurcadas: _q(sql_sqlite, sql_pg, params)
+- Gráfico barras agrupadas + linha saldo — últimos 12 meses
+- Breakdown por fornecedor e por categoria de despesa
 
 ## Fotos de gôndola
 - Salvas como base64 inline no campo foto_path da tabela pesquisa_foto
-- Função _foto_para_b64() em pesquisa.py centraliza a leitura (base64 ou path local)
-- Fotos antigas com path local (C:\Users\...) funcionam só localmente — no Railway não aparecem
-- Pendente: script de migração das fotos antigas para base64 (baixa prioridade)
+- Fotos antigas com path local não aparecem no Railway (migração pendente)
+
+## Dashboard — PROBLEMA CRÍTICO PENDENTE
+- Dashboard desabilitado temporariamente no crm_app.py (linha: `pass`)
+- Causa: query de pedidos demora 3.4s no Railway — total 6-7s travava o app
+- Solução necessária ANTES de reabilitar:
+  1. Criar índices no PostgreSQL Railway:
+     CREATE INDEX IF NOT EXISTS idx_pedido_data ON pedido(data_pedido);
+     CREATE INDEX IF NOT EXISTS idx_pedido_status ON pedido(status_pedido);
+     CREATE INDEX IF NOT EXISTS idx_pedido_item_pedido ON pedido_item(pedido_id);
+  2. Reabilitar _dashboard() no crm_app.py após confirmar que query < 1s
+- Menu já foi movido para ANTES do dashboard (navegação funciona mesmo sem dashboard)
 
 ## Concluído na sessão 31/05/2026
-- Migração colunas comissao_pagamento no Railway (data_pagamento_original, motivo_prorrogacao)
-- Resultado Operacional: painel confronto comissões × despesas (novo módulo)
-- B4: mensagem de sucesso ao editar PDV + scroll ao topo após salvar
-- B3: filtro de fornecedor em Contatos → pré-seleciona fornecedor no painel de interações
-  ao abrir tópico com filtro de fornecedor ativo na lista de Registros
-  Também corrigido bug: chamada com fornecedor_id= renomeada para forn_presel=
-- Correção ortográfica nos tipos de PDV: Empório, Sacolão, Açougue, Clube / Associação
-  (cadastros.py + banco Railway corrigidos)
+- Migração colunas comissao_pagamento no Railway
+- Resultado Operacional: painel confronto comissões × despesas
+- B4: mensagem de sucesso ao editar PDV + scroll ao topo
+- B3: filtro de fornecedor em Contatos pré-seleciona no painel de interações
+  (também corrigido bug: parâmetro fornecedor_id= renomeado para forn_presel=)
+- Correção ortográfica tipos de PDV: Empório, Sacolão, Açougue, Clube/Associação
+- Metas: N+1 queries eliminadas (batch por tipo produto/categoria/linha)
+- Relatórios: datas hardcoded substituídas por cálculo Python dinâmico
+- requirements.txt: streamlit==1.55.0, python-dotenv adicionado
+- crm_app.py: menu movido para antes do dashboard
 
 ## Próximas etapas (em ordem de prioridade)
-1. **C1 — Auditoria Railway** — varredura com olhar de novo usuário em todos os módulos
-   (deixada para utilização na semana — 02/06/2026 em diante)
-2. **B1 — Aba Mensagens por fornecedor** — reformular WhatsApp adaptado à estrutura
-   de tópicos por fornecedor
-3. **C3 — Performance** — N+1 queries em metas.py, queries lentas em relatorios.py
-4. **D1 — Níveis de acesso** — 6 perfis de usuário (mais trabalhoso e estratégico)
-   - Representante (dono) — acesso total
-   - Vendedor interno — sem financeiro
-   - Promotor — só pesquisa e visitas
-   - Cliente — só pedidos
-   - Fornecedor — só relatórios
-   - Admin — configurações
-5. **D2 — Multi-tenant** — múltiplos representantes com dados isolados
-6. **D3 — Modelo de negócio** — planos, cobrança, onboarding
+1. **URGENTE — Criar índices no Railway e reabilitar dashboard**
+   - Script: criar_indices.py com os 3 CREATE INDEX acima
+   - Após confirmar query < 1s, reabilitar _dashboard() no crm_app.py
+2. **C1 — Auditoria Railway** — varredura módulo a módulo em produção
+3. **B1 — Aba Mensagens por fornecedor** — reformular WhatsApp por tópico
+4. **C3 — Performance adicional** — outras queries lentas identificadas
+5. **D1 — Níveis de acesso** — 6 perfis de usuário
+6. **D2 — Multi-tenant** — múltiplos representantes isolados
+7. **D3 — Modelo de negócio** — planos, cobrança, onboarding
 
 ## Bugs conhecidos pendentes
+- Dashboard desabilitado (ver seção acima)
 - Fotos de gôndola antigas (path local) não aparecem no Railway
-- Migração fotos antigas para base64 pendente (baixa prioridade)
+- Sequences PostgreSQL podem desincronizar — rodar corrigir_sequence.py se UniqueViolation
 
 ## requirements.txt atual
-streamlit, psycopg2-binary, pandas, plotly, reportlab, requests,
+streamlit==1.55.0, psycopg2-binary, pandas, plotly, reportlab, requests,
 Pillow, opencv-python-headless, numpy, openpyxl, python-dotenv

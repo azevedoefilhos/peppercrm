@@ -653,8 +653,10 @@ if pagina == "home":
         if st.button("📞 Contatos & Negociações",   width="stretch"): ir("contatos")
         if st.button("🎯 Metas",                    width="stretch"): ir("metas")
 
-    # ── Dashboard desabilitado temporariamente (otimização pendente) ─────
-    pass
+    # ── Dashboard DEPOIS do menu ───────────────────────────────────────────
+    st.divider()
+    with st.spinner("Carregando indicadores..."):
+        _dashboard()
 
 
 elif pagina == "configuracao":  from configuracao import tela_configuracao; tela_configuracao()
