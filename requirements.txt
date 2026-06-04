@@ -1,4 +1,4 @@
-streamlit
+streamlit==1.45.1
 psycopg2-binary
 pandas
 plotly
@@ -8,3 +8,4 @@ openpyxl
 Pillow
 opencv-python-headless
 numpy
+python-dotenv
