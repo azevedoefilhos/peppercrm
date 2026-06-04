@@ -677,4 +677,8 @@ elif pagina == "contatos":            from contatos import tela_contatos; tela_c
 elif pagina == "metas":               from metas import tela_metas; tela_metas()
 elif pagina == "catalogo":            from catalogo import tela_catalogo; tela_catalogo()
 elif pagina == "despesas":            from despesas import tela_despesas; tela_despesas()
+elif pagina == "resultado_operacional":
+    st.header("Resultado Operacional")
+    if st.button("Voltar"): ir("home")
+    from resultado_operacional import tela_resultado_operacional; tela_resultado_operacional()
 elif pagina == "busca_global":        _tela_busca_global()
