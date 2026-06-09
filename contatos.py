@@ -581,24 +581,15 @@ def _gerar_pdf_topico(cid, fornecedor_id=None):
         WHERE cxf.contato_id=?""", (cid,))
     forns_str = " / ".join(f[0] for f in forns) if forns else "—"
 
-    # Busca interações — sem filtro ativo no SQL (compatível SQLite e PostgreSQL)
-    if fornecedor_id:
-        ints = query("""
-            SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
-                   ci.descricao, ci.resultado, ci.data_followup, ci.ativo
-            FROM contato_interacao ci
-            WHERE ci.contato_id=?
-              AND (ci.fornecedor_id=? OR ci.fornecedor_id IS NULL)
-            ORDER BY ci.data_interacao ASC""", (cid, fornecedor_id))
-    else:
-        ints = query("""
-            SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
-                   ci.descricao, ci.resultado, ci.data_followup, ci.ativo
-            FROM contato_interacao ci
-            WHERE ci.contato_id=?
-            ORDER BY ci.data_interacao ASC""", (cid,))
-    # Filtra inativos em Python
-    ints = [r for r in (ints or []) if r['ativo'] not in (0, False)]
+    # Busca interações — fornecedor_id não existe em contato_interacao, busca tudo do tópico
+    ints = query("""
+        SELECT ci.data_interacao, ci.via_comunicacao, ci.contato_pessoa,
+               ci.descricao, ci.resultado, ci.data_followup, ci.ativo
+        FROM contato_interacao ci
+        WHERE ci.contato_id=?
+        ORDER BY ci.data_interacao ASC""", (cid,))
+    # Filtra inativos em Python — usa índice pois _DictRow pode não suportar chave string
+    ints = [r for r in (ints or []) if r[6] not in (0, False, None)]
 
     # ── Estilos ───────────────────────────────────────────
     buf  = _io.BytesIO()
@@ -979,8 +970,8 @@ def _gerar_pdf_consolidado(topicos_ids, filtros_desc, modo_interacoes,
                 FROM contato_interacao ci
                 WHERE ci.contato_id=?
                 ORDER BY ci.data_interacao ASC""", (cid,))
-        # Filtra inativos em Python
-        ints = [r for r in (ints or []) if r['ativo'] not in (0, False)]
+        # Filtra inativos em Python — usa índice pois _DictRow pode não suportar chave string
+        ints = [r for r in (ints or []) if r[6] not in (0, False, None)]
 
         total_interacoes += len(ints)
         for irow in ints:
@@ -1320,8 +1311,8 @@ def _painel_topico_completo(cid, status_atual, prioridade_atual, tipo_atual, for
             FROM contato_interacao ci
             WHERE ci.contato_id=? AND ci.ativo!=0
             ORDER BY ci.data_interacao DESC""", (cid,))
-        # Filtra em Python para máxima compatibilidade SQLite/PostgreSQL
-        ints = [r for r in ints if r['ativo'] not in (0, False, '0')] if ints and hasattr(ints[0], 'keys') and 'ativo' in ints[0].keys() else ints
+        # SQL já filtra ci.ativo!=0 — sem necessidade de filtro adicional em Python
+        ints = ints or []
     except Exception as _ex:
         st.warning(f"Erro ao buscar interações: {_ex}")
         ints = []
