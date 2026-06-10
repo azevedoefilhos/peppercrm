@@ -1604,9 +1604,7 @@ def _rel_competitivo():
                 "Peso conc.":       f"{peso_c}{um_c}" if peso_c else "",
                 "Tipo relação":     tipo_rel,
                 "Último preço":     ultimo_preco,
-                git commit - -allow - empty - m "force redeploy: configurar DATABASE_URL"
-                    git push
-                    "Data pesquisa":    (data_ult or "")[:10],
+                "Data pesquisa":    (data_ult or "")[:10],
                 "PDV pesquisado":   pdv_ult,
                 "Dif. % vs nosso":  diff_v,
                 "Média frentes":    media_frt,

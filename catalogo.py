@@ -20,30 +20,12 @@ def _brl(v):
 # ENTRY POINT
 # ═══════════════════════════════════════════════════════
 def tela_catalogo():
-    st.header("📄 Catálogo & Mensagens")
+    st.header("📄 Catálogo PDF")
     if st.button("⬅ Voltar"): _ir("home")
-
-    ABAS = {
-        "catalogo":  "📄 Catálogo PDF",
-        "mensagens": "💬 Mensagens WhatsApp",
-    }
-    if "cat_aba" not in st.session_state:
-        st.session_state["cat_aba"] = "catalogo"
-    cols = st.columns(2)
-    for col, (k, v) in zip(cols, ABAS.items()):
-        ativa = st.session_state["cat_aba"] == k
-        if col.button(v, key=f"catnav_{k}", width="stretch",
-                      type="primary" if ativa else "secondary"):
-            st.session_state["cat_aba"] = k; st.rerun()
     st.divider()
-
     msg = st.session_state.pop("cat_msg", None)
     if msg: st.success(msg)
-
-    if st.session_state["cat_aba"] == "catalogo":
-        _tela_catalogo()
-    else:
-        _tela_mensagens()
+    _tela_catalogo()
 
 
 # ═══════════════════════════════════════════════════════

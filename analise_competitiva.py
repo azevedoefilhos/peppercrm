@@ -43,7 +43,7 @@ def tela_analise_competitiva():
     st.divider()
 
     ABAS_ANA = {"mc":"Marcas/categorias","pdv":"Presença PDV",
-                "vs":"Meu produto vs","op":"Oportunidades"}
+                "vs":"Meu produto vs concorrentes","op":"Oportunidades"}
     if "ana_aba" not in st.session_state: st.session_state["ana_aba"] = "mc"
     cols = st.columns(4)
     for col,(k,v) in zip(cols, ABAS_ANA.items()):
