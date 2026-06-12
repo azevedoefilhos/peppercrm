@@ -10,15 +10,12 @@ except ImportError:
 import streamlit as st
 from database import query
 
-@st.cache_data(ttl=300, show_spinner=False)
-def _nome_empresa():
-    try:
-        from configuracao import get_nome_empresa
-        return get_nome_empresa()
-    except Exception:
-        return "PepperCRM"
-
 st.set_page_config(page_title="PepperCRM", layout="wide")
+
+# ── Autenticação — bloqueia o app até o login ser feito ──────────────────────
+from auth import tela_login, logout, usuario_atual
+if not tela_login():
+    st.stop()
 
 if "pagina"         not in st.session_state: st.session_state["pagina"]         = "home"
 if "id_selecionado" not in st.session_state: st.session_state["id_selecionado"] = None
@@ -90,13 +87,20 @@ def _scroll_topo():
 
 
 @st.cache_data(ttl=300, show_spinner=False)
+def _nome_empresa():
+    try:
+        from configuracao import get_nome_empresa
+        return get_nome_empresa()
+    except Exception:
+        return "PepperCRM"
+
+
+@st.cache_data(ttl=300, show_spinner=False)
 def _dados_dashboard_cache():
     """
-    Coleta TODOS os dados do dashboard em uma única conexão PostgreSQL.
-    Uma só conexão = sem overhead de handshake por query.
+    Coleta TODOS os dados do dashboard em poucas queries cacheadas (TTL 300s).
     """
     from datetime import date as _date, timedelta as _td
-    from database import _check_supabase, _pg_connect, query as _query
 
     hoje        = _date.today().isoformat()
     mes_ini     = _date.today().strftime("%Y-%m-01")
@@ -107,147 +111,142 @@ def _dados_dashboard_cache():
     sete_dias   = (_date.today() + _td(days=7)).isoformat()
     limite_neg  = (_date.today() - _td(days=15)).isoformat()
 
-    # Valores padrão
-    qtd_abertos = qtd_mes = qtd_entregas = qtd_sem_pedido = qtd_rupturas = 0
-    qtd_contatos_mes = qtd_negoc_abertas = qtd_clientes_contatados = qtd_prox_fups = 0
-    qtd_pesquisas_mes = qtd_visitas_mes = qtd_clientes_ativos = qtd_prospectos = 0
-    pesq_rascu_n = sem_contato_n = 0
-    total_mes = comissao_mes = 0.0
-    fups_v = fups_h = det_ped = neg_paradas_raw = []
+    def q1(sql, p=()):
+        r = query(sql, p)
+        return r[0][0] if r else 0
+
+    # ── Query 1: KPIs de pedidos (consolidada) ────────────────────────────
+    r_ped = query("""
+        SELECT
+            COUNT(DISTINCT CASE WHEN p.status_pedido IN ('ABERTO','ENVIADO')
+                  THEN p.pedido_id END) AS qtd_abertos,
+            COUNT(DISTINCT CASE WHEN p.status_pedido NOT IN ('CANCELADO','RECUSADO')
+                  AND p.data_pedido >= ? THEN p.pedido_id END) AS qtd_mes,
+            ROUND(COALESCE(SUM(CASE
+                WHEN p.status_pedido NOT IN ('CANCELADO','RECUSADO')
+                 AND p.data_pedido >= ?
+                THEN pi.quantidade*pi.preco_final*(1-COALESCE(p.desconto_geral,0)/100.0)
+                END),0),2) AS total_mes,
+            ROUND(COALESCE(SUM(CASE
+                WHEN p.status_pedido='ENTREGUE' AND p.data_pedido >= ?
+                THEN pi.quantidade*pi.preco_final*(1-COALESCE(p.desconto_geral,0)/100.0)
+                    *COALESCE(p.comissao_percentual,COALESCE(com.percentual,0))/100.0
+                END),0),2) AS comissao_mes,
+            COUNT(DISTINCT CASE
+                WHEN p.data_entrega BETWEEN ? AND ?
+                 AND p.status_pedido NOT IN ('CANCELADO','RECUSADO','ENTREGUE','DEVOLVIDO')
+                THEN p.pedido_id END) AS qtd_entregas
+        FROM pedido p
+        LEFT JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
+            AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO','CANCELADO')
+        LEFT JOIN comissao com ON p.fornecedor_id=com.fornecedor_id AND com.ativo=1
+    """, (mes_ini, mes_ini, mes_ini, hoje, sete_dias))
+
+    qtd_abertos  = int(r_ped[0][0] or 0) if r_ped else 0
+    qtd_mes      = int(r_ped[0][1] or 0) if r_ped else 0
+    total_mes    = float(r_ped[0][2] or 0) if r_ped else 0.0
+    comissao_mes = float(r_ped[0][3] or 0) if r_ped else 0.0
+    qtd_entregas = int(r_ped[0][4] or 0) if r_ped else 0
+
+    # ── Query 2: KPIs de contatos/clientes (consolidada) ─────────────────
+    r_ct = query("""
+        SELECT
+            COUNT(DISTINCT CASE WHEN cr.ativo!=0 AND cr.data_contato >= ?
+                  THEN cr.contato_id END) AS contatos_mes,
+            COUNT(DISTINCT CASE WHEN cr.ativo!=0 AND cr.tipo_topico='Negociação'
+                  AND cr.status NOT IN ('Concluído','Cancelado')
+                  THEN cr.contato_id END) AS negoc_abertas,
+            COUNT(DISTINCT CASE WHEN cr.ativo!=0 AND cr.data_contato >= ?
+                  AND cr.cliente_id IS NOT NULL
+                  THEN cr.cliente_id END) AS clientes_contatados,
+            COUNT(DISTINCT CASE WHEN cr.ativo!=0
+                  AND cr.data_followup BETWEEN ? AND ?
+                  AND cr.status NOT IN ('Concluído','Cancelado')
+                  THEN cr.contato_id END) AS prox_fups
+        FROM contato_registro cr
+    """, (mes_ini, trinta_dias, amanha, depois))
+
+    qtd_contatos_mes       = int(r_ct[0][0] or 0) if r_ct else 0
+    qtd_negoc_abertas      = int(r_ct[0][1] or 0) if r_ct else 0
+    qtd_clientes_contatados= int(r_ct[0][2] or 0) if r_ct else 0
+    qtd_prox_fups          = int(r_ct[0][3] or 0) if r_ct else 0
+
+    # ── Query 3: Contagens simples restantes ──────────────────────────────
+    r_misc = query("""
+        SELECT
+            (SELECT COUNT(*) FROM cliente WHERE status NOT IN ('Encerrado','Cancelado')) AS cli_ativos,
+            (SELECT COUNT(*) FROM cliente WHERE status='Prospecto') AS prospectos,
+            (SELECT COUNT(*) FROM pesquisa_preco WHERE data_pesquisa >= ?) AS pesquisas_mes,
+            (SELECT COUNT(*) FROM visita_cliente WHERE data_visita >= ?) AS visitas_mes,
+            (SELECT COUNT(*) FROM pesquisa_preco WHERE status='rascunho' AND data_pesquisa <= ?) AS pesq_rascu,
+            (SELECT COUNT(*) FROM cliente c WHERE c.ativo!=0
+                AND NOT EXISTS (SELECT 1 FROM pedido p WHERE p.cliente_id=c.cliente_id
+                    AND p.data_pedido >= ? AND p.status_pedido NOT IN ('CANCELADO','RECUSADO'))) AS sem_pedido,
+            (SELECT COUNT(*) FROM pesquisa_preco_item pi
+                JOIN pesquisa_preco pp ON pi.pesquisa_id=pp.pesquisa_id
+                WHERE pi.ruptura=1 AND pp.data_pesquisa >= ?) AS rupturas,
+            (SELECT COUNT(*) FROM cliente c WHERE c.ativo!=0
+                AND c.status IN ('Visitado','Ativo')
+                AND c.cliente_id NOT IN (
+                    SELECT DISTINCT cliente_id FROM contato_registro
+                    WHERE ativo!=0 AND cliente_id IS NOT NULL)) AS sem_contato
+    """, (mes_ini, mes_ini, tres_dias, trinta_dias, trinta_dias))
+
+    qtd_clientes_ativos = int(r_misc[0][0] or 0) if r_misc else 0
+    qtd_prospectos      = int(r_misc[0][1] or 0) if r_misc else 0
+    qtd_pesquisas_mes   = int(r_misc[0][2] or 0) if r_misc else 0
+    qtd_visitas_mes     = int(r_misc[0][3] or 0) if r_misc else 0
+    pesq_rascu_n        = int(r_misc[0][4] or 0) if r_misc else 0
+    qtd_sem_pedido      = int(r_misc[0][5] or 0) if r_misc else 0
+    qtd_rupturas        = int(r_misc[0][6] or 0) if r_misc else 0
+    sem_contato_n       = int(r_misc[0][7] or 0) if r_misc else 0
+
+    # ── Query 4: Follow-ups vencidos e de hoje ────────────────────────────
+    fups_v = query("""
+        SELECT cr.contato_id, COALESCE(cli.nome_fantasia,'—'), cr.assunto,
+               cr.data_followup, cr.prioridade
+        FROM contato_registro cr
+        LEFT JOIN cliente cli ON cr.cliente_id=cli.cliente_id
+        WHERE cr.ativo!=0 AND cr.data_followup IS NOT NULL
+          AND cr.status NOT IN ('Concluído','Cancelado','Proposta enviada')
+          AND cr.data_followup < ?
+        ORDER BY cr.data_followup""", (hoje,)) or []
+
+    fups_h = query("""
+        SELECT cr.contato_id, COALESCE(cli.nome_fantasia,'—'),
+               cr.assunto, cr.data_followup
+        FROM contato_registro cr
+        LEFT JOIN cliente cli ON cr.cliente_id=cli.cliente_id
+        WHERE cr.ativo!=0 AND cr.data_followup IS NOT NULL
+          AND cr.status NOT IN ('Concluído','Cancelado','Proposta enviada')
+          AND cr.data_followup = ?
+        ORDER BY cr.data_followup""", (hoje,)) or []
+
+    # ── Query 5: Pedidos em aberto para exibição ──────────────────────────
+    det_ped = query("""
+        SELECT p.pedido_id, p.data_pedido, c.nome_fantasia,
+               f.nome_fantasia, p.status_pedido
+        FROM pedido p
+        JOIN cliente c ON p.cliente_id=c.cliente_id
+        JOIN fornecedor f ON p.fornecedor_id=f.fornecedor_id
+        WHERE p.status_pedido IN ('ABERTO','ENVIADO')
+        ORDER BY p.data_pedido DESC LIMIT 10""") or []
+
+    # ── Alertas ───────────────────────────────────────────────────────────
     alertas = []
 
-    if _check_supabase():
-        # UMA única conexão para todas as queries
-        try:
-            conn = _pg_connect()
-            cur = conn.cursor()
+    # Negociações paradas
+    neg_paradas_raw = query("""
+        SELECT cr.contato_id,
+               COALESCE(MAX(ci.data_interacao), cr.data_contato) AS ultima
+        FROM contato_registro cr
+        LEFT JOIN contato_interacao ci ON ci.contato_id=cr.contato_id AND ci.ativo!=0
+        WHERE cr.ativo!=0 AND cr.tipo_topico='Negociação'
+          AND cr.status NOT IN ('Concluído','Cancelado')
+        GROUP BY cr.contato_id
+        HAVING COALESCE(MAX(ci.data_interacao), cr.data_contato) <= ?
+    """, (limite_neg,)) or []
 
-            def _q(sql, p=()):
-                cur.execute(sql, p)
-                return cur.fetchall()
-
-            # KPIs pedidos
-            r = _q("""
-                SELECT
-                    COUNT(DISTINCT CASE WHEN p.status_pedido IN ('ABERTO','ENVIADO') THEN p.pedido_id END),
-                    COUNT(DISTINCT CASE WHEN p.status_pedido NOT IN ('CANCELADO','RECUSADO') AND p.data_pedido >= %s THEN p.pedido_id END),
-                    ROUND(COALESCE(SUM(CASE WHEN p.status_pedido NOT IN ('CANCELADO','RECUSADO') AND p.data_pedido >= %s
-                        THEN pi.quantidade*pi.preco_final*(1-COALESCE(p.desconto_geral,0)/100.0) END),0)::NUMERIC,2),
-                    ROUND(COALESCE(SUM(CASE WHEN p.status_pedido='ENTREGUE' AND p.data_pedido >= %s
-                        THEN pi.quantidade*pi.preco_final*(1-COALESCE(p.desconto_geral,0)/100.0)
-                            *COALESCE(p.comissao_percentual,COALESCE(com.percentual,0))/100.0 END),0)::NUMERIC,2),
-                    COUNT(DISTINCT CASE WHEN p.data_entrega BETWEEN %s AND %s
-                        AND p.status_pedido NOT IN ('CANCELADO','RECUSADO','ENTREGUE','DEVOLVIDO') THEN p.pedido_id END)
-                FROM pedido p
-                LEFT JOIN pedido_item pi ON pi.pedido_id=p.pedido_id
-                    AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO','CANCELADO')
-                LEFT JOIN comissao com ON p.fornecedor_id=com.fornecedor_id AND com.ativo=1
-            """, (mes_ini, mes_ini, mes_ini, hoje, sete_dias))
-            if r:
-                qtd_abertos=int(r[0][0] or 0); qtd_mes=int(r[0][1] or 0)
-                total_mes=float(r[0][2] or 0); comissao_mes=float(r[0][3] or 0)
-                qtd_entregas=int(r[0][4] or 0)
-
-            # KPIs contatos
-            r = _q("""
-                SELECT
-                    COUNT(DISTINCT CASE WHEN cr.ativo!=0 AND cr.data_contato >= %s THEN cr.contato_id END),
-                    COUNT(DISTINCT CASE WHEN cr.ativo!=0 AND cr.tipo_topico='Negociação'
-                          AND cr.status NOT IN ('Concluído','Cancelado') THEN cr.contato_id END),
-                    COUNT(DISTINCT CASE WHEN cr.ativo!=0 AND cr.data_contato >= %s
-                          AND cr.cliente_id IS NOT NULL THEN cr.cliente_id END),
-                    COUNT(DISTINCT CASE WHEN cr.ativo!=0 AND cr.data_followup BETWEEN %s AND %s
-                          AND cr.status NOT IN ('Concluído','Cancelado') THEN cr.contato_id END)
-                FROM contato_registro cr
-            """, (mes_ini, trinta_dias, amanha, depois))
-            if r:
-                qtd_contatos_mes=int(r[0][0] or 0); qtd_negoc_abertas=int(r[0][1] or 0)
-                qtd_clientes_contatados=int(r[0][2] or 0); qtd_prox_fups=int(r[0][3] or 0)
-
-            # Misc
-            r = _q("""
-                SELECT
-                    (SELECT COUNT(*) FROM cliente WHERE status NOT IN ('Encerrado','Cancelado')),
-                    (SELECT COUNT(*) FROM cliente WHERE status='Prospecto'),
-                    (SELECT COUNT(*) FROM pesquisa_preco WHERE data_pesquisa >= %s),
-                    (SELECT COUNT(*) FROM visita_cliente WHERE data_visita >= %s),
-                    (SELECT COUNT(*) FROM pesquisa_preco WHERE status='rascunho' AND data_pesquisa <= %s),
-                    (SELECT COUNT(*) FROM cliente c WHERE c.ativo!=0
-                        AND NOT EXISTS (SELECT 1 FROM pedido p WHERE p.cliente_id=c.cliente_id
-                            AND p.data_pedido >= %s AND p.status_pedido NOT IN ('CANCELADO','RECUSADO'))),
-                    (SELECT COUNT(*) FROM pesquisa_preco_item pi
-                        JOIN pesquisa_preco pp ON pi.pesquisa_id=pp.pesquisa_id
-                        WHERE pi.ruptura=1 AND pp.data_pesquisa >= %s),
-                    (SELECT COUNT(*) FROM cliente c WHERE c.ativo!=0
-                        AND c.status IN ('Visitado','Ativo')
-                        AND c.cliente_id NOT IN (
-                            SELECT DISTINCT cliente_id FROM contato_registro
-                            WHERE ativo!=0 AND cliente_id IS NOT NULL))
-            """, (mes_ini, mes_ini, tres_dias, trinta_dias, trinta_dias))
-            if r:
-                qtd_clientes_ativos=int(r[0][0] or 0); qtd_prospectos=int(r[0][1] or 0)
-                qtd_pesquisas_mes=int(r[0][2] or 0); qtd_visitas_mes=int(r[0][3] or 0)
-                pesq_rascu_n=int(r[0][4] or 0); qtd_sem_pedido=int(r[0][5] or 0)
-                qtd_rupturas=int(r[0][6] or 0); sem_contato_n=int(r[0][7] or 0)
-
-            # Follow-ups vencidos
-            fups_v = _q("""
-                SELECT cr.contato_id, COALESCE(cli.nome_fantasia,'—'), cr.assunto,
-                       cr.data_followup, cr.prioridade
-                FROM contato_registro cr
-                LEFT JOIN cliente cli ON cr.cliente_id=cli.cliente_id
-                WHERE cr.ativo!=0 AND cr.data_followup IS NOT NULL
-                  AND cr.status NOT IN ('Concluído','Cancelado','Proposta enviada')
-                  AND cr.data_followup < %s
-                ORDER BY cr.data_followup""", (hoje,)) or []
-
-            fups_h = _q("""
-                SELECT cr.contato_id, COALESCE(cli.nome_fantasia,'—'), cr.assunto, cr.data_followup
-                FROM contato_registro cr
-                LEFT JOIN cliente cli ON cr.cliente_id=cli.cliente_id
-                WHERE cr.ativo!=0 AND cr.data_followup IS NOT NULL
-                  AND cr.status NOT IN ('Concluído','Cancelado','Proposta enviada')
-                  AND cr.data_followup = %s
-                ORDER BY cr.data_followup""", (hoje,)) or []
-
-            det_ped = _q("""
-                SELECT p.pedido_id, p.data_pedido, c.nome_fantasia, f.nome_fantasia, p.status_pedido
-                FROM pedido p
-                JOIN cliente c ON p.cliente_id=c.cliente_id
-                JOIN fornecedor f ON p.fornecedor_id=f.fornecedor_id
-                WHERE p.status_pedido IN ('ABERTO','ENVIADO')
-                ORDER BY p.data_pedido DESC LIMIT 10""") or []
-
-            neg_paradas_raw = _q("""
-                SELECT cr.contato_id, COALESCE(MAX(ci.data_interacao), cr.data_contato) AS ultima
-                FROM contato_registro cr
-                LEFT JOIN contato_interacao ci ON ci.contato_id=cr.contato_id AND ci.ativo!=0
-                WHERE cr.ativo!=0 AND cr.tipo_topico='Negociação'
-                  AND cr.status NOT IN ('Concluído','Cancelado')
-                GROUP BY cr.contato_id
-                HAVING COALESCE(MAX(ci.data_interacao), cr.data_contato) <= %s
-            """, (limite_neg,)) or []
-
-            cur.close()
-            conn.close()
-
-        except Exception:
-            pass
-
-    else:
-        # SQLite local — usa query() normal (sem overhead de handshake)
-        def _ql(sql, p=()):
-            return _query(sql, p) or []
-
-        r = _ql("SELECT COUNT(*) FROM pedido WHERE status_pedido IN ('ABERTO','ENVIADO')")
-        qtd_abertos = int(r[0][0] or 0) if r else 0
-        r = _ql("SELECT COUNT(*) FROM pedido WHERE status_pedido NOT IN ('CANCELADO','RECUSADO') AND data_pedido >= ?", (mes_ini,))
-        qtd_mes = int(r[0][0] or 0) if r else 0
-        r = _ql("SELECT COUNT(*) FROM contato_registro WHERE ativo!=0 AND tipo_topico='Negociação' AND status NOT IN ('Concluído','Cancelado')")
-        qtd_negoc_abertas = int(r[0][0] or 0) if r else 0
-        fups_v = _ql("SELECT contato_id, '', assunto, data_followup, prioridade FROM contato_registro WHERE ativo!=0 AND data_followup < ? AND status NOT IN ('Concluído','Cancelado','Proposta enviada') ORDER BY data_followup", (hoje,))
-
-    # Alertas
     if neg_paradas_raw:
         from datetime import date as _d2
         dias_lista = []
@@ -624,7 +623,7 @@ def _tela_busca_global():
 
 
 if pagina == "home":
-    col_t, col_b, col_c = st.columns([5, 1, 1])
+    col_t, col_b, col_c, col_sair = st.columns([4, 1, 1, 1])
     with col_t: st.title(f"{_nome_empresa()}")
     with col_b:
         st.write("")
@@ -632,6 +631,9 @@ if pagina == "home":
     with col_c:
         st.write("")
         if st.button("⚙️ Config.", width="stretch"): ir("configuracao")
+    with col_sair:
+        st.write("")
+        if st.button("🚪 Sair", width="stretch"): logout()
 
     # ── Menu ANTES do dashboard — garante navegação mesmo se dashboard lento
     st.divider()
@@ -660,16 +662,12 @@ if pagina == "home":
         if st.button("📞 Contatos & Negociações",   width="stretch"): ir("contatos")
         if st.button("🎯 Metas",                    width="stretch"): ir("metas")
 
+    # ── Dashboard DEPOIS do menu ───────────────────────────────────────────
     st.divider()
     with st.spinner("Carregando indicadores..."):
         _dashboard()
 
 
-elif pagina == "indicadores":
-    st.header("📊 Indicadores do dia")
-    if st.button("⬅ Voltar"): ir("home")
-    st.caption("Consultando dados no servidor — pode levar alguns segundos...")
-    _dashboard()
 elif pagina == "configuracao":  from configuracao import tela_configuracao; tela_configuracao()
 elif pagina == "fornecedores":  from cadastros import tela_fornecedores; tela_fornecedores()
 elif pagina == "produtos":      from cadastros import tela_produtos; tela_produtos()
