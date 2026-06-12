@@ -1,130 +1,131 @@
 # CHANGELOG — PepperCRM
 # Registro de correções e melhorias aplicadas
-# IMPORTANTE: Atualizar este arquivo após cada sessão de desenvolvimento
+# IMPORTANTE: Atualizar após cada sessão de desenvolvimento
 # Em caso de git reset, reaplicar todas as correções listadas aqui
 
 ---
 
-## [2026-06-08] — Sessão atual
+## ⚠️ REGRA MAIS CRÍTICA DO PROJETO
 
-### Bugs corrigidos
-- **contatos.py** — PDF de tópico mostrava "0 interações" mesmo havendo interações
-  - Causa: `r['ativo']` não funciona com `_DictRow` do database.py — retorna erro silencioso
-  - Correção: substituído por `r[6]` (acesso por índice) em 3 lugares da função `_gerar_pdf_topico`
-  - Padrão a evitar: NUNCA usar `r['nome_coluna']` com resultados de `query()` — usar sempre índice `r[0]`, `r[1]`, etc.
-
-### Melhorias
-- **requirements.txt** — versões de todos os pacotes fixadas para evitar quebras automáticas
-  - streamlit==1.55.0 (versão testada e compatível com celular Android/Chrome)
-  - numpy==1.26.4 (1.25.0 não tem wheel para Python 3.12)
-  - Demais pacotes com versões fixadas conforme ambiente local
+### Streamlit — NUNCA fixar abaixo de 1.58.0
+- Streamlit 1.58.0+ usa Uvicorn (assíncrono) → dashboard carrega normalmente
+- Streamlit 1.55.0 usa Tornado (síncrono) → dashboard bloqueia por minutos
+- requirements.txt deve ter `streamlit` SEM versão fixada
+- Esta regra custou dias de debugging — NUNCA ignorar
 
 ---
 
-## [2026-06-04] — Sessão de estabilização
+## [2026-06-10] — Sessão atual
+
+### Causa raiz do dashboard lento identificada e corrigida
+- Problema: fixamos streamlit==1.55.0 pensando resolver compatibilidade mobile
+- Efeito: Tornado (1.55.0) bloqueia thread durante queries → dashboard trava por minutos
+- Solução: `streamlit` sem versão → Railway instala 1.58.0+ com Uvicorn assíncrono
+- Dashboard voltou a funcionar normalmente no celular e desktop
+
+### railway.toml — causa raiz do problema mobile identificada
+- startCommand estava na seção [build] em vez de [deploy]
+- Correto:
+  [deploy]
+  startCommand = "python keepalive.py & streamlit run crm_app.py ..."
+
+---
+
+## [2026-06-08] — Sessão
 
 ### Bugs corrigidos
-- **railway.toml** — Nixpacks deprecado causava falha de WebSocket no celular
-  - Correção: removido `builder = "nixpacks"` da seção `[build]`, mantendo apenas `[deploy]`
-- **relatorios.py** — texto de comando git colado acidentalmente na linha 1607
-  - Causa: copiar/colar incorreto durante sessão de desenvolvimento
-  - Correção: remoção do texto corrompido
-- **catalogo.py** — aba "Mensagens WhatsApp" removida do Catálogo
-  - Mensagens já existe dentro do módulo Contatos & Negociações
-- **resultado_operacional.py** — título duplicado "📊 Resultado Operacional"
-  - Correção: removido `st.subheader` de dentro de `tela_resultado_operacional()`
-- **corrigir_sequence.py** — sequences do PostgreSQL desincronizadas causando UniqueViolation
-  - Rodado em 31/05/2026: contato_interacao, contato_registro, pedido, cliente, pdv
+- **contatos.py** — PDF mostrava "0 interações"
+  - Causa 1: r['ativo'] não funciona com _DictRow → usar r[6] (índice)
+  - Causa 2: query filtrava por ci.fornecedor_id que não existe na tabela contato_interacao
+  - Fix: remover filtro de fornecedor_id da query do PDF; usar índice r[6]
+  - Padrão: NUNCA usar r['coluna'] — sempre r[índice]
 
-### Melhorias
-- **resultado_operacional.py** — cache de 5 minutos adicionado em todas as funções de query
-- **crm_app.py** — menu movido para ANTES do dashboard para não bloquear navegação
+### Apresentação criada
+- PepperCRM_Apresentacao.pptx — 7 slides para a consultora Gigi (Sebrae)
+- Pendente para próxima versão: scanner de código de barras + roteiros de visitas
+
+---
+
+## [2026-06-04/05] — Sessão de estabilização
+
+### Causa raiz do problema mobile
+- railway.toml com startCommand na seção [build] em vez de [deploy]
+- Nixpacks deprecado pelo Railway causava comportamento errático
+
+### Bugs corrigidos
+- **relatorios.py** — texto git corrompido na linha 1607 removido
+- **catalogo.py** — aba Mensagens WhatsApp removida (já existe em Contatos)
+- **analise_competitiva.py** — botão "Meu produto vs" → "Meu produto vs concorrentes"
+- **configuracao.py** — tabela configuracao criada automaticamente se não existir
+- Sequences PostgreSQL desincronizadas corrigidas via corrigir_sequence.py
 
 ---
 
 ## [2026-05-31] — Sessão principal de desenvolvimento
 
 ### Funcionalidades implementadas
-- **resultado_operacional.py** — novo módulo: painel confronto comissões × despesas
-  - Visão "previsto": comissões de pedidos ENTREGUE com pagto PENDENTE/PAGO_PARCIAL
-  - Visão "realizado": comissões pagas por data_pagamento
-  - Gráfico barras agrupadas + linha saldo — últimos 12 meses
-  - Breakdown por fornecedor e por categoria de despesa
-  - Queries bifurcadas: `_q(sql_sqlite, sql_pg, params)` — NÃO usa tradutor automático
-- **B4** — mensagem de sucesso ao editar PDV + scroll ao topo (`_pdv_msg_ok`)
-- **B3** — filtro de fornecedor em Contatos pré-seleciona fornecedor no painel
-  - Parâmetro `forn_presel=` adicionado a `_painel_topico()` e `_painel_topico_completo()`
-  - Bug corrigido: parâmetro `fornecedor_id=` renomeado para `forn_presel=`
-- **metas.py** — N+1 queries eliminadas com batch por tipo (produto/categoria/linha)
-- **relatorios.py** — datas hardcoded (2026-05-18, 2026-01-01) substituídas por cálculo Python dinâmico
+- **resultado_operacional.py** — painel confronto comissões × despesas
+- **B4** — mensagem de sucesso ao editar PDV
+- **B3** — filtro de fornecedor em Contatos pré-seleciona no painel
+- **metas.py** — N+1 queries eliminadas com batch
+- **relatorios.py** — datas hardcoded substituídas por cálculo Python dinâmico
 
 ### Migrações de banco
-- `comissao_pagamento.data_pagamento_original TEXT` — migrado 31/05/2026
-- `comissao_pagamento.motivo_prorrogacao TEXT` — migrado 31/05/2026
-- Sequences PostgreSQL corrigidas via `corrigir_sequence.py`
+- comissao_pagamento.data_pagamento_original TEXT
+- comissao_pagamento.motivo_prorrogacao TEXT
+- Sequences corrigidas
 - Tipos de PDV corrigidos: Empório, Sacolão, Açougue, Clube/Associação
-  - Scripts: `corrigir_emporio.py` e `corrigir_acentos_pdv.py` rodados no Railway
 
 ### Índices criados no PostgreSQL
-- `idx_pedido_data` ON pedido(data_pedido)
-- `idx_pedido_status` ON pedido(status_pedido)
-- `idx_pedido_fornecedor` ON pedido(fornecedor_id)
-- `idx_pedido_item_pedido` ON pedido_item(pedido_id)
-- `idx_pedido_item_status` ON pedido_item(status_item)
-- `idx_comissao_fornecedor` ON comissao(fornecedor_id)
+- idx_pedido_data, idx_pedido_status, idx_pedido_fornecedor
+- idx_pedido_item_pedido, idx_pedido_item_status, idx_comissao_fornecedor
 
 ---
 
-## Padrões críticos — NUNCA ignorar
+## Padrões críticos de código
 
 ### Acesso a resultados de query()
 ```python
-# ERRADO — pode falhar silenciosamente com _DictRow
+# ERRADO — falha silenciosamente com _DictRow
 r['nome_coluna']
-
-# CORRETO — sempre usar índice
-r[0], r[1], r[2]...
+# CORRETO
+r[0], r[1], r[2]
 ```
 
-### Queries com ROUND() no PostgreSQL
+### ROUND() no PostgreSQL
 ```python
-# ERRADO — PostgreSQL rejeita ROUND(float, int)
+# ERRADO
 ROUND(SUM(valor), 2)
-
-# CORRETO — cast explícito
+# CORRETO
 ROUND(SUM(valor)::NUMERIC, 2)
 ```
 
-### Queries com GROUP BY no PostgreSQL
+### GROUP BY no PostgreSQL
 ```python
-# ERRADO — PostgreSQL exige que colunas fora de agregação estejam no GROUP BY
+# ERRADO — PostgreSQL exige coluna no GROUP BY ou em agregação
 SELECT p.comissao_percentual, SUM(pi.valor) FROM pedido p ... GROUP BY p.pedido_id
-
-# CORRETO — usar MAX() para colunas funcionalmente dependentes
+# CORRETO
 SELECT MAX(p.comissao_percentual), SUM(pi.valor) FROM pedido p ... GROUP BY p.pedido_id
 ```
 
 ### comissao.ativo no PostgreSQL
 ```python
-# ERRADO — ativo é INTEGER no Railway, não BOOLEAN
+# ERRADO — ativo é INTEGER, não BOOLEAN
 com.ativo = TRUE
-
 # CORRETO
 com.ativo = 1
 ```
 
-### Encoding de arquivos
-- Sempre salvar .py com `encoding='utf-8', newline='\n'` para compatibilidade Linux/Railway
-- NUNCA editar crm_app.py manualmente no Windows — usar scripts Python para modificar
-
 ### railway.toml
-- startCommand deve estar na seção `[deploy]`, não em `[build]`
-- Não usar `builder = "nixpacks"` — Nixpacks foi deprecado pelo Railway
+```toml
+# ERRADO
+[build]
+builder = "nixpacks"
+startCommand = "..."
 
----
-
-## Dashboard — status atual
-- Dashboard de indicadores DESABILITADO temporariamente no crm_app.py
-- Causa: queries de pedidos demoram 3-5s mesmo com índices — trava o celular
-- Solução pendente: transformar em página separada acessível por botão
-- Índices criados: ver seção acima — reduziram de 5s para 0.45s em condições normais
+# CORRETO
+[deploy]
+startCommand = "python keepalive.py & streamlit run crm_app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+```
