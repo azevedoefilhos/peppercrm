@@ -1131,16 +1131,21 @@ def _lista_tabelas():
 
     st.divider()
 
-    # ── Seleção da tabela para editar ─────────────────
-    # Usa session_state para fixar a tabela selecionada após salvar (evita pular para próxima)
-    ids     = [(r[0], f"{r[2]} · {r[3]}") for r in dados]
-    ids_map = {r[0]: i for i, r in enumerate(ids)}   # tab_id → índice na lista
+    # ── Seleção da tabela para editar — respeita filtros de fornecedor e tipo ──
+    ids_visiveis = set(int(x) for x in df_vis["ID"].values)
+    ids_filtrados = [(r[0], f"{r[2]} · {r[3]}") for r in dados
+                     if int(r[0]) in ids_visiveis]
+    ids_map = {tid: i for i, (tid, _) in enumerate(ids_filtrados)}
+
+    if not ids_filtrados:
+        st.info("Nenhuma tabela encontrada com os filtros selecionados.")
+        return
 
     # Recupera tab_id fixado (salvo após edição) e calcula índice correspondente
     tab_id_fixo = st.session_state.get("tab_editando_id")
-    idx_sel = ids_map.get(tab_id_fixo, 0) if tab_id_fixo else 0
+    idx_sel = ids_map.get(tab_id_fixo, 0) if tab_id_fixo in ids_map else 0
 
-    sel = st.selectbox("Selecione a tabela para editar", ids,
+    sel = st.selectbox("Selecione a tabela para editar", ids_filtrados,
                        index=idx_sel,
                        format_func=lambda x: x[1],
                        key="tab_sel_edit")
@@ -1180,8 +1185,9 @@ def _lista_tabelas():
         forns_e     = cache_fornecedores()
         forn_ids_e  = [f[0] for f in forns_e]
         idx_forn_e  = forn_ids_e.index(forn_id_at) if forn_id_at in forn_ids_e else 0
-        tipos_e     = ["rede","varejo","atacado"]
-        idx_tipo_e  = tipos_e.index(tipo_at) if tipo_at in tipos_e else 0
+        tipos_e     = ["Atacado", "Distribuidor", "Rede", "Varejo"]
+        tipo_at_cap = tipo_at.capitalize() if tipo_at else "Varejo"
+        idx_tipo_e  = tipos_e.index(tipo_at_cap) if tipo_at_cap in tipos_e else 0
         fretes_e    = ["FOB","CIF","—"]
         idx_frete_e = fretes_e.index(frete_at) if frete_at in fretes_e else 2
 
@@ -1410,7 +1416,7 @@ def _form_nova_tabela():
         with col1:
             forn_sel    = st.selectbox("Fornecedor", forns, format_func=lambda x: x[1])
             nome_tabela = st.text_input("Nome da tabela", placeholder="Ex: Rede 28d")
-            tipo        = st.selectbox("Tipo", ["rede","varejo","atacado"])
+            tipo        = st.selectbox("Tipo", ["Atacado", "Distribuidor", "Rede", "Varejo"])
         with col2:
             prazo    = st.text_input("Prazo de pagamento", placeholder="Ex: 28 dias")
             frete    = st.selectbox("Frete", ["FOB","CIF","—"])
