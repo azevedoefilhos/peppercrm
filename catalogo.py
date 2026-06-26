@@ -453,11 +453,6 @@ def _tela_mensagens():
     _garantir_tabela_mensagens()
     st.subheader("💬 Biblioteca de mensagens & envio WhatsApp")
 
-    # Exibe mensagem de sucesso se houver
-    _msg = st.session_state.pop("cat_msg", None)
-    if _msg:
-        st.success(_msg)
-
     ABAS_MSG = {
         "enviar":    "📤 Enviar mensagem",
         "modelos":   "📝 Gerenciar modelos",
@@ -480,228 +475,211 @@ def _tela_mensagens():
 
 def _tela_enviar_mensagem():
     from database import _check_supabase
+    import urllib.parse
 
-    clientes = query("SELECT cliente_id, nome_fantasia, status FROM cliente ORDER BY nome_fantasia")
-    fornecs  = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")
+    # ── Dados base (todas as queries juntas no início) ─────────────────────
+    fornecs  = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia") or []
+    clientes_todos = query("SELECT cliente_id, nome_fantasia, status, perfil FROM cliente ORDER BY nome_fantasia") or []
+    vend     = query("SELECT nome FROM vendedor WHERE ativo=1 LIMIT 1")
+    nome_vend = vend[0][0] if vend else ""
 
-    # PONTO 4: Fornecedores tratados NO INÍCIO
-    st.markdown("**1. Fornecedor(es) tratado(s) na mensagem**")
-    _kfn = "ms_forns_sel"
-    if _kfn not in st.session_state: st.session_state[_kfn] = []
-    st.multiselect("Fornecedores tratados na mensagem",
+    # ── 1. Fornecedor tratado ──────────────────────────────────────────────
+    st.markdown("**1. Fornecedor tratado na mensagem**")
+    # Restaura fornecedor do backup após "Próximo envio"
+    if "ms_forns_backup" in st.session_state:
+        st.session_state["ms_forns_sel"] = st.session_state.pop("ms_forns_backup")
+    if "ms_forns_sel" not in st.session_state:
+        st.session_state["ms_forns_sel"] = []
+    st.multiselect("Fornecedor(es)",
                    options=[(f[0], f[1]) for f in fornecs],
-                   format_func=lambda x: x[1], key=_kfn)
-    _forns_sel    = st.session_state.get(_kfn, [])
+                   format_func=lambda x: x[1],
+                   key="ms_forns_sel")
+    _forns_sel    = st.session_state.get("ms_forns_sel", [])
     forn_unico_id = _forns_sel[0][0] if len(_forns_sel) == 1 else None
     st.divider()
 
-    # PONTO 3: Modelos filtrados por fornecedor
-    st.markdown("**2. Qual mensagem?**")
+    # ── 2. Modelo de mensagem ──────────────────────────────────────────────
+    st.markdown("**2. Modelo de mensagem**")
     if forn_unico_id:
         modelos = query("""SELECT mensagem_id, nome, assunto, corpo
             FROM mensagem_modelo
             WHERE ativo=1 AND (fornecedor_id=? OR fornecedor_id IS NULL)
-            ORDER BY nome""", (forn_unico_id,))
+            ORDER BY nome""", (forn_unico_id,)) or []
     else:
-        modelos = query("""SELECT mensagem_id, nome, assunto, corpo
-            FROM mensagem_modelo WHERE ativo=1 ORDER BY nome""")
+        modelos = query("SELECT mensagem_id, nome, assunto, corpo FROM mensagem_modelo WHERE ativo=1 ORDER BY nome") or []
 
-    corpo_base = assunto_base = ""
-    if modelos:
-        mod_opts = [(None, "— escrever do zero —")] + \
-                   [(m[0], f"{m[1]}" + (f" — {m[2]}" if m[2] else "")) for m in modelos]
-        mod_sel = st.selectbox("Modelo salvo", mod_opts,
-                               format_func=lambda x: x[1], key="ms_modelo")
-        if mod_sel and mod_sel[0]:
-            modelo_info  = next((m for m in modelos if m[0] == mod_sel[0]), None)
-            corpo_base   = modelo_info[3] if modelo_info else ""
-            assunto_base = modelo_info[2] if modelo_info else ""  # PONTO 5
+    mod_opts = [(0, "— escrever do zero —")] + [(m[0], f"{m[1]}" + (f" — {m[2]}" if m[2] else "")) for m in modelos]
+    mod_sel  = st.selectbox("Modelo", mod_opts, format_func=lambda x: x[1], key="ms_modelo")
+    mod_id   = mod_sel[0] if mod_sel else 0
+
+    # Atualiza corpo e assunto quando modelo muda
+    if st.session_state.get("ms_modelo_anterior") != mod_id:
+        st.session_state["ms_modelo_anterior"] = mod_id
+        if mod_id:
+            m_info = next((m for m in modelos if m[0] == mod_id), None)
+            if m_info:
+                _nm = m_info[1] or ""
+                _as = m_info[2] or ""
+                st.session_state["ms_assunto"] = f"{_nm} - {_as}" if _nm and _as else (_nm or _as)
+                st.session_state["ms_corpo"]   = (m_info[3] or "").replace("{cliente}", "").replace("{vendedor}", nome_vend)
         else:
-            mod_sel = (None, "— escrever do zero —")
-    else:
-        mod_sel = (None, "— escrever do zero —")
-        st.info("Nenhum modelo salvo ainda — escreva abaixo e salve como modelo se quiser.")
+            st.session_state.pop("ms_assunto", None)
+            st.session_state.pop("ms_corpo", None)
     st.divider()
 
-    # Para quem?
+    # ── 3. Destinatário ────────────────────────────────────────────────────
     st.markdown("**3. Para quem?**")
-    col1, col2 = st.columns(2)
-    with col1:
-        dest_tipo = st.selectbox("Tipo", ["Cliente","Fornecedor"], key="ms_tipo")
-    with col2:
+    col_t, col_p = st.columns(2)
+    with col_t:
+        dest_tipo = st.selectbox("Tipo", ["Cliente", "Fornecedor"], key="ms_tipo")
+    with col_p:
         if dest_tipo == "Cliente":
-            tipos_cli = query("SELECT DISTINCT tipo_pdv FROM cliente WHERE tipo_pdv IS NOT NULL AND ativo!=0 ORDER BY tipo_pdv")
-            tipo_opts = ["Todos"] + [t[0] for t in (tipos_cli or []) if t[0]]
-            tipo_cli_sel = st.selectbox("Filtrar por tipo", tipo_opts, key="ms_tipo_cli")
+            perfis    = query("SELECT DISTINCT perfil FROM cliente WHERE perfil IS NOT NULL AND perfil != '' ORDER BY perfil") or []
+            tipo_opts = ["Todos"] + [p[0] for p in perfis if p[0]]
+            tipo_sel  = st.selectbox("Perfil (opcional)", tipo_opts, key="ms_tipo_cli")
         else:
-            tipo_cli_sel = "Todos"
+            tipo_sel = "Todos"
 
     if dest_tipo == "Cliente":
-        # Busca clientes já com tipo_pdv para filtrar sem N+1
-        clientes_com_tipo = query("SELECT cliente_id, nome_fantasia, status, tipo_pdv FROM cliente WHERE ativo!=0 ORDER BY nome_fantasia")
-        if tipo_cli_sel != "Todos":
-            clientes_fil = [c for c in (clientes_com_tipo or []) if c[3] == tipo_cli_sel]
+        # c[0]=cliente_id, c[1]=nome_fantasia, c[2]=status, c[3]=perfil
+        if tipo_sel != "Todos":
+            clientes_fil = [c for c in clientes_todos if c[3] == tipo_sel]
         else:
-            clientes_fil = clientes_com_tipo or clientes
+            clientes_fil = clientes_todos
 
-        dest_sel = st.selectbox("Cliente", clientes_fil,
-                                format_func=lambda x: f"{x[1]} ({x[2]})" if x[2] else x[1],
-                                key="ms_cli")
-        dest_id      = dest_sel[0] if dest_sel else None
-        dest_nome    = dest_sel[1] if dest_sel else ""
-        dest_forn_id = None
-        contatos = query("""SELECT contato_cliente_id, nome_contato,
-                departamento, whatsapp
-            FROM contato_cliente
-            WHERE cliente_id=? AND ativo=1 AND whatsapp IS NOT NULL
-            ORDER BY nome_contato""", (dest_id,)) if dest_id else []
+        dest_sel  = st.selectbox("Cliente", clientes_fil,
+                                 format_func=lambda x: f"{x[1]} ({x[2]})" if x[2] else x[1],
+                                 key="ms_cli")
+        dest_id   = dest_sel[0] if dest_sel else None
+        dest_nome = dest_sel[1] if dest_sel else ""
     else:
-        dest_sel     = st.selectbox("Fornecedor", fornecs,
-                                    format_func=lambda x: x[1], key="ms_forn")
-        dest_id      = None
-        dest_forn_id = dest_sel[0] if dest_sel else None
-        dest_nome    = dest_sel[1] if dest_sel else ""
-        contatos     = []
+        dest_sel  = st.selectbox("Fornecedor", fornecs, format_func=lambda x: x[1], key="ms_forn")
+        dest_id   = None
+        dest_nome = dest_sel[1] if dest_sel else ""
 
-    st.markdown("**4. Para qual contato?**")
-    pessoa_nome = ""
+    # Atualiza corpo com nome do cliente quando cliente muda
     if st.session_state.get("ms_cli_anterior") != dest_id:
         st.session_state["ms_cli_anterior"] = dest_id
         st.session_state.pop("ms_wa_num", None)
+        if mod_id and dest_nome:
+            m_info = next((m for m in modelos if m[0] == mod_id), None)
+            if m_info:
+                st.session_state["ms_corpo"] = (m_info[3] or "").replace("{cliente}", dest_nome).replace("{vendedor}", nome_vend)
+    st.divider()
 
-    if dest_tipo == "Cliente":
-        _cli_fone = query("SELECT COALESCE(fone,'') FROM cliente WHERE cliente_id=?",
-                          (dest_id,)) if dest_id else []
-        _fone_cli = _cli_fone[0][0] if _cli_fone and _cli_fone[0][0] else ""
+    # ── 4. Contato e WhatsApp ──────────────────────────────────────────────
+    st.markdown("**4. Contato e número**")
+    pessoa_nome = ""
+    if dest_tipo == "Cliente" and dest_id:
+        contatos = query("""SELECT contato_cliente_id, nome_contato, departamento, whatsapp
+            FROM contato_cliente WHERE cliente_id=? AND ativo=1 AND whatsapp IS NOT NULL
+            ORDER BY nome_contato""", (dest_id,)) or []
+        _fone = (query("SELECT COALESCE(fone,'') FROM cliente WHERE cliente_id=?", (dest_id,)) or [[""]]) [0][0]
+
         if contatos:
-            ct_opts_full = [(None, "— usar fone do cadastro —")] + \
-                           [(c[0], f"{c[1]}" + (f" — {c[2]}" if c[2] else "") +
-                             f" | {c[3]}") for c in contatos]
-            ct_sel = st.selectbox("Contato", ct_opts_full,
-                                  format_func=lambda x: x[1], key="ms_ct")
+            ct_opts = [(None, "— usar fone do cadastro —")] + \
+                      [(c[0], f"{c[1]}{' — '+c[2] if c[2] else ''} | {c[3]}") for c in contatos]
+            ct_sel = st.selectbox("Contato", ct_opts, format_func=lambda x: x[1], key="ms_ct")
             if ct_sel and ct_sel[0]:
-                ct_info = next((c for c in contatos if c[0]==ct_sel[0]), None)
-                if ct_info:
-                    pessoa_nome = ct_info[1]
-                    _fone_cli   = ct_info[3] or _fone_cli
+                ct = next((c for c in contatos if c[0] == ct_sel[0]), None)
+                if ct:
+                    pessoa_nome = ct[1]
+                    _fone = ct[3] or _fone
+
         if "ms_wa_num" not in st.session_state:
-            st.session_state["ms_wa_num"] = _fone_cli
-        wa_num = st.text_input("Número WhatsApp", key="ms_wa_num",
-                               placeholder="11 9 9999-9999",
-                               help="Auto-preenchido com o fone do cadastro")
+            st.session_state["ms_wa_num"] = _fone
+        wa_num = st.text_input("Número WhatsApp", key="ms_wa_num", placeholder="11 9 9999-9999")
     else:
-        wa_num = st.text_input("Número WhatsApp do fornecedor",
-                               placeholder="11 9 9999-9999", key="ms_wa_forn")
+        wa_num = st.text_input("Número WhatsApp", placeholder="11 9 9999-9999", key="ms_wa_forn")
     st.divider()
 
-    # Assunto e mensagem
+    # ── 5. Assunto e mensagem ──────────────────────────────────────────────
     st.markdown("**5. Assunto e mensagem**")
-    vend      = query("SELECT nome FROM vendedor WHERE ativo=1 LIMIT 1")
-    nome_vend = vend[0][0] if vend else ""
-    _mod_id   = mod_sel[0] if mod_sel and mod_sel[0] else None
-    if st.session_state.get("ms_modelo_anterior") != _mod_id:
-        st.session_state["ms_modelo_anterior"] = _mod_id
-        st.session_state["ms_corpo"]   = corpo_base.replace(
-            "{cliente}", dest_nome or "").replace("{vendedor}", nome_vend)
-        st.session_state["ms_assunto"] = assunto_base
-    assunto_msg = st.text_input("Assunto (para registro em Contatos)",
-                                key="ms_assunto",
+    assunto_msg = st.text_input("Assunto (para registro em Contatos)", key="ms_assunto",
                                 placeholder="Ex: Prospecção Hamburgueria - Specialli")
-    corpo_edit = st.text_area("Mensagem", key="ms_corpo", height=200)
+    corpo_edit  = st.text_area("Mensagem", key="ms_corpo", height=220)
     st.divider()
 
-    # Registrar em Contatos?
-    registrar = st.checkbox("✅ Registrar este contato em Contatos & Negociações",
-                            value=True, key="ms_registrar")
+    # ── 6. Dados do registro ───────────────────────────────────────────────
+    registrar = st.checkbox("✅ Registrar contato em Contatos & Negociações", value=True, key="ms_registrar")
     if registrar:
-        col_r1, col_r2, col_r3, col_r4 = st.columns(4)
-        with col_r1:
-            ms_status = st.selectbox("Status",
-                ["Em andamento","A contatar","Aguardando retorno",
-                 "Proposta enviada","Concluído","Cancelado"],
-                index=1, key="ms_status")
-        with col_r2:
-            ms_prior = st.selectbox("Prioridade", ["Alta","Média","Baixa"],
-                                    index=1, key="ms_prior")
-        with col_r3:
-            ms_tipo = st.selectbox("Tipo", ["Contato","Negociação"], key="ms_tipo_top")
-        with col_r4:
-            ms_fup = st.date_input("Próximo contato", value=None, key="ms_fup")
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: st.selectbox("Status", ["Em andamento","A contatar","Aguardando retorno","Proposta enviada","Concluído","Cancelado"], index=2, key="ms_status")
+        with c2: st.selectbox("Prioridade", ["Alta","Média","Baixa"], index=1, key="ms_prior")
+        with c3: st.selectbox("Tipo", ["Contato","Negociação"], key="ms_tipo_top")
+        with c4: st.date_input("Próximo contato", value=None, key="ms_fup")
     st.divider()
 
-    # Preview e envio
+    # ── 7. Envio e confirmação ─────────────────────────────────────────────
     if wa_num and corpo_edit:
-        num_clean = "".join(filter(str.isdigit, wa_num))
-        if not num_clean.startswith("55"): num_clean = "55" + num_clean
-        import urllib.parse
-        wa_link = f"https://wa.me/{num_clean}?text={urllib.parse.quote(corpo_edit)}"
-        col_wa, col_copia = st.columns(2)
-        col_wa.markdown(
-            f'<a href="{wa_link}" target="_blank">'
-            f'<button style="background:#25D366;color:white;border:none;'
-            f'padding:10px 20px;border-radius:8px;font-size:15px;'
-            f'cursor:pointer;width:100%">💬 Abrir WhatsApp e enviar</button></a>',
-            unsafe_allow_html=True)
-        if col_copia.button("📋 Copiar mensagem", key="ms_copiar", width="stretch"):
-            st.code(corpo_edit, language=None)
-            st.caption("Selecione o texto acima e copie.")
+        num = "".join(filter(str.isdigit, wa_num))
+        if not num.startswith("55"): num = "55" + num
+        wa_link = f"https://wa.me/{num}?text={urllib.parse.quote(corpo_edit)}"
 
-        st.caption("Após enviar no WhatsApp, clique abaixo para confirmar o registro:")
+        col_wa, col_cp = st.columns(2)
+        col_wa.markdown(
+            f'<a href="{wa_link}" target="_blank"><button style="background:#25D366;'
+            f'color:white;border:none;padding:10px 20px;border-radius:8px;'
+            f'font-size:15px;cursor:pointer;width:100%">💬 Abrir WhatsApp</button></a>',
+            unsafe_allow_html=True)
+        if col_cp.button("📋 Copiar", key="ms_copiar", width="stretch"):
+            st.code(corpo_edit, language=None)
+
+        st.caption("Após enviar no WhatsApp, clique abaixo:")
         _ja_salvo = st.session_state.get("ms_ja_registrado", False)
+
         if st.button("✅ Confirmar envio e registrar", key="ms_confirmar",
                      type="primary", width="stretch", disabled=_ja_salvo):
             if registrar and dest_id:
-                _forns = st.session_state.get("ms_forns_sel", [])
-                _forn_ids, _forn_nomes = [], []
-                for ft in _forns:
-                    if isinstance(ft, (list, tuple)) and len(ft) >= 2:
-                        _forn_ids.append(int(ft[0])); _forn_nomes.append(str(ft[1]))
-                    elif isinstance(ft, (int, float)):
-                        _forn_ids.append(int(ft))
-                _ms_status = st.session_state.get("ms_status", "Aguardando retorno")
-                _ms_prior  = st.session_state.get("ms_prior", "Média")
-                _ms_tipo   = st.session_state.get("ms_tipo_top", "Contato")
-                _ms_fup    = st.session_state.get("ms_fup", None)
-                _fup_val   = _ms_fup.isoformat() if _ms_fup and hasattr(_ms_fup,'isoformat') else None
-                _assunto_final = assunto_msg.strip() or "Mensagem WhatsApp"
-                if _forn_nomes and not any(n in _assunto_final for n in _forn_nomes):
-                    _assunto_final = f"{_assunto_final} — {', '.join(_forn_nomes)}"
+                _forns      = st.session_state.get("ms_forns_sel", [])
+                _forn_ids   = [int(f[0]) for f in _forns if isinstance(f, (list,tuple)) and len(f)>=2]
+                _forn_nomes = [str(f[1]) for f in _forns if isinstance(f, (list,tuple)) and len(f)>=2]
+                _status  = st.session_state.get("ms_status", "Aguardando retorno")
+                _prior   = st.session_state.get("ms_prior", "Média")
+                _tipo    = st.session_state.get("ms_tipo_top", "Contato")
+                _fup     = st.session_state.get("ms_fup", None)
+                _fup_val = _fup.isoformat() if _fup and hasattr(_fup, "isoformat") else None
+                _assunto = assunto_msg.strip() or "Mensagem WhatsApp"
+                if _forn_nomes and not any(n in _assunto for n in _forn_nomes):
+                    _assunto = f"{_assunto} — {', '.join(_forn_nomes)}"
+
                 conn = conectar()
                 if _check_supabase():
                     novo_cid = conn.execute("""INSERT INTO contato_registro
-                        (data_contato, via_comunicacao, tipo_entidade, cliente_id,
-                         contato_pessoa, assunto, descricao, status, prioridade,
-                         tipo_topico, data_followup, ativo)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,1) RETURNING contato_id""",
-                        (date.today().isoformat(), "WhatsApp", "cliente", dest_id,
-                         pessoa_nome or None, _assunto_final, corpo_edit.strip(),
-                         _ms_status, _ms_prior, _ms_tipo, _fup_val)).fetchone()[0]
+                        (data_contato,via_comunicacao,tipo_entidade,cliente_id,
+                         contato_pessoa,assunto,descricao,status,prioridade,
+                         tipo_topico,data_followup,ativo)
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?,1) RETURNING contato_id""",
+                        (date.today().isoformat(),"WhatsApp","cliente",dest_id,
+                         pessoa_nome or None,_assunto,corpo_edit.strip(),
+                         _status,_prior,_tipo,_fup_val)).fetchone()[0]
                 else:
                     conn.execute("""INSERT INTO contato_registro
-                        (data_contato, via_comunicacao, tipo_entidade, cliente_id,
-                         contato_pessoa, assunto, descricao, status, prioridade,
-                         tipo_topico, data_followup, ativo)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,1)""",
-                        (date.today().isoformat(), "WhatsApp", "cliente", dest_id,
-                         pessoa_nome or None, _assunto_final, corpo_edit.strip(),
-                         _ms_status, _ms_prior, _ms_tipo, _fup_val))
+                        (data_contato,via_comunicacao,tipo_entidade,cliente_id,
+                         contato_pessoa,assunto,descricao,status,prioridade,
+                         tipo_topico,data_followup,ativo)
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?,1)""",
+                        (date.today().isoformat(),"WhatsApp","cliente",dest_id,
+                         pessoa_nome or None,_assunto,corpo_edit.strip(),
+                         _status,_prior,_tipo,_fup_val))
                     novo_cid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
                 for fid in _forn_ids:
-                    conn.execute("INSERT INTO contato_x_fornecedor "
-                                 "(contato_id, fornecedor_id) VALUES (?,?) "
-                                 "ON CONFLICT DO NOTHING", (novo_cid, fid))
+                    conn.execute("INSERT INTO contato_x_fornecedor(contato_id,fornecedor_id) "
+                                 "VALUES(?,?) ON CONFLICT DO NOTHING", (novo_cid, fid))
                 conn.execute("""INSERT INTO contato_interacao
-                    (contato_id, data_interacao, via_comunicacao, contato_pessoa, descricao, ativo)
-                    VALUES (?,?,?,?,?,1)""",
-                    (novo_cid, date.today().isoformat(), "WhatsApp",
-                     pessoa_nome or None, corpo_edit.strip()))
+                    (contato_id,data_interacao,via_comunicacao,contato_pessoa,descricao,ativo)
+                    VALUES(?,?,?,?,?,1)""",
+                    (novo_cid,date.today().isoformat(),"WhatsApp",
+                     pessoa_nome or None,corpo_edit.strip()))
                 conn.commit(); conn.close()
-                # Limpa tudo EXCETO fornecedor — mantém para próximo envio
-                _forns_backup = st.session_state.get("ms_forns_sel", [])
+
+                # Preserva fornecedor usando key auxiliar — não pode modificar key de widget ativo
+                _backup_forns = list(st.session_state.get("ms_forns_sel", []))
                 for k in ["ms_wa_num","ms_corpo","ms_modelo_anterior","ms_assunto",
-                          "ms_cli_anterior","ms_status","ms_prior","ms_tipo_top","ms_fup"]:
+                          "ms_cli_anterior","ms_status","ms_prior","ms_tipo_top","ms_fup","ms_cli"]:
                     st.session_state.pop(k, None)
-                st.session_state["ms_forns_sel"]    = _forns_backup
+                st.session_state["ms_forns_backup"]  = _backup_forns
                 st.session_state["ms_ja_registrado"] = True
                 st.session_state["ms_sucesso_nome"]  = dest_nome
                 st.rerun()
@@ -709,23 +687,16 @@ def _tela_enviar_mensagem():
                 st.success("✅ Envio confirmado!")
 
         if _ja_salvo:
-            _nome_ok = st.session_state.get("ms_sucesso_nome", "")
-            st.success(f"✅ Contato registrado para **{_nome_ok}**! Selecione o próximo cliente.")
+            _ok = st.session_state.get("ms_sucesso_nome", "")
+            st.success(f"✅ Registrado para **{_ok}**! Selecione o próximo cliente.")
             if st.button("➕ Próximo envio", key="ms_proximo", width="stretch"):
                 for k in ["ms_wa_num","ms_corpo","ms_modelo_anterior","ms_assunto",
                           "ms_cli_anterior","ms_status","ms_prior","ms_tipo_top",
                           "ms_fup","ms_ja_registrado","ms_sucesso_nome","ms_cli"]:
                     st.session_state.pop(k, None)
-                # Scroll ao topo
-                st.components.v1.html("<script>window.parent.scrollTo(0,0);</script>", height=0)
                 st.rerun()
     else:
-        if not wa_num and not corpo_edit:
-            st.info("Preencha o número e a mensagem para gerar o link de envio.")
-        elif not wa_num:
-            st.info("Preencha o número WhatsApp para gerar o link.")
-        else:
-            st.info("Selecione um modelo ou escreva a mensagem para gerar o link.")
+        st.info("Preencha o número WhatsApp e a mensagem para gerar o link de envio.")
 
 
 def _tela_gerenciar_modelos():
