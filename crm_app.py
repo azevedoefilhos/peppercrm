@@ -41,7 +41,6 @@ _RESET_ABAS = {
     "ver_pedidos":         {"vp_modo": "lista"},
     "configuracao":        {"cfg_aba": "sis"},
     "despesas":            {"desp_aba": "nova"},
-    "catalogo":            {"cat_aba": "catalogo"},
 }
 
 
@@ -644,7 +643,6 @@ if pagina == "home":
         if st.button("📦 Produtos",         width="stretch"): ir("produtos")
         if st.button("💲 Tabelas de Preço", width="stretch"): ir("tabelas_preco")
         if st.button("👥 Clientes",         width="stretch"): ir("clientes")
-        if st.button("📒 Catálogo",         width="stretch"): ir("catalogo")
     with col2:
         st.subheader("Comercial")
         if st.button("🧾 Novo Pedido",    width="stretch"): ir("pedido")
@@ -684,7 +682,6 @@ elif pagina == "concorrentes":        from concorrentes import tela_concorrentes
 elif pagina == "analise_competitiva": from analise_competitiva import tela_analise_competitiva; tela_analise_competitiva()
 elif pagina == "contatos":            from contatos import tela_contatos; tela_contatos()
 elif pagina == "metas":               from metas import tela_metas; tela_metas()
-elif pagina == "catalogo":            from catalogo import tela_catalogo; tela_catalogo()
 elif pagina == "despesas":            from despesas import tela_despesas; tela_despesas()
 elif pagina == "resultado_operacional":
     st.header("Resultado Operacional")
