@@ -99,6 +99,13 @@ def _form_nova_despesa():
         "nd_preco_l": 0.0, "nd_media": 12.0,
         "nd_valor": 0.0,
     }
+    # Substitui nd_media pela última entrada registrada no banco, se existir
+    if "nd_media" not in st.session_state:
+        _ultima_media = query("""SELECT media_km_litro FROM despesa
+            WHERE media_km_litro IS NOT NULL AND media_km_litro > 0
+            ORDER BY data_despesa DESC, despesa_id DESC LIMIT 1""")
+        if _ultima_media and _ultima_media[0][0]:
+            _defaults["nd_media"] = float(_ultima_media[0][0])
     for k, v in _defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v

@@ -22,7 +22,7 @@ TIPOS_VISITA    = ["Prospeccao","Rotina","Cobranca","Entrega","Reuniao","Outro"]
 
 
 def tela_visitas():
-    st.header("Visitas a Clientes")
+    st.header("🗺️ Promotores & Roteiros")
 
     modo = st.session_state.get("vis_modo", "lista")
 

@@ -651,7 +651,7 @@ if pagina == "home":
         if st.button("💰 Comissões",      width="stretch"): ir("comissoes")
         if st.button("💸 Despesas",       width="stretch"): ir("despesas")
         if st.button("📊 Resultado Operacional", width="stretch"): ir("resultado_operacional")
-        if st.button("📋 Visitas",        width="stretch"): ir("visitas")
+        if st.button("🗺️ Promotores & Roteiros", width="stretch"): ir("visitas")
         if st.button("🎯 Mix / Oferta",   width="stretch"): ir("mix_analise")
         if st.button("🔍 Pesquisa PDV",   width="stretch"):
             st.session_state["pq_modo"] = "lista"; ir("pesquisa")
