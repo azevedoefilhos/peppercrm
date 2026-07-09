@@ -30,14 +30,20 @@ def _garantir_tabela_tokens():
 
 def _usuario_valido(login: str, senha: str):
     rows = query(
-        "SELECT usuario_id, nome, email, tipo FROM usuario "
+        "SELECT usuario_id, nome, email, tipo, empresa_id FROM usuario "
         "WHERE email=? AND senha_hash=? AND ativo=1",
         (login.strip().lower(), _hash(senha))
     )
     if not rows:
         return None
     r = rows[0]
-    return {"id": r[0], "nome": r[1], "email": r[2], "tipo": r[3]}
+    return {
+        "id":         r[0],
+        "nome":       r[1],
+        "email":      r[2],
+        "tipo":       r[3],
+        "empresa_id": r[4] if r[4] else 1,
+    }
 
 
 def _criar_token(usuario_id: int, lembrar: bool) -> str:
@@ -57,7 +63,7 @@ def _validar_token(token: str):
         return None
     _garantir_tabela_tokens()
     rows = query("""
-        SELECT u.usuario_id, u.nome, u.email, u.tipo, st.expira_em
+        SELECT u.usuario_id, u.nome, u.email, u.tipo, st.expira_em, u.empresa_id
         FROM sessao_token st
         JOIN usuario u ON u.usuario_id = st.usuario_id
         WHERE st.token=? AND st.ativo=1 AND u.ativo=1
@@ -72,7 +78,13 @@ def _validar_token(token: str):
             return None
     except Exception:
         return None
-    return {"id": r[0], "nome": r[1], "email": r[2], "tipo": r[3]}
+    return {
+        "id":         r[0],
+        "nome":       r[1],
+        "email":      r[2],
+        "tipo":       r[3],
+        "empresa_id": r[5] if r[5] else 1,
+    }
 
 
 def logout():

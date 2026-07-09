@@ -474,6 +474,21 @@ def get_nome_empresa():
     return r[0][0] if r and r[0][0] else "PepperCRM"
 
 
+def get_empresa_id() -> int:
+    """
+    Retorna o empresa_id do usuario logado na sessao atual.
+    Enquanto D2 nao estiver 100% ativo, retorna sempre 1.
+    Quando D2 estiver completo, le de st.session_state["auth_user"]["empresa_id"].
+    """
+    try:
+        import streamlit as st
+        usuario = st.session_state.get("auth_user", {})
+        eid = usuario.get("empresa_id", 1)
+        return int(eid) if eid else 1
+    except Exception:
+        return 1
+
+
 def _cache_clientes():
     try:
         import streamlit as st
