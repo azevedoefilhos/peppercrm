@@ -221,6 +221,20 @@ def _pg_connect():
     )
 
 
+def _set_empresa_id(conn):
+    """Injeta empresa_id na conexao para o RLS funcionar."""
+    try:
+        import streamlit as st
+        usuario = st.session_state.get("auth_user", {})
+        eid = int(usuario.get("empresa_id", 1) or 1)
+        cur = conn.cursor()
+        cur.execute(f"SET app.empresa_id = '{eid}'")
+        conn.commit()
+        cur.close()
+    except Exception:
+        pass
+
+
 def _get_session_conn():
     """
     Conexao persistente por sessao Streamlit.
@@ -232,8 +246,10 @@ def _get_session_conn():
         conn = st.session_state.get("db_conn")
         # Reconecta só se não existe ou se psycopg2 marcou como fechada
         if conn is None or getattr(conn, 'closed', 1) != 0:
-            st.session_state["db_conn"] = _pg_connect()
-            return st.session_state["db_conn"]
+            conn = _pg_connect()
+            _set_empresa_id(conn)
+            st.session_state["db_conn"] = conn
+            return conn
         return conn
     except Exception:
         return _pg_connect()
@@ -254,6 +270,7 @@ class _PgCursor:
 class _PgConn:
     def __init__(self):
         self._conn = _pg_connect()
+        _set_empresa_id(self._conn)
     def cursor(self): return _PgCursor(self._conn.cursor())
     def execute(self, sql, params=()):
         cur = self.cursor(); cur.execute(sql, params); return cur
