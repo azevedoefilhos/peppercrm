@@ -41,6 +41,7 @@ _RESET_ABAS = {
     "ver_pedidos":         {"vp_modo": "lista"},
     "configuracao":        {"cfg_aba": "sis"},
     "despesas":            {"desp_aba": "nova"},
+    "catalogo":            {"cat_aba": "catalogo"},
 }
 
 
@@ -622,6 +623,8 @@ def _tela_busca_global():
 
 
 if pagina == "home":
+    from permissoes import get_menu, e_admin, e_master, perfil_atual
+
     col_t, col_b, col_c, col_sair = st.columns([4, 1, 1, 1])
     with col_t: st.title(f"{_nome_empresa()}")
     with col_b:
@@ -629,44 +632,35 @@ if pagina == "home":
         if st.button("🔍 Busca", width="stretch"): ir("busca_global")
     with col_c:
         st.write("")
-        if st.button("⚙️ Config.", width="stretch"): ir("configuracao")
+        if e_admin() and st.button("⚙️ Config.", width="stretch"): ir("configuracao")
     with col_sair:
         st.write("")
         if st.button("🚪 Sair", width="stretch"): logout()
 
-    # ── Menu ANTES do dashboard — garante navegação mesmo se dashboard lento
+    # ── Menu dinâmico por perfil ───────────────────────────────────────────
     st.divider()
+    _menu = get_menu()
+    _itens = list(_menu.values())
+    _meio  = len(_itens) // 2
+
     col1, col2 = st.columns(2)
     with col1:
-        st.subheader("Cadastros")
-        if st.button("🏭 Fornecedores",     width="stretch"): ir("fornecedores")
-        if st.button("📦 Produtos",         width="stretch"): ir("produtos")
-        if st.button("💲 Tabelas de Preço", width="stretch"): ir("tabelas_preco")
-        if st.button("👥 Clientes",         width="stretch"): ir("clientes")
+        for label, pagina_dest in _itens[:_meio]:
+            if st.button(label, width="stretch"): ir(pagina_dest)
     with col2:
-        st.subheader("Comercial")
-        if st.button("🧾 Novo Pedido",    width="stretch"): ir("pedido")
-        if st.button("📊 Ver Pedidos",    width="stretch"): ir("ver_pedidos")
-        if st.button("📈 Relatórios",     width="stretch"): ir("relatorios")
-        if st.button("💰 Comissões",      width="stretch"): ir("comissoes")
-        if st.button("💸 Despesas",       width="stretch"): ir("despesas")
-        if st.button("📊 Resultado Operacional", width="stretch"): ir("resultado_operacional")
-        if st.button("🗺️ Promotores & Roteiros", width="stretch"): ir("visitas")
-        if st.button("🎯 Mix / Oferta",   width="stretch"): ir("mix_analise")
-        if st.button("🔍 Pesquisa PDV",   width="stretch"):
-            st.session_state["pq_modo"] = "lista"; ir("pesquisa")
-        if st.button("🏷️ Concorrentes",   width="stretch"): ir("concorrentes")
-        if st.button("📊 Inteligência Competitiva", width="stretch"): ir("analise_competitiva")
-        if st.button("📞 Contatos & Negociações",   width="stretch"): ir("contatos")
-        if st.button("🎯 Metas",                    width="stretch"): ir("metas")
+        for label, pagina_dest in _itens[_meio:]:
+            if st.button(label, width="stretch"): ir(pagina_dest)
 
     # ── Dashboard DEPOIS do menu ───────────────────────────────────────────
-    st.divider()
-    with st.spinner("Carregando indicadores..."):
-        _dashboard()
+    if e_admin() or e_master():
+        st.divider()
+        with st.spinner("Carregando indicadores..."):
+            _dashboard()
 
 
 elif pagina == "configuracao":  from configuracao import tela_configuracao; tela_configuracao()
+elif pagina == "usuarios":      from usuarios import tela_usuarios; tela_usuarios()
+elif pagina == "empresas":      from usuarios import tela_empresas; tela_empresas()
 elif pagina == "fornecedores":  from cadastros import tela_fornecedores; tela_fornecedores()
 elif pagina == "produtos":      from cadastros import tela_produtos; tela_produtos()
 elif pagina == "tabelas_preco": from cadastros import tela_tabelas_preco; tela_tabelas_preco()
@@ -682,6 +676,7 @@ elif pagina == "concorrentes":        from concorrentes import tela_concorrentes
 elif pagina == "analise_competitiva": from analise_competitiva import tela_analise_competitiva; tela_analise_competitiva()
 elif pagina == "contatos":            from contatos import tela_contatos; tela_contatos()
 elif pagina == "metas":               from metas import tela_metas; tela_metas()
+elif pagina == "catalogo":            from catalogo import tela_catalogo; tela_catalogo()
 elif pagina == "despesas":            from despesas import tela_despesas; tela_despesas()
 elif pagina == "resultado_operacional":
     st.header("Resultado Operacional")
