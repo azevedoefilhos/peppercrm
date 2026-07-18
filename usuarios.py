@@ -382,6 +382,43 @@ def tela_usuarios(embutido=False):
                             value=st.session_state.get("nu_senha", _gerar_senha()),
                             help="Gerada automaticamente. Pode alterar.")
 
+    # Opção de cadastrar também na Equipe (quando nao ha vinculo existente)
+    _criar_colaborador = False
+    _colab_extra = {}
+    if not vinculo_id and n_tipo in ('REPRESENTANTE','VENDEDOR','REPRESENTANTE_ADM',
+                                      'PROMOTOR','PROMOTOR_VENDEDOR','SUPERVISOR'):
+        LABELS = {
+            'REPRESENTANTE':     'Representante',
+            'VENDEDOR':          'Vendedor',
+            'REPRESENTANTE_ADM': 'Representante/Vendedor',
+            'PROMOTOR':          'Promotor',
+            'PROMOTOR_VENDEDOR': 'Promotor Vendedor',
+            'SUPERVISOR':        'Supervisor',
+        }
+        _label = LABELS.get(n_tipo, n_tipo)
+        _criar_colaborador = st.checkbox(
+            f"➕ Também cadastrar como **{_label}** na Equipe",
+            key="nu_criar_colab",
+            help="Cria o cadastro de colaborador e vincula automaticamente ao usuário."
+        )
+        if _criar_colaborador:
+            with st.expander("Dados adicionais do colaborador", expanded=True):
+                col1, col2 = st.columns(2)
+                with col1:
+                    _cidade = st.text_input("Cidade", key="nu_colab_cidade")
+                with col2:
+                    _ufs_list = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA",
+                                 "MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN",
+                                 "RO","RR","RS","SC","SE","SP","TO"]
+                    _uf = st.selectbox("UF", _ufs_list, index=_ufs_list.index("SP"),
+                                       key="nu_colab_uf")
+                _bairro = st.text_input("Bairro / região de atuação", key="nu_colab_bairro")
+                _obs    = st.text_input("Observação", key="nu_colab_obs")
+                _colab_extra = {
+                    "cidade": _cidade, "uf": _uf,
+                    "bairro": _bairro, "obs": _obs
+                }
+
     if st.button("💾 Criar usuário", key="nu_criar", type="primary"):
         if not n_nome.strip() or not n_email.strip():
             st.error("Nome e email são obrigatórios.")
@@ -402,6 +439,8 @@ def tela_usuarios(embutido=False):
                 novo_uid = query("SELECT usuario_id FROM usuario WHERE email=%s",
                                  (n_email.strip().lower(),))
                 novo_uid = novo_uid[0][0] if novo_uid else None
+
+                # Vincula colaborador existente
                 if novo_uid and vinculo_id:
                     if vinculo_tipo == 'promotor':
                         execute_write(
@@ -415,6 +454,38 @@ def tela_usuarios(embutido=False):
                         execute_write(
                             "UPDATE vendedor SET usuario_id=%s WHERE vendedor_id=%s",
                             (novo_uid, vinculo_id))
+
+                # Cria novo colaborador na Equipe se solicitado
+                if novo_uid and _criar_colaborador and not vinculo_id:
+                    _nm  = n_nome.strip()
+                    _wa  = n_wa.strip() or None
+                    _cid = _colab_extra.get("cidade") or None
+                    _uf  = _colab_extra.get("uf")
+                    _br  = _colab_extra.get("bairro") or None
+                    _ob  = _colab_extra.get("obs") or None
+
+                    if n_tipo in ('REPRESENTANTE','VENDEDOR','REPRESENTANTE_ADM'):
+                        execute_write("""
+                            INSERT INTO vendedor
+                                (nome, whatsapp, cidade, empresa_id, usuario_id, ativo)
+                            VALUES (%s,%s,%s,%s,%s,1)
+                        """, (_nm, _wa, _cid, eid_novo, novo_uid))
+
+                    elif n_tipo in ('PROMOTOR','PROMOTOR_VENDEDOR'):
+                        execute_write("""
+                            INSERT INTO promotor
+                                (nome, fone, cidade, estado, bairro, observacao,
+                                 empresa_id, usuario_id, ativo)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1)
+                        """, (_nm, _wa, _cid, _uf, _br, _ob, eid_novo, novo_uid))
+
+                    elif n_tipo == 'SUPERVISOR':
+                        execute_write("""
+                            INSERT INTO supervisor
+                                (nome, fone, cidade, estado, bairro, observacao,
+                                 empresa_id, usuario_id, ativo)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1)
+                        """, (_nm, _wa, _cid, _uf, _br, _ob, eid_novo, novo_uid))
 
                 st.session_state["nu_criado"] = {
                     "nome":  n_nome.strip(),
