@@ -290,7 +290,6 @@ def tela_usuarios(embutido=False):
     _pre_wa    = st.session_state.get("nu_wa", "")
 
     if n_tipo in ('REPRESENTANTE', 'VENDEDOR', 'REPRESENTANTE_ADM'):
-        # Vendedores da tabela vendedor sem usuario vinculado
         sem_login_v = query("""
             SELECT vendedor_id, nome, fone, email, whatsapp FROM vendedor
             WHERE empresa_id=%s AND usuario_id IS NULL AND ativo!=0
@@ -310,8 +309,10 @@ def tela_usuarios(embutido=False):
                 _pre_nome  = v[1] or ""
                 _pre_email = v[3] or ""
                 _pre_wa    = v[4] or v[2] or ""
+        else:
+            st.caption("ℹ️ Nenhum vendedor cadastrado sem login. O usuário será criado sem vínculo.")
 
-    elif n_tipo == 'PROMOTOR' or n_tipo == 'PROMOTOR_VENDEDOR':
+    elif n_tipo in ('PROMOTOR', 'PROMOTOR_VENDEDOR'):
         sem_login = query("""
             SELECT promotor_id, nome, fone, email FROM promotor
             WHERE empresa_id=%s AND ativo!=0
@@ -332,6 +333,8 @@ def tela_usuarios(embutido=False):
                 _pre_nome  = p[1] or ""
                 _pre_email = p[3] or ""
                 _pre_wa    = p[2] or ""
+        else:
+            st.caption("ℹ️ Nenhum promotor cadastrado sem login. O usuário será criado sem vínculo.")
 
     elif n_tipo == 'SUPERVISOR':
         sem_login_s = query("""
@@ -354,6 +357,8 @@ def tela_usuarios(embutido=False):
                 _pre_nome  = s[1] or ""
                 _pre_email = s[3] or ""
                 _pre_wa    = s[2] or ""
+        else:
+            st.caption("ℹ️ Nenhum supervisor cadastrado sem login. O usuário será criado sem vínculo.")
 
     # Mostra credenciais do usuario recem-criado
     if st.session_state.get("nu_criado"):
