@@ -620,12 +620,12 @@ def _tela_carteira_clientes():
     if st.session_state.get("eq_cart_msg"):
         st.success(st.session_state.pop("eq_cart_msg"))
 
-    # Busca vendedores sem JOIN
+    # Busca vendedores sem JOIN — inclui MASTER pois pode ter carteira
     usu_vend = query("""
         SELECT usuario_id, nome FROM usuario
         WHERE empresa_id=%s
           AND (tipo='REPRESENTANTE_ADM' OR tipo='REPRESENTANTE'
-               OR tipo='VENDEDOR' OR tipo='PROMOTOR_VENDEDOR')
+               OR tipo='VENDEDOR' OR tipo='PROMOTOR_VENDEDOR' OR tipo='MASTER')
           AND ativo=1 ORDER BY nome
     """, (eid,)) or []
 

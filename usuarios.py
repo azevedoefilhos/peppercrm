@@ -276,13 +276,42 @@ def tela_usuarios(embutido=False):
     else:
         eid_novo = empresa_id_atual()
 
-    # Vinculacao com promotor ou supervisor existente — pré-popula campos
-    vinculo_id = None
-    _pre_nome = st.session_state.get("nu_nome", "")
-    _pre_email = st.session_state.get("nu_email", "")
-    _pre_wa = st.session_state.get("nu_wa", "")
+    # Vinculacao com colaborador existente — pré-popula campos
+    # Reset da selecao de vinculo quando tipo muda
+    if st.session_state.get("_nu_tipo_anterior") != n_tipo:
+        for k in ["nu_vinc_prom","nu_vinc_sup","nu_vinc_vend"]:
+            st.session_state.pop(k, None)
+        st.session_state["_nu_tipo_anterior"] = n_tipo
 
-    if n_tipo == 'PROMOTOR':
+    vinculo_id   = None
+    vinculo_tipo = None
+    _pre_nome  = st.session_state.get("nu_nome", "")
+    _pre_email = st.session_state.get("nu_email", "")
+    _pre_wa    = st.session_state.get("nu_wa", "")
+
+    if n_tipo in ('REPRESENTANTE', 'VENDEDOR', 'REPRESENTANTE_ADM'):
+        # Vendedores da tabela vendedor sem usuario vinculado
+        sem_login_v = query("""
+            SELECT vendedor_id, nome, fone, email, whatsapp FROM vendedor
+            WHERE empresa_id=%s AND usuario_id IS NULL AND ativo!=0
+            ORDER BY nome
+        """, (eid_novo,)) or []
+        if sem_login_v:
+            opts_v = [(None, "— Criar novo vendedor")] + \
+                     [(v[0], v[1]) for v in sem_login_v]
+            sel_v = st.selectbox("Vincular a vendedor já cadastrado (opcional)",
+                                 opts_v, format_func=lambda x: x[1],
+                                 key="nu_vinc_vend")
+            vinculo_id   = sel_v[0] if sel_v else None
+            vinculo_tipo = 'vendedor'
+            if vinculo_id:
+                v = next(v for v in sem_login_v if v[0] == vinculo_id)
+                st.info(f"✅ Vinculando a **{v[1]}** — dados pré-preenchidos abaixo.")
+                _pre_nome  = v[1] or ""
+                _pre_email = v[3] or ""
+                _pre_wa    = v[4] or v[2] or ""
+
+    elif n_tipo == 'PROMOTOR' or n_tipo == 'PROMOTOR_VENDEDOR':
         sem_login = query("""
             SELECT promotor_id, nome, fone, email FROM promotor
             WHERE empresa_id=%s AND ativo!=0
@@ -295,7 +324,8 @@ def tela_usuarios(embutido=False):
             sel = st.selectbox("Vincular a promotor já cadastrado (opcional)",
                                opts, format_func=lambda x: x[1],
                                key="nu_vinc_prom")
-            vinculo_id = sel[0] if sel else None
+            vinculo_id   = sel[0] if sel else None
+            vinculo_tipo = 'promotor'
             if vinculo_id:
                 p = next(p for p in sem_login if p[0] == vinculo_id)
                 st.info(f"✅ Vinculando a **{p[1]}** — dados pré-preenchidos abaixo.")
@@ -316,7 +346,8 @@ def tela_usuarios(embutido=False):
             sel_s = st.selectbox("Vincular a supervisor já cadastrado (opcional)",
                                  opts_s, format_func=lambda x: x[1],
                                  key="nu_vinc_sup")
-            vinculo_id = sel_s[0] if sel_s else None
+            vinculo_id   = sel_s[0] if sel_s else None
+            vinculo_tipo = 'supervisor'
             if vinculo_id:
                 s = next(s for s in sem_login_s if s[0] == vinculo_id)
                 st.info(f"✅ Vinculando a **{s[1]}** — dados pré-preenchidos abaixo.")
@@ -367,13 +398,17 @@ def tela_usuarios(embutido=False):
                                  (n_email.strip().lower(),))
                 novo_uid = novo_uid[0][0] if novo_uid else None
                 if novo_uid and vinculo_id:
-                    if n_tipo == 'PROMOTOR':
+                    if vinculo_tipo == 'promotor':
                         execute_write(
                             "UPDATE promotor SET usuario_id=%s WHERE promotor_id=%s",
                             (novo_uid, vinculo_id))
-                    elif n_tipo == 'SUPERVISOR':
+                    elif vinculo_tipo == 'supervisor':
                         execute_write(
                             "UPDATE supervisor SET usuario_id=%s WHERE supervisor_id=%s",
+                            (novo_uid, vinculo_id))
+                    elif vinculo_tipo == 'vendedor':
+                        execute_write(
+                            "UPDATE vendedor SET usuario_id=%s WHERE vendedor_id=%s",
                             (novo_uid, vinculo_id))
 
                 st.session_state["nu_criado"] = {
