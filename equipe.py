@@ -66,25 +66,41 @@ def _tela_vendedores():
     st.subheader("💼 Vendedores / Representantes")
     st.caption("🔑 Com login no app | ⚪ Sem login")
 
-    from permissoes import e_master as _e_master, perfil_atual
+    from permissoes import e_master as _e_master
     _is_master = _e_master()
 
-    vends_u = query("""
-        SELECT u.usuario_id, u.nome, u.email, u.whatsapp, u.tipo, u.ativo,
-               v.vendedor_id, v.fone, v.cidade
-        FROM usuario u
-        LEFT JOIN vendedor v ON v.usuario_id=u.usuario_id
-        WHERE u.empresa_id=%s
-          AND (u.tipo='REPRESENTANTE_ADM' OR u.tipo='REPRESENTANTE'
-               OR u.tipo='VENDEDOR' OR u.tipo='MASTER')
-        ORDER BY u.nome
+    # Busca usuarios SEM JOIN — LEFT JOIN com vendedor falha silenciosamente com RLS
+    usu_raw = query("""
+        SELECT usuario_id, nome, email, whatsapp, tipo, ativo
+        FROM usuario
+        WHERE empresa_id=%s
+          AND (tipo='REPRESENTANTE_ADM' OR tipo='REPRESENTANTE'
+               OR tipo='VENDEDOR' OR tipo='MASTER')
+        ORDER BY nome
     """, (eid,)) or []
 
+    # Busca vendedores separadamente
+    vend_raw = query("""
+        SELECT vendedor_id, usuario_id, fone, cidade
+        FROM vendedor WHERE empresa_id=%s AND ativo!=0
+    """, (eid,)) or []
+    vend_map = {v[1]: v for v in vend_raw if v[1]}
+
+    # Combina em memoria sem JOIN
+    vends_u = []
+    for u in usu_raw:
+        uid, nome, email, wa, tipo, ativo = u[0], u[1], u[2], u[3], u[4], u[5]
+        v = vend_map.get(uid)
+        vends_u.append((uid, nome, email, wa, tipo, ativo,
+                        v[0] if v else None,
+                        v[2] if v else None,
+                        v[3] if v else None))
+
+    # Vendedores legados sem usuario
     vends_leg = query("""
-        SELECT v.vendedor_id, v.nome, v.email, v.whatsapp, v.fone, v.cidade
-        FROM vendedor v
-        WHERE v.empresa_id=%s AND v.usuario_id IS NULL AND v.ativo!=0
-        ORDER BY v.nome
+        SELECT vendedor_id, nome, email, whatsapp, fone, cidade
+        FROM vendedor WHERE empresa_id=%s AND usuario_id IS NULL AND ativo!=0
+        ORDER BY nome
     """, (eid,)) or []
 
     vends = vends_u
