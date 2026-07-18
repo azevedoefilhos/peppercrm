@@ -1995,6 +1995,13 @@ def _lista_clientes():
         where_q.append("c.status=?"); params_q.append(fil_status)
     if fil_busca.strip():
         where_q.append("c.nome_fantasia LIKE ?"); params_q.append(f"%{fil_busca.strip()}%")
+
+    # Filtro de carteira por perfil — vendedor ve apenas seus clientes
+    from permissoes import e_admin, e_master, usuario_id_atual, e_vendedor
+    if e_vendedor():
+        where_q.append("c.vendedor_id=?")
+        params_q.append(usuario_id_atual())
+
     where_sql = ("WHERE " + " AND ".join(where_q)) if where_q else ""
 
     dados = query(f"""
@@ -2175,16 +2182,20 @@ def _form_novo_cliente():
         if existe:
             _erro(f"Ja existe um cliente com o nome '{fantasia}'."); return
         ativo_n = 1 if status_n == "Ativo" else 0
+        # Vendedor_id: preenche com o usuario logado (ADM fica NULL — ve todos)
+        from permissoes import e_vendedor, usuario_id_atual
+        vend_id = usuario_id_atual() if e_vendedor() else None
         conn = conectar()
         conn.execute("""
             INSERT INTO cliente
             (razao_social, nome_fantasia, perfil, fone, cnpj, ie, endereco, bairro,
-             cidade, estado, site, instagram, associacao_id, observacao, status, ativo)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             cidade, estado, site, instagram, associacao_id, observacao, status, ativo,
+             vendedor_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (razao, fantasia.strip(), perfil, fone or None, cnpj or None, None,
               endereco or None, bairro or None, cidade, estado,
               site or None, insta or None, assoc_sel[0], obs or None,
-              status_n, ativo_n))
+              status_n, ativo_n, vend_id))
         conn.commit(); conn.close()
         _sucesso(f"Cliente '{fantasia}' cadastrado como {status_n}!")
 

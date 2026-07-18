@@ -8,48 +8,50 @@ import streamlit as st
 # HIERARQUIA DE PERFIS
 # ═══════════════════════════════════════════════════════════════
 NIVEL = {
-    'MASTER':             99,  # super-admin — acessa todas as empresas
-    'REPRESENTANTE_ADM':   5,  # admin da empresa — acesso total
-    'REPRESENTANTE':       4,  # vendedor com carteira propria
-    'VENDEDOR':            4,  # mesmo nivel que REPRESENTANTE
-    'SUPERVISOR':          3,  # coordena grupo de promotores
-    'PROMOTOR':            2,  # execucao em campo
+    'MASTER':              99,
+    'REPRESENTANTE_ADM':    5,
+    'REPRESENTANTE':        4,
+    'VENDEDOR':             4,
+    'PROMOTOR_VENDEDOR':    3,
+    'SUPERVISOR':           3,
+    'PROMOTOR':             2,
 }
 
-# ═══════════════════════════════════════════════════════════════
-# MODULOS PERMITIDOS POR PERFIL
-# ═══════════════════════════════════════════════════════════════
 MODULOS = {
     'MASTER': [
         "fornecedores", "clientes", "produtos", "tabelas_preco",
         "pedido", "ver_pedidos", "comissoes", "resultado_operacional",
         "contatos", "metas", "pesquisa", "despesas", "relatorios",
-        "visitas", "configuracao", "usuarios", "empresas",
+        "visitas", "equipe", "roteiros", "configuracao",
         "mix_analise", "concorrentes", "analise_competitiva",
     ],
     'REPRESENTANTE_ADM': [
         "fornecedores", "clientes", "produtos", "tabelas_preco",
         "pedido", "ver_pedidos", "comissoes", "resultado_operacional",
         "contatos", "metas", "pesquisa", "despesas", "relatorios",
-        "visitas", "configuracao", "usuarios",
+        "visitas", "equipe", "roteiros", "configuracao",
         "mix_analise", "concorrentes", "analise_competitiva",
     ],
     'REPRESENTANTE': [
         "clientes", "pedido", "ver_pedidos", "comissoes",
         "resultado_operacional", "contatos", "metas",
-        "pesquisa", "despesas", "visitas",
+        "pesquisa", "despesas", "visitas", "roteiros",
         "mix_analise", "analise_competitiva",
     ],
     'VENDEDOR': [
         "clientes", "pedido", "ver_pedidos", "comissoes",
         "resultado_operacional", "contatos", "metas",
-        "pesquisa", "despesas", "visitas",
+        "pesquisa", "despesas", "visitas", "roteiros",
+    ],
+    'PROMOTOR_VENDEDOR': [
+        "clientes", "pedido", "ver_pedidos",
+        "pesquisa", "visitas", "roteiros", "produtos",
     ],
     'SUPERVISOR': [
-        "clientes", "pesquisa", "visitas", "relatorios",
+        "clientes", "pesquisa", "visitas", "roteiros", "relatorios",
     ],
     'PROMOTOR': [
-        "visitas", "pesquisa",
+        "visitas", "pesquisa", "roteiros",
     ],
 }
 
@@ -85,21 +87,25 @@ def nivel_atual() -> int:
 def e_master() -> bool:
     return perfil_atual() == 'MASTER'
 
-
 def e_admin() -> bool:
     return perfil_atual() in ('MASTER', 'REPRESENTANTE_ADM')
-
 
 def e_vendedor() -> bool:
     return perfil_atual() in ('REPRESENTANTE', 'VENDEDOR')
 
+def e_promotor_vendedor() -> bool:
+    return perfil_atual() == 'PROMOTOR_VENDEDOR'
 
 def e_supervisor() -> bool:
     return perfil_atual() == 'SUPERVISOR'
 
-
 def e_promotor() -> bool:
     return perfil_atual() == 'PROMOTOR'
+
+def e_responsavel_comercial() -> bool:
+    """Perfis que tem carteira de clientes."""
+    return perfil_atual() in ('REPRESENTANTE_ADM', 'REPRESENTANTE',
+                               'VENDEDOR', 'PROMOTOR_VENDEDOR')
 
 
 def pode_acessar(modulo: str) -> bool:
@@ -121,13 +127,23 @@ def pode(nivel_minimo: str) -> bool:
 def get_filtro_vendedor() -> tuple:
     """
     Retorna (where_clause, params) para filtrar clientes por carteira.
-    ADM e MASTER: sem filtro (veem todos).
-    VENDEDOR/REPRESENTANTE: so sua carteira.
+    ADM e MASTER: sem filtro.
+    VENDEDOR/REPRESENTANTE: so sua carteira (por cliente.vendedor_id).
+    PROMOTOR_VENDEDOR: so seus PDVs (por pdv.promotor_vendedor_id) — filtro diferente.
     """
     if e_admin() or e_master():
         return "", []
     uid = usuario_id_atual()
-    return "AND c.vendedor_id = %s", [uid]
+    if e_vendedor():
+        return "AND c.vendedor_id = %s", [uid]
+    if e_promotor_vendedor():
+        # Ve clientes que tem pelo menos 1 PDV atribuido a ele
+        return """AND EXISTS (
+            SELECT 1 FROM pdv p
+            WHERE p.cliente_id=c.cliente_id
+            AND p.promotor_vendedor_id=%s AND p.ativo!=0
+        )""", [uid]
+    return "", []
 
 
 def get_filtro_promotor() -> tuple:
@@ -239,10 +255,10 @@ def get_menu() -> dict:
         "analise_competitiva":   ("📊 Inteligência Competitiva", "analise_competitiva"),
         "relatorios":            ("📋 Relatórios",                "relatorios"),
         "despesas":              ("💸 Despesas",                  "despesas"),
-        "visitas":               ("🗺️ Promotores & Roteiros",     "visitas"),
+        "visitas":               ("📋 Visitas",                   "visitas"),
+        "equipe":                ("👥 Equipe",                    "equipe"),
+        "roteiros":              ("🗓️ Roteiros",                  "roteiros"),
         "configuracao":          ("⚙️ Configuração",              "configuracao"),
-        "usuarios":              ("👤 Usuários",                  "usuarios"),
-        "empresas":              ("🏢 Empresas",                  "empresas"),
     }
 
     permitidos = MODULOS.get(perfil, [])

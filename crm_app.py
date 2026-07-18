@@ -34,14 +34,15 @@ _RESET_ABAS = {
     "comissoes":           {"com_aba": "cfg"},
     "relatorios":          {"rel_aba": "cli"},
     "visitas":             {"vis_aba": "prom", "vis_modo": "lista"},
+    "equipe":              {"eq_aba": "vend"},
+    "roteiros":            {"rot_aba": "vend"},
     "mix_analise":         {"mix_aba": "pdv"},
     "metas":               {"mt_nav_aba": "painel", "def_aba": "fat"},
     "analise_competitiva": {"ana_aba": "mc"},
     "concorrentes":        {"cc_aba": "marcas"},
     "ver_pedidos":         {"vp_modo": "lista"},
-    "configuracao":        {"cfg_aba": "sis"},
+    "configuracao":        {"cfg_aba": "empresa"},
     "despesas":            {"desp_aba": "nova"},
-    "catalogo":            {"cat_aba": "catalogo"},
 }
 
 
@@ -659,8 +660,8 @@ if pagina == "home":
 
 
 elif pagina == "configuracao":  from configuracao import tela_configuracao; tela_configuracao()
-elif pagina == "usuarios":      from usuarios import tela_usuarios; tela_usuarios()
-elif pagina == "empresas":      from usuarios import tela_empresas; tela_empresas()
+elif pagina == "equipe":        from equipe import tela_equipe; tela_equipe()
+elif pagina == "roteiros":      from roteiros import tela_roteiros; tela_roteiros()
 elif pagina == "fornecedores":  from cadastros import tela_fornecedores; tela_fornecedores()
 elif pagina == "produtos":      from cadastros import tela_produtos; tela_produtos()
 elif pagina == "tabelas_preco": from cadastros import tela_tabelas_preco; tela_tabelas_preco()

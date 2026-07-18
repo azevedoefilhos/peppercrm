@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import io
 from datetime import date, datetime
-from database import conectar, query
+from database import conectar, query, execute_write
 
 
 def _ir(p):
@@ -22,7 +22,9 @@ TIPOS_VISITA    = ["Prospeccao","Rotina","Cobranca","Entrega","Reuniao","Outro"]
 
 
 def tela_visitas():
-    st.header("🗺️ Promotores & Roteiros")
+    st.header("📋 Visitas")
+
+    from permissoes import e_admin, e_master, e_supervisor, e_promotor, e_promotor_vendedor, usuario_id_atual
 
     modo = st.session_state.get("vis_modo", "lista")
 
@@ -46,6 +48,11 @@ def tela_visitas():
         if st.button("Voltar a lista de visitas"):
             st.session_state["vis_modo"] = "lista"; st.rerun()
         _tela_promotores()
+
+    elif modo == "supervisor":
+        if st.button("Voltar a lista de visitas"):
+            st.session_state["vis_modo"] = "lista"; st.rerun()
+        _tela_supervisor()
 
     elif modo == "detalhe":
         col1, col2 = st.columns([2,1])
@@ -71,8 +78,9 @@ def tela_visitas():
 def _lista_visitas():
     from database import _cache_todos_clientes
     from datetime import date as _date, timedelta as _td
+    from permissoes import e_admin, e_master, e_supervisor, usuario_id_atual
 
-    col1, col2, col3, col4 = st.columns([2,1,1,1])
+    col1, col2, col3, col4, col5 = st.columns([2,1,1,1,1])
     with col2:
         if st.button("Nova visita", type="primary", width="stretch"):
             st.session_state["vis_modo"] = "nova"
@@ -82,9 +90,15 @@ def _lista_visitas():
             st.session_state["vis_modo"] = "roteiro"
             st.rerun()
     with col4:
-        if st.button("Promotores", width="stretch"):
-            st.session_state["vis_modo"] = "promotores"
-            st.rerun()
+        if e_admin() or e_master():
+            if st.button("Promotores", width="stretch"):
+                st.session_state["vis_modo"] = "promotores"
+                st.rerun()
+    with col5:
+        if e_admin() or e_master() or e_supervisor():
+            if st.button("🎯 Supervisão", width="stretch"):
+                st.session_state["vis_modo"] = "supervisor"
+                st.rerun()
 
     st.divider()
 
@@ -270,7 +284,27 @@ as coordenadas aparecem na URL apos o simbolo @
         pdv_id   = pdv_sel[0]
 
         data_vis = st.date_input("Data da visita *", value=date.today(), key="vis_data")
-        tipo_vis = st.selectbox("Tipo de visita", TIPOS_VISITA, key="vis_tipo")
+        from permissoes import e_supervisor, e_promotor, e_promotor_vendedor, e_vendedor, e_admin, e_master
+        # Tipo de visita e automatico pelo perfil — ADM pode escolher
+        if e_admin() or e_master():
+            tipo_visita_reg = st.selectbox("Tipo de registro",
+                ["promotor","promotor_vendedor","supervisao","vendedor"],
+                key="vis_tipo_reg",
+                format_func=lambda x: {
+                    "promotor":         "👤 Promotor",
+                    "promotor_vendedor":"👤💼 Promotor Vendedor",
+                    "supervisao":       "🔍 Supervisão",
+                    "vendedor":         "💼 Vendedor"
+                }.get(x, x))
+        elif e_supervisor():
+            tipo_visita_reg = "supervisao"
+        elif e_promotor_vendedor():
+            tipo_visita_reg = "promotor_vendedor"
+        elif e_promotor():
+            tipo_visita_reg = "promotor"
+        else:
+            tipo_visita_reg = "vendedor"
+        tipo_vis = st.selectbox("Tipo de PDV visitado", TIPOS_VISITA, key="vis_tipo")
         duracao  = st.number_input("Duracao (minutos)", min_value=0, value=30, step=15,
                                    key="vis_dur")
 
@@ -337,14 +371,15 @@ as coordenadas aparecem na URL apos o simbolo @
             (cliente_id, pdv_id, local, data_visita, contato, resumo,
              produtos_tratados, pedido_id, pesquisa_preco_id,
              proxima_acao, data_followup, observacao,
-             latitude, longitude, endereco_gps, duracao_minutos)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             latitude, longitude, endereco_gps, duracao_minutos, tipo_visita)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (cli_id, pdv_id, tipo_vis, str(data_vis), contato or None,
               resumo.strip(), prods or None, ped_id, pesq_id,
               prox_acao or None,
               str(fw_data) if fw_data else None,
               obs or None, lat, lng,
-              endereco_gps or None, duracao or None))
+              endereco_gps or None, duracao or None,
+              tipo_visita_reg))
         conn.commit(); conn.close()
         st.success("Visita registrada com sucesso!")
         st.session_state["vis_modo"] = "lista"
@@ -645,13 +680,18 @@ FREQ_VEND    = ["Semanal","Quinzenal","Mensal","Bimestral","Sob demanda"]
 
 
 def _tela_promotores():
-    st.header("Promotores e Atendimento")
-    st.caption("Cadastre promotores e defina quais PDVs cada um atende, com dias e frequencia.")
+    st.header("Equipe de Campo")
+    st.caption("Gerencie promotores, supervisores e suas atribuições de PDVs.")
 
-    ABAS_VIS = {"prom":"Promotores","att":"Atendimento Promotor",
-                "vend":"Atendimento Vendedor","rot":"Roteiro Promotor"}
+    ABAS_VIS = {
+        "prom": "👤 Promotores",
+        "sup":  "🎯 Supervisores",
+        "att":  "🏪 PDVs por Promotor",
+        "vend": "🏪 PDVs por Vendedor",
+        "rot":  "📅 Roteiro Promotor",
+    }
     if "vis_aba" not in st.session_state: st.session_state["vis_aba"] = "prom"
-    cols = st.columns(4)
+    cols = st.columns(len(ABAS_VIS))
     for col,(k,v) in zip(cols, ABAS_VIS.items()):
         ativa = st.session_state["vis_aba"] == k
         if col.button(v, key=f"visnav_{k}", width="stretch",
@@ -660,6 +700,7 @@ def _tela_promotores():
     st.divider()
     a = st.session_state["vis_aba"]
     if a=="prom":   _tela_cadastro_promotores()
+    elif a=="sup":  _tela_cadastro_supervisores()
     elif a=="att":  _tela_att_promotor()
     elif a=="vend": _tela_att_vendedor()
     elif a=="rot":  _tela_roteiro_promotor()
@@ -669,22 +710,24 @@ def _tela_promotores():
 
 def _tela_cadastro_promotores():
     st.subheader("Promotores cadastrados")
+    st.caption("🔑 Com login no app | ⚪ Sem login")
 
-    proms = query("""SELECT promotor_id, nome, fone, cidade, estado, ativo
-        FROM promotor ORDER BY nome""")
+    proms = query("""SELECT p.promotor_id, p.nome, p.fone, p.cidade, p.estado,
+                            p.ativo, p.usuario_id, u.email
+                     FROM promotor p
+                     LEFT JOIN usuario u ON u.usuario_id=p.usuario_id
+                     WHERE p.nome != 'Sem promotor'
+                     ORDER BY p.nome""") or []
 
     if proms:
-        df = pd.DataFrame(proms,
-                          columns=["ID","Nome","Fone","Cidade","UF","Ativo"])
-        df["Ativo"] = df["Ativo"].map({1:"Sim",0:"Nao"})
-        st.dataframe(df, width="stretch", hide_index=True)
-
-        # Edicao rapida
-        prom_sel = st.selectbox("Editar promotor", [(None,"— selecione")] +
-                                [(p[0], p[1]) for p in proms],
-                                format_func=lambda x: x[1], key="prom_edit_sel")
-        if prom_sel[0]:
-            _form_editar_promotor(prom_sel[0])
+        for p in proms:
+            pid, nome, fone, cidade, estado, ativo, uid, login = p
+            icon_login = "🔑" if uid else "⚪"
+            icon_ativo = "✅" if ativo else "❌"
+            with st.expander(f"{icon_ativo} {icon_login} {nome} | {cidade or '—'} | {fone or '—'}"):
+                if uid:
+                    st.caption(f"Login: {login or '—'}")
+                _form_editar_promotor(pid)
     else:
         st.info("Nenhum promotor cadastrado ainda.")
 
@@ -705,6 +748,9 @@ def _tela_cadastro_promotores():
         obs_p  = st.text_input("Observacao")
         salvar = st.form_submit_button("Salvar promotor", type="primary")
 
+    if st.session_state.get("prom_msg"):
+        st.success(st.session_state.pop("prom_msg"))
+
     if salvar:
         if not nome_p.strip():
             st.error("Nome e obrigatorio."); return
@@ -716,7 +762,7 @@ def _tela_cadastro_promotores():
              cidade_p or None, estado_p, bairro_p or None,
              veiculo_p or None, obs_p or None))
         conn.commit(); conn.close()
-        st.success(f"Promotor '{nome_p}' cadastrado!")
+        st.session_state["prom_msg"] = f"✅ Promotor '{nome_p}' cadastrado!"
         st.rerun()
 
 
@@ -756,6 +802,75 @@ def _form_editar_promotor(prom_id):
 def _ufs_vis():
     return ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT",
             "PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"]
+
+
+def _tela_cadastro_supervisores():
+    st.subheader("Supervisores cadastrados")
+
+    sups = query("""SELECT supervisor_id, nome, fone, cidade, estado, ativo, usuario_id
+        FROM supervisor ORDER BY nome""") or []
+
+    if sups:
+        for s in sups:
+            sid, snome, sfone, scidade, sestado, sativo, suid = s
+            icon   = "✅" if sativo else "❌"
+            login  = "🔑 Com login" if suid else "⚪ Sem login"
+            with st.expander(f"{icon} {snome} | {scidade or '—'} | {login}"):
+                with st.form(f"edit_sup_{sid}"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        nome_s  = st.text_input("Nome",   snome or "", key=f"sn_{sid}")
+                        fone_s  = st.text_input("Fone",   sfone or "", key=f"sf_{sid}")
+                    with col2:
+                        cidade_s = st.text_input("Cidade", scidade or "", key=f"sc_{sid}")
+                        ufs      = _ufs_vis()
+                        idx_uf   = ufs.index(sestado) if sestado in ufs else 0
+                        estado_s = st.selectbox("UF", ufs, index=idx_uf, key=f"suf_{sid}")
+                    obs_s   = st.text_input("Observacao", key=f"so_{sid}")
+                    ativo_s = st.checkbox("Ativo", value=bool(sativo), key=f"sa_{sid}")
+                    salvar  = st.form_submit_button("💾 Salvar", type="primary")
+                if salvar:
+                    execute_write("""UPDATE supervisor SET nome=%s, fone=%s,
+                        cidade=%s, estado=%s, observacao=%s, ativo=%s
+                        WHERE supervisor_id=%s""",
+                        (nome_s, fone_s or None, cidade_s or None,
+                         estado_s, obs_s or None, int(ativo_s), sid))
+                    st.success("Supervisor atualizado!")
+                    st.rerun()
+    else:
+        st.info("Nenhum supervisor cadastrado ainda.")
+
+    st.divider()
+    st.subheader("Novo supervisor")
+    with st.form("novo_supervisor", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            nome_s  = st.text_input("Nome completo *")
+            fone_s  = st.text_input("Fone / WhatsApp")
+            email_s = st.text_input("E-mail")
+        with col2:
+            cidade_s = st.text_input("Cidade")
+            estado_s = st.selectbox("UF", _ufs_vis(), key="sup_uf_novo")
+            bairro_s = st.text_input("Bairro / região de atuação")
+        obs_s  = st.text_input("Observação")
+        salvar = st.form_submit_button("Salvar supervisor", type="primary")
+
+    if st.session_state.get("sup_msg"):
+        st.success(st.session_state.pop("sup_msg"))
+
+    if salvar:
+        if not nome_s.strip():
+            st.error("Nome é obrigatório."); return
+        from permissoes import empresa_id_atual
+        eid = empresa_id_atual()
+        execute_write("""INSERT INTO supervisor
+            (nome, fone, email, cidade, estado, bairro, observacao, empresa_id, ativo)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1)""",
+            (nome_s.strip(), fone_s or None, email_s or None,
+             cidade_s or None, estado_s, bairro_s or None,
+             obs_s or None, eid))
+        st.session_state["sup_msg"] = f"✅ Supervisor '{nome_s}' cadastrado!"
+        st.rerun()
 
 
 # ── Atendimento Promotor ──────────────────────────────
@@ -891,11 +1006,23 @@ def _tela_att_vendedor():
     st.subheader("Atendimento de Vendedor por PDV")
     st.caption("Defina quais PDVs o vendedor visita e com qual frequencia.")
 
-    vends = query("SELECT vendedor_id, nome FROM vendedor WHERE ativo!=0 ORDER BY nome")
-    if not vends:
-        st.info("Nenhum vendedor cadastrado. Va em Configuracoes > Vendedores."); return
+    from permissoes import empresa_id_atual
+    eid = empresa_id_atual()
 
-    vend_sel = st.selectbox("Vendedor", vends, format_func=lambda x: x[1],
+    # Busca vendedores da tabela usuario (perfis comerciais)
+    vends = query("""
+        SELECT usuario_id, nome, tipo FROM usuario
+        WHERE empresa_id=%s
+          AND tipo IN ('REPRESENTANTE_ADM','REPRESENTANTE','VENDEDOR','PROMOTOR_VENDEDOR')
+          AND ativo=1 ORDER BY nome
+    """, (eid,)) or []
+
+    if not vends:
+        st.info("Nenhum vendedor/representante cadastrado ainda.")
+        return
+
+    vend_sel = st.selectbox("Vendedor / Representante", vends,
+                            format_func=lambda x: f"{x[1]} ({x[2]})",
                             key="att_vend_sel")
     vend_id  = vend_sel[0]
 
@@ -1052,3 +1179,273 @@ def _tela_roteiro_promotor():
                    else f"https://www.google.com/maps/dir/{orig}/{dest}"
             st.link_button(f"Abrir rota de {dia} no Google Maps ({len(pdvs_gps)} pontos)",
                            url)
+
+# ==============================================================
+# TELA DO SUPERVISOR
+# ==============================================================
+
+def _tela_supervisor():
+    from permissoes import e_admin, e_master, e_supervisor, usuario_id_atual, empresa_id_atual
+    import urllib.parse
+
+    st.subheader("🎯 Painel do Supervisor")
+    st.caption("Gerencie sua equipe de promotores, PDVs sob supervisão e registre visitas de supervisão.")
+
+    eid = empresa_id_atual()
+    uid = usuario_id_atual()
+
+    # Selecao de supervisor (ADM ve todos, supervisor ve apenas a si)
+    if e_admin() or e_master():
+        supervisores = query("""
+            SELECT s.supervisor_id, s.nome,
+                   CASE WHEN s.usuario_id IS NOT NULL THEN '🔑' ELSE '⚪' END as login
+            FROM supervisor s
+            WHERE s.empresa_id=%s AND s.ativo!=0
+            ORDER BY s.nome
+        """, (eid,)) or []
+        if not supervisores:
+            st.info("Nenhum supervisor cadastrado. Use a aba **Promotores → Supervisores** para cadastrar.")
+            return
+        sup_opts = [(s[0], f"{s[1]} {s[2]}") for s in supervisores]
+        sup_sel  = st.selectbox("Supervisor", sup_opts, format_func=lambda x: x[1], key="sup_sel")
+        sup_id   = sup_sel[0]
+    else:
+        # Supervisor logado: busca seu supervisor_id pelo usuario_id
+        rows = query("SELECT supervisor_id FROM supervisor WHERE usuario_id=%s AND ativo!=0 LIMIT 1",
+                     (uid,)) or []
+        if not rows:
+            st.warning("Seu cadastro de supervisor não foi encontrado. Contate o administrador.")
+            return
+        sup_id = rows[0][0]
+
+    ABAS_SUP = {
+        "equipe":  "👥 Minha Equipe",
+        "pdvs":    "🏪 PDVs Sob Supervisão",
+        "atrib":   "🔗 Atribuições",
+        "visitas": "📋 Visitas de Supervisão",
+    }
+    if "sup_aba" not in st.session_state: st.session_state["sup_aba"] = "equipe"
+    cols = st.columns(len(ABAS_SUP))
+    for col, (k, v) in zip(cols, ABAS_SUP.items()):
+        ativa = st.session_state["sup_aba"] == k
+        if col.button(v, key=f"supnav_{k}", width="stretch",
+                      type="primary" if ativa else "secondary"):
+            st.session_state["sup_aba"] = k; st.rerun()
+    st.divider()
+
+    aba = st.session_state["sup_aba"]
+
+    # ── ABA: Minha Equipe ────────────────────────────────────────────────
+    if aba == "equipe":
+        st.markdown("**Promotores desta equipe**")
+
+        # Promotores vinculados via supervisor_promotor
+        promotores_eq = query("""
+            SELECT p.promotor_id, p.nome, p.fone, p.cidade,
+                   COUNT(ap.pdv_id) as n_pdvs
+            FROM supervisor_promotor sp
+            JOIN promotor p ON p.promotor_id=sp.promotor_id
+            LEFT JOIN att_promotor ap ON ap.promotor_id=p.promotor_id AND ap.ativo!=0
+            WHERE sp.supervisor_id=%s AND sp.ativo=1 AND p.ativo!=0
+            AND p.nome != 'Sem promotor'
+            GROUP BY p.promotor_id, p.nome, p.fone, p.cidade
+            ORDER BY p.nome
+        """, (sup_id,)) or []
+
+        if not promotores_eq:
+            st.info("Nenhum promotor vinculado ainda. Use a aba **Atribuições** para vincular.")
+        else:
+            for p in promotores_eq:
+                pid, pnome, pfone, pcidade, n_pdvs = p
+                with st.expander(f"👤 {pnome} | {pcidade or '—'} | {n_pdvs} PDV(s)"):
+                    col1, col2 = st.columns(2)
+                    col1.write(f"**Fone:** {pfone or '—'}")
+                    col2.write(f"**Cidade:** {pcidade or '—'}")
+                    # PDVs do promotor
+                    pdvs_p = query("""
+                        SELECT p2.nome_loja, c.nome_fantasia, ap.dia_visita, ap.frequencia
+                        FROM att_promotor ap
+                        JOIN pdv p2 ON ap.pdv_id=p2.pdv_id
+                        JOIN cliente c ON p2.cliente_id=c.cliente_id
+                        WHERE ap.promotor_id=%s AND ap.ativo!=0
+                        ORDER BY ap.dia_visita, p2.nome_loja
+                    """, (pid,)) or []
+                    if pdvs_p:
+                        for pdv in pdvs_p:
+                            st.caption(f"🏪 {pdv[0]} | {pdv[1]} | {pdv[2] or '—'} | {pdv[3] or '—'}")
+                    else:
+                        st.caption("Sem PDVs atribuídos")
+
+    # ── ABA: PDVs Sob Supervisão ─────────────────────────────────────────
+    elif aba == "pdvs":
+        st.markdown("**PDVs sob responsabilidade desta supervisão**")
+
+        # PDVs via promotores da equipe
+        pdvs_via_prom = query("""
+            SELECT DISTINCT p2.pdv_id, p2.nome_loja, c.nome_fantasia,
+                   p2.cidade, pr.nome as promotor_nome,
+                   ap.dia_visita
+            FROM supervisor_promotor sp
+            JOIN att_promotor ap ON ap.promotor_id=sp.promotor_id AND ap.ativo!=0
+            JOIN pdv p2 ON ap.pdv_id=p2.pdv_id
+            JOIN cliente c ON p2.cliente_id=c.cliente_id
+            JOIN promotor pr ON ap.promotor_id=pr.promotor_id
+            WHERE sp.supervisor_id=%s AND sp.ativo=1
+            ORDER BY p2.nome_loja
+        """, (sup_id,)) or []
+
+        # PDVs atribuidos diretamente ao supervisor
+        pdvs_diretos = query("""
+            SELECT p2.pdv_id, p2.nome_loja, c.nome_fantasia,
+                   p2.cidade, 'Sem promotor' as promotor_nome,
+                   NULL as dia_visita
+            FROM supervisor_pdv sp
+            JOIN pdv p2 ON sp.pdv_id=p2.pdv_id
+            JOIN cliente c ON p2.cliente_id=c.cliente_id
+            WHERE sp.supervisor_id=%s AND sp.ativo=1
+            ORDER BY p2.nome_loja
+        """, (sup_id,)) or []
+
+        # Consolida sem duplicatas
+        ids_via_prom = {r[0] for r in pdvs_via_prom}
+        pdvs_todos   = list(pdvs_via_prom) + [r for r in pdvs_diretos if r[0] not in ids_via_prom]
+
+        if not pdvs_todos:
+            st.info("Nenhum PDV sob supervisão ainda.")
+        else:
+            st.write(f"Total: **{len(pdvs_todos)} PDV(s)**")
+            for pdv in pdvs_todos:
+                pid, nome_loja, cliente, cidade, prom_nome, dia = pdv
+                icon = "⚠️" if prom_nome == "Sem promotor" else "✅"
+                st.write(f"{icon} **{nome_loja}** | {cliente} | {cidade or '—'} | "
+                         f"Promotor: {prom_nome} | {dia or '—'}")
+
+    # ── ABA: Atribuições ────────────────────────────────────────────────
+    elif aba == "atrib":
+        col_a, col_b = st.columns(2)
+
+        with col_a:
+            st.markdown("**Vincular promotor à equipe**")
+            # Promotores da empresa nao vinculados a este supervisor
+            todos_prom = query("""
+                SELECT p.promotor_id, p.nome FROM promotor p
+                WHERE p.empresa_id=%s AND p.ativo!=0 AND p.nome != 'Sem promotor'
+                AND p.promotor_id NOT IN (
+                    SELECT promotor_id FROM supervisor_promotor
+                    WHERE supervisor_id=%s AND ativo=1
+                )
+                ORDER BY p.nome
+            """, (eid, sup_id)) or []
+
+            if todos_prom:
+                prom_sel = st.selectbox("Promotor", todos_prom,
+                                        format_func=lambda x: x[1], key="sup_add_prom")
+                if st.button("➕ Vincular promotor", key="sup_btn_prom", type="primary"):
+                    execute_write("""
+                        INSERT INTO supervisor_promotor (supervisor_id, promotor_id, empresa_id, ativo)
+                        VALUES (%s,%s,%s,1) ON CONFLICT DO NOTHING
+                    """, (sup_id, prom_sel[0], eid))
+                    st.success(f"✅ {prom_sel[1]} vinculado à equipe.")
+                    st.rerun()
+            else:
+                st.info("Todos os promotores já estão vinculados.")
+
+            # Desvincular promotor
+            st.markdown("**Desvincular promotor**")
+            prom_eq = query("""
+                SELECT p.promotor_id, p.nome FROM supervisor_promotor sp
+                JOIN promotor p ON p.promotor_id=sp.promotor_id
+                WHERE sp.supervisor_id=%s AND sp.ativo=1 AND p.nome!='Sem promotor'
+                ORDER BY p.nome
+            """, (sup_id,)) or []
+
+            if prom_eq:
+                prom_rem = st.selectbox("Remover da equipe", prom_eq,
+                                        format_func=lambda x: x[1], key="sup_rem_prom")
+                if st.button("➖ Desvincular", key="sup_btn_rem"):
+                    execute_write("""
+                        UPDATE supervisor_promotor SET ativo=0
+                        WHERE supervisor_id=%s AND promotor_id=%s
+                    """, (sup_id, prom_rem[0]))
+                    st.success(f"{prom_rem[1]} desvinculado.")
+                    st.rerun()
+
+        with col_b:
+            st.markdown("**Atribuir PDV diretamente ao supervisor**")
+            st.caption("Para PDVs temporariamente sem promotor.")
+
+            # PDVs nao vinculados diretamente
+            pdvs_disp = query("""
+                SELECT p.pdv_id, p.nome_loja, c.nome_fantasia
+                FROM pdv p JOIN cliente c ON p.cliente_id=c.cliente_id
+                WHERE p.empresa_id=%s AND p.ativo!=0
+                AND p.pdv_id NOT IN (
+                    SELECT pdv_id FROM supervisor_pdv
+                    WHERE supervisor_id=%s AND ativo=1
+                )
+                ORDER BY p.nome_loja
+            """, (eid, sup_id)) or []
+
+            if pdvs_disp:
+                pdv_sel = st.selectbox("PDV", pdvs_disp,
+                                       format_func=lambda x: f"{x[1]} | {x[2]}",
+                                       key="sup_add_pdv")
+                if st.button("➕ Vincular PDV direto", key="sup_btn_pdv", type="primary"):
+                    execute_write("""
+                        INSERT INTO supervisor_pdv (supervisor_id, pdv_id, empresa_id, ativo)
+                        VALUES (%s,%s,%s,1) ON CONFLICT DO NOTHING
+                    """, (sup_id, pdv_sel[0], eid))
+                    st.success(f"✅ {pdv_sel[1]} vinculado diretamente.")
+                    st.rerun()
+            else:
+                st.info("Nenhum PDV disponível para vincular diretamente.")
+
+            # Remover vinculo direto
+            pdvs_dir = query("""
+                SELECT p.pdv_id, p.nome_loja FROM supervisor_pdv sp
+                JOIN pdv p ON p.pdv_id=sp.pdv_id
+                WHERE sp.supervisor_id=%s AND sp.ativo=1
+                ORDER BY p.nome_loja
+            """, (sup_id,)) or []
+
+            if pdvs_dir:
+                st.markdown("**Remover PDV direto**")
+                pdv_rem = st.selectbox("PDV a remover", pdvs_dir,
+                                       format_func=lambda x: x[1], key="sup_rem_pdv")
+                if st.button("➖ Remover vínculo", key="sup_btn_rem_pdv"):
+                    execute_write("""
+                        UPDATE supervisor_pdv SET ativo=0
+                        WHERE supervisor_id=%s AND pdv_id=%s
+                    """, (sup_id, pdv_rem[0]))
+                    st.success(f"{pdv_rem[1]} desvinculado.")
+                    st.rerun()
+
+    # ── ABA: Visitas de Supervisão ────────────────────────────────────────
+    elif aba == "visitas":
+        st.markdown("**Histórico de visitas de supervisão**")
+
+        visitas_sup = query("""
+            SELECT vc.visita_id, vc.data_visita, c.nome_fantasia,
+                   p.nome_loja, vc.tipo_visita, vc.resumo
+            FROM visita_cliente vc
+            JOIN cliente c ON vc.cliente_id=c.cliente_id
+            LEFT JOIN pdv p ON vc.pdv_id=p.pdv_id
+            WHERE vc.empresa_id=%s
+              AND vc.tipo_visita='supervisao'
+            ORDER BY vc.data_visita DESC
+            LIMIT 50
+        """, (eid,)) or []
+
+        if not visitas_sup:
+            st.info("Nenhuma visita de supervisão registrada ainda.")
+            st.caption("Use 'Nova visita' e selecione tipo 'Visita de supervisão'.")
+        else:
+            for v in visitas_sup:
+                vid, data, cliente, pdv_nome, tipo, resumo = v
+                with st.expander(f"📋 {str(data)[:10]} | {cliente} | {pdv_nome or '—'}"):
+                    st.write(f"**Tipo:** {tipo}")
+                    st.write(f"**Resumo:** {resumo or '—'}")
+                    if st.button("Ver detalhes", key=f"sup_det_{vid}"):
+                        st.session_state["vis_id"]  = vid
+                        st.session_state["vis_modo"] = "detalhe"
+                        st.rerun()
