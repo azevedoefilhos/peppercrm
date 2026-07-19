@@ -110,6 +110,32 @@ def _tela_vendedores():
     if st.session_state.get("eq_vend_msg"):
         st.success(st.session_state.pop("eq_vend_msg"))
 
+    # Detecta usuarios VENDEDOR/REPRESENTANTE sem cadastro na tabela vendedor
+    sem_cadastro = query("""
+        SELECT usuario_id, nome, tipo FROM usuario
+        WHERE empresa_id=%s
+          AND (tipo='REPRESENTANTE_ADM' OR tipo='REPRESENTANTE'
+               OR tipo='VENDEDOR' OR tipo='MASTER')
+          AND ativo=1
+          AND usuario_id NOT IN (
+              SELECT usuario_id FROM vendedor WHERE usuario_id IS NOT NULL
+          )
+        ORDER BY nome
+    """, (eid,)) or []
+
+    if sem_cadastro:
+        with st.expander(f"⚠️ {len(sem_cadastro)} usuário(s) sem cadastro na Equipe", expanded=True):
+            st.caption("Estes usuários têm login mas não foram cadastrados como vendedor/representante.")
+            for u in sem_cadastro:
+                uid, unome, utipo = u[0], u[1], u[2]
+                col1, col2 = st.columns([3,1])
+                col1.write(f"**{unome}** | {utipo}")
+                if col2.button("➕ Cadastrar na Equipe", key=f"sc_btn_{uid}"):
+                    execute_write("""INSERT INTO vendedor (nome, empresa_id, usuario_id, ativo)
+                        VALUES (%s,%s,%s,1)""", (unome, eid, uid))
+                    st.session_state["eq_vend_msg"] = f"✅ {unome} cadastrado como vendedor!"
+                    st.rerun()
+
     if not vends and not vends_leg:
         st.info("Nenhum vendedor/representante cadastrado.")
 
