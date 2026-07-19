@@ -393,7 +393,42 @@ def _tela_promotores():
             (np_nome.strip(), np_fone or None, np_email or None, np_cpf or None,
              np_cid or None, np_uf, np_bair or None, np_vei or None, np_obs or None, eid))
         st.session_state["eq_prom_msg"] = f"✅ Promotor '{np_nome}' cadastrado!"
+        # Verifica se há usuários PROMOTOR sem vínculo para oferecer vinculação
+        usu_sem_vinc = query("""
+            SELECT COUNT(*) FROM usuario
+            WHERE empresa_id=%s AND tipo='PROMOTOR' AND ativo=1
+            AND usuario_id NOT IN (SELECT usuario_id FROM promotor WHERE usuario_id IS NOT NULL)
+        """, (eid,)) or [[0]]
+        if usu_sem_vinc[0][0] > 0:
+            st.session_state["eq_prom_oferecer_vinculo"] = True
         st.rerun()
+
+    # Oferta de vínculo após cadastrar novo promotor
+    if st.session_state.get("eq_prom_oferecer_vinculo"):
+        st.info("💡 Há usuários com perfil PROMOTOR sem vínculo. Deseja vincular ao promotor recém cadastrado?")
+        usu_disp = query("""
+            SELECT usuario_id, nome, email FROM usuario
+            WHERE empresa_id=%s AND tipo='PROMOTOR' AND ativo=1
+            AND usuario_id NOT IN (SELECT usuario_id FROM promotor WHERE usuario_id IS NOT NULL)
+            ORDER BY nome
+        """, (eid,)) or []
+        # Pega o último promotor cadastrado
+        ultimo = query("SELECT promotor_id, nome FROM promotor WHERE empresa_id=%s ORDER BY promotor_id DESC LIMIT 1", (eid,)) or []
+        if usu_disp and ultimo:
+            opts = [(u[0], f"{u[1]} ({u[2]})") for u in usu_disp]
+            u_sel = st.selectbox("Usuário para vincular ao promotor recém cadastrado",
+                                 opts, format_func=lambda x: x[1],
+                                 key="eq_prom_vinc_novo")
+            col_v, col_n = st.columns(2)
+            if col_v.button("🔗 Vincular", key="eq_prom_vinc_btn", type="primary"):
+                execute_write("UPDATE promotor SET usuario_id=%s WHERE promotor_id=%s",
+                              (u_sel[0], ultimo[0][0]))
+                st.session_state.pop("eq_prom_oferecer_vinculo", None)
+                st.session_state["eq_prom_msg"] = f"✅ {ultimo[0][1]} vinculado ao usuário!"
+                st.rerun()
+            if col_n.button("Não vincular agora", key="eq_prom_vinc_skip"):
+                st.session_state.pop("eq_prom_oferecer_vinculo", None)
+                st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -606,7 +641,39 @@ def _tela_supervisores():
             (ns_nome.strip(), ns_fone or None, ns_email or None,
              ns_cid or None, ns_uf, ns_bair or None, ns_obs or None, eid))
         st.session_state["eq_sup_msg"] = f"✅ Supervisor '{ns_nome}' cadastrado!"
+        usu_sem_vinc = query("""
+            SELECT COUNT(*) FROM usuario
+            WHERE empresa_id=%s AND tipo='SUPERVISOR' AND ativo=1
+            AND usuario_id NOT IN (SELECT usuario_id FROM supervisor WHERE usuario_id IS NOT NULL)
+        """, (eid,)) or [[0]]
+        if usu_sem_vinc[0][0] > 0:
+            st.session_state["eq_sup_oferecer_vinculo"] = True
         st.rerun()
+
+    # Oferta de vínculo após cadastrar novo supervisor
+    if st.session_state.get("eq_sup_oferecer_vinculo"):
+        st.info("💡 Há usuários com perfil SUPERVISOR sem vínculo. Deseja vincular ao supervisor recém cadastrado?")
+        usu_disp = query("""
+            SELECT usuario_id, nome, email FROM usuario
+            WHERE empresa_id=%s AND tipo='SUPERVISOR' AND ativo=1
+            AND usuario_id NOT IN (SELECT usuario_id FROM supervisor WHERE usuario_id IS NOT NULL)
+            ORDER BY nome
+        """, (eid,)) or []
+        ultimo = query("SELECT supervisor_id, nome FROM supervisor WHERE empresa_id=%s ORDER BY supervisor_id DESC LIMIT 1", (eid,)) or []
+        if usu_disp and ultimo:
+            opts = [(u[0], f"{u[1]} ({u[2]})") for u in usu_disp]
+            u_sel = st.selectbox("Usuário para vincular ao supervisor recém cadastrado",
+                                 opts, format_func=lambda x: x[1], key="eq_sup_vinc_novo")
+            col_v, col_n = st.columns(2)
+            if col_v.button("🔗 Vincular", key="eq_sup_vinc_btn", type="primary"):
+                execute_write("UPDATE supervisor SET usuario_id=%s WHERE supervisor_id=%s",
+                              (u_sel[0], ultimo[0][0]))
+                st.session_state.pop("eq_sup_oferecer_vinculo", None)
+                st.session_state["eq_sup_msg"] = f"✅ {ultimo[0][1]} vinculado ao usuário!"
+                st.rerun()
+            if col_n.button("Não vincular agora", key="eq_sup_vinc_skip"):
+                st.session_state.pop("eq_sup_oferecer_vinculo", None)
+                st.rerun()
 
 # ═══════════════════════════════════════════════════════════════
 # CARTEIRA DE CLIENTES
