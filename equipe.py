@@ -713,14 +713,18 @@ def _tela_carteira_clientes():
     if st.session_state.get("eq_cart_msg"):
         st.success(st.session_state.pop("eq_cart_msg"))
 
-    # Busca vendedores sem JOIN — inclui MASTER pois pode ter carteira
-    usu_vend = query("""
-        SELECT usuario_id, nome FROM usuario
-        WHERE empresa_id=%s
-          AND (tipo='REPRESENTANTE_ADM' OR tipo='REPRESENTANTE'
-               OR tipo='VENDEDOR' OR tipo='PROMOTOR_VENDEDOR' OR tipo='MASTER')
-          AND ativo=1 ORDER BY nome
+    # Busca apenas vendedores cadastrados na tabela vendedor (membros da equipe)
+    # Usuarios com tipo VENDEDOR mas sem cadastro na equipe NAO aparecem aqui
+    vend_raw = query("""
+        SELECT v.vendedor_id, v.usuario_id, v.nome,
+               COALESCE(u.nome, v.nome) as nome_exib
+        FROM vendedor v
+        LEFT JOIN usuario u ON u.usuario_id=v.usuario_id
+        WHERE v.empresa_id=%s AND v.ativo!=0
+        ORDER BY nome_exib
     """, (eid,)) or []
+
+    usu_vend = [(v[1] or v[0], v[3]) for v in vend_raw]
 
     if not usu_vend:
         st.info("Nenhum vendedor cadastrado.")
@@ -732,8 +736,10 @@ def _tela_carteira_clientes():
     with st.expander("📊 Resumo da carteira"):
         col1, col2 = st.columns(2)
         for i, v in enumerate(usu_vend):
-            cnt = (query("SELECT COUNT(*) FROM cliente WHERE vendedor_id=%s", (v[0],)) or [[0]])[0][0]
-            (col1 if i%2==0 else col2).metric(v[1], f"{cnt} clientes")
+            vid, vnome = v
+            # Conta clientes pelo vendedor_id (usuario_id do responsavel)
+            cnt = (query("SELECT COUNT(*) FROM cliente WHERE vendedor_id=%s", (vid,)) or [[0]])[0][0]
+            (col1 if i%2==0 else col2).metric(vnome, f"{cnt} clientes")
         sv = (query("SELECT COUNT(*) FROM cliente WHERE empresa_id=%s AND vendedor_id IS NULL", (eid,)) or [[0]])[0][0]
         if sv: st.metric("Sem vendedor", f"{sv} clientes")
 
