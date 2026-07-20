@@ -469,50 +469,180 @@ def _tela_promotores_vendedores():
     if st.session_state.get("eq_pv_msg"):
         st.success(st.session_state.pop("eq_pv_msg"))
 
+    # Busca promotores com tipo PROMOTOR_VENDEDOR na tabela promotor
+    # e usuarios PROMOTOR_VENDEDOR sem cadastro em promotor
     pvs = query("""
-        SELECT u.usuario_id, u.nome, u.email, u.whatsapp, u.ativo
-        FROM usuario u
-        WHERE u.empresa_id=%s AND u.tipo='PROMOTOR_VENDEDOR' AND u.ativo!=0
-        ORDER BY u.nome
+        SELECT p.promotor_id, p.nome, p.fone, p.cidade, p.ativo, p.usuario_id,
+               u.email, u.whatsapp
+        FROM promotor p
+        LEFT JOIN usuario u ON u.usuario_id=p.usuario_id
+        WHERE p.empresa_id=%s
+          AND (u.tipo='PROMOTOR_VENDEDOR' OR u.usuario_id IS NULL)
+        ORDER BY p.nome
     """, (eid,)) or []
 
-    for pv in pvs:
-        uid, nome, email, wa, ativo = pv
-        with st.expander(f"✅ 🔑 {nome} | {email}"):
-            with st.expander("✏️ Editar"):
-                e_nome  = st.text_input("Nome", value=nome, key=f"pv_n_{uid}")
-                e_wa    = st.text_input("WhatsApp", value=wa or "", key=f"pv_w_{uid}")
-                e_email = st.text_input("Email", value=email, key=f"pv_e_{uid}")
-                if st.button("💾 Salvar", key=f"pv_sv_{uid}"):
-                    execute_write("UPDATE usuario SET nome=%s,whatsapp=%s,email=%s WHERE usuario_id=%s",
-                                  (e_nome.strip(), e_wa or None, e_email.strip().lower(), uid))
+    # Detecta usuarios PROMOTOR_VENDEDOR sem cadastro em promotor
+    sem_cadastro = query("""
+        SELECT usuario_id, nome FROM usuario
+        WHERE empresa_id=%s AND tipo='PROMOTOR_VENDEDOR' AND ativo=1
+        AND usuario_id NOT IN (SELECT usuario_id FROM promotor WHERE usuario_id IS NOT NULL)
+        ORDER BY nome
+    """, (eid,)) or []
+
+    if sem_cadastro:
+        with st.expander(f"⚠️ {len(sem_cadastro)} usuário(s) sem cadastro na Equipe", expanded=True):
+            st.caption("Têm login mas não foram cadastrados como Promotor Vendedor.")
+            for u in sem_cadastro:
+                uid, unome = u[0], u[1]
+                col1, col2 = st.columns([3,1])
+                col1.write(f"**{unome}**")
+                if col2.button("➕ Cadastrar", key=f"pv_sc_{uid}"):
+                    execute_write("""INSERT INTO promotor
+                        (nome, empresa_id, usuario_id, ativo)
+                        VALUES (%s,%s,%s,1)""", (unome, eid, uid))
+                    st.session_state["eq_pv_msg"] = f"✅ {unome} cadastrado!"
+                    st.rerun()
+
+    if pvs:
+        for p in pvs:
+            pid, nome, fone, cidade, ativo, uid, email, wa = p
+            icon = "✅" if ativo else "❌"
+            login_icon = "🔑" if uid else "⚪"
+            with st.expander(f"{icon} {login_icon} {nome} | {cidade or '—'} | {fone or '—'}"):
+                if uid: st.caption(f"Login: {email}")
+                with st.form(f"pv_{pid}"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        e_nome = st.text_input("Nome", value=nome, key=f"pvn_{pid}")
+                        e_fone = st.text_input("Fone/WhatsApp", value=fone or "", key=f"pvf_{pid}")
+                    with col2:
+                        e_cid  = st.text_input("Cidade", value=cidade or "", key=f"pvc_{pid}")
+                        e_ativo = st.checkbox("Ativo", value=bool(ativo), key=f"pva_{pid}")
+                    salvar = st.form_submit_button("💾 Salvar", type="primary")
+                if salvar:
+                    execute_write("UPDATE promotor SET nome=%s,fone=%s,cidade=%s,ativo=%s WHERE promotor_id=%s",
+                                  (e_nome.strip(), e_fone or None, e_cid or None, int(e_ativo), pid))
+                    if uid:
+                        execute_write("UPDATE usuario SET nome=%s WHERE usuario_id=%s", (e_nome.strip(), uid))
                     st.session_state["eq_pv_msg"] = "✅ Atualizado."
                     st.rerun()
 
-    if not pvs:
-        st.info("Nenhum Promotor Vendedor cadastrado. Crie via botão abaixo.")
+                if not uid:
+                    col_a, col_b = st.columns(2)
+                    if col_a.button("🔑 Criar login", key=f"pv_login_{pid}"):
+                        st.session_state[f"pv_criar_{pid}"] = True
+                        st.session_state.pop(f"pv_vinc_{pid}", None)
+                    if col_b.button("🔗 Vincular usuário", key=f"pv_vinc_{pid}"):
+                        st.session_state[f"pv_vinc_{pid}"] = True
+                        st.session_state.pop(f"pv_criar_{pid}", None)
+
+                    if st.session_state.get(f"pv_criar_{pid}"):
+                        with st.form(f"pv_login_{pid}"):
+                            l_email = st.text_input("Email *", key=f"pvle_{pid}")
+                            l_wa    = st.text_input("WhatsApp", key=f"pvlw_{pid}")
+                            l_senha = st.text_input("Senha", value=_gerar_senha(), key=f"pvls_{pid}")
+                            criar   = st.form_submit_button("✅ Criar")
+                        if criar:
+                            existe = query("SELECT 1 FROM usuario WHERE email=%s", (l_email.strip().lower(),))
+                            if existe:
+                                st.error("Email já cadastrado.")
+                            else:
+                                execute_write("""INSERT INTO usuario (nome,email,senha_hash,tipo,empresa_id,whatsapp,ativo)
+                                    VALUES (%s,%s,%s,'PROMOTOR_VENDEDOR',%s,%s,1)""",
+                                    (nome, l_email.strip().lower(), _hash(l_senha), eid, l_wa or None))
+                                novo_uid = (query("SELECT usuario_id FROM usuario WHERE email=%s",
+                                                 (l_email.strip().lower(),)) or [[None]])[0][0]
+                                if novo_uid:
+                                    execute_write("UPDATE promotor SET usuario_id=%s WHERE promotor_id=%s",
+                                                  (novo_uid, pid))
+                                if l_wa or fone:
+                                    wa_env = l_wa or fone
+                                    link = _link_wa(wa_env, _msg_acesso(nome, l_email.strip().lower(), l_senha))
+                                    st.markdown(f'<a href="{link}" target="_blank"><button style="background:#25D366;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;width:100%">💬 Enviar via WhatsApp</button></a>', unsafe_allow_html=True)
+                                st.session_state[f"pv_criar_{pid}"] = False
+                                st.session_state["eq_pv_msg"] = f"✅ Login criado para {nome}."
+                                st.rerun()
+
+                    if st.session_state.get(f"pv_vinc_{pid}"):
+                        usu_disp = query("""
+                            SELECT usuario_id, nome, email FROM usuario
+                            WHERE empresa_id=%s AND tipo='PROMOTOR_VENDEDOR' AND ativo=1
+                            AND usuario_id NOT IN (SELECT usuario_id FROM promotor WHERE usuario_id IS NOT NULL)
+                            ORDER BY nome
+                        """, (eid,)) or []
+                        if usu_disp:
+                            with st.form(f"pv_vinc_form_{pid}"):
+                                opts = [(u[0], f"{u[1]} ({u[2]})") for u in usu_disp]
+                                u_sel = st.selectbox("Usuário", opts, format_func=lambda x: x[1], key=f"pvvu_{pid}")
+                                vincular = st.form_submit_button("🔗 Vincular")
+                            if vincular:
+                                execute_write("UPDATE promotor SET usuario_id=%s WHERE promotor_id=%s",
+                                              (u_sel[0], pid))
+                                st.session_state[f"pv_vinc_{pid}"] = False
+                                st.session_state["eq_pv_msg"] = f"✅ {nome} vinculado."
+                                st.rerun()
+                        else:
+                            st.info("Nenhum usuário PROMOTOR_VENDEDOR sem vínculo disponível.")
+                else:
+                    if st.button("🔓 Desvincular login", key=f"pv_desv_{pid}"):
+                        execute_write("UPDATE promotor SET usuario_id=NULL WHERE promotor_id=%s", (pid,))
+                        st.session_state["eq_pv_msg"] = f"Login desvinculado de {nome}."
+                        st.rerun()
+    else:
+        if not sem_cadastro:
+            st.info("Nenhum Promotor Vendedor cadastrado.")
 
     st.divider()
     st.subheader("➕ Novo Promotor Vendedor")
-    n_nome  = st.text_input("Nome *", key="npv_nome")
-    n_email = st.text_input("Email/login *", key="npv_email")
-    n_wa    = st.text_input("WhatsApp", key="npv_wa")
-    n_senha = st.text_input("Senha inicial", key="npv_senha", value=_gerar_senha())
-    if st.button("💾 Criar", key="npv_criar", type="primary"):
-        if not n_nome.strip() or not n_email.strip():
-            st.error("Nome e email obrigatórios.")
-        else:
-            existe = query("SELECT 1 FROM usuario WHERE email=%s", (n_email.strip().lower(),))
-            if existe:
-                st.error("Email já cadastrado.")
-            else:
-                execute_write("""INSERT INTO usuario (nome,email,senha_hash,tipo,empresa_id,whatsapp,ativo)
-                    VALUES (%s,%s,%s,'PROMOTOR_VENDEDOR',%s,%s,1)""",
-                    (n_nome.strip(), n_email.strip().lower(), _hash(n_senha), eid, n_wa or None))
-                if n_wa:
-                    link = _link_wa(n_wa, _msg_acesso(n_nome, n_email.strip().lower(), n_senha))
-                    st.markdown(f'<a href="{link}" target="_blank"><button style="background:#25D366;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;width:100%">💬 Enviar via WhatsApp</button></a>', unsafe_allow_html=True)
-                st.session_state["eq_pv_msg"] = f"✅ {n_nome} criado!"
+    with st.form("novo_pv_eq", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            npv_nome  = st.text_input("Nome completo *")
+            npv_fone  = st.text_input("Fone / WhatsApp")
+            npv_email = st.text_input("E-mail")
+        with col2:
+            npv_cid  = st.text_input("Cidade")
+            npv_uf   = st.selectbox("UF", _ufs())
+            npv_bair = st.text_input("Bairro")
+        npv_obs = st.text_input("Observação")
+        salvar_pv = st.form_submit_button("Salvar Promotor Vendedor", type="primary")
+
+    if salvar_pv:
+        if not npv_nome.strip(): st.error("Nome obrigatório."); return
+        execute_write("""INSERT INTO promotor
+            (nome,fone,email,cidade,estado,bairro,observacao,empresa_id,ativo)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1)""",
+            (npv_nome.strip(), npv_fone or None, npv_email or None,
+             npv_cid or None, npv_uf, npv_bair or None, npv_obs or None, eid))
+        st.session_state["eq_pv_msg"] = f"✅ '{npv_nome}' cadastrado! Use '🔑 Criar login' para dar acesso ao app."
+        # Verifica usuarios sem vinculo para oferecer
+        usu_sem = query("""SELECT COUNT(*) FROM usuario
+            WHERE empresa_id=%s AND tipo='PROMOTOR_VENDEDOR' AND ativo=1
+            AND usuario_id NOT IN (SELECT usuario_id FROM promotor WHERE usuario_id IS NOT NULL)
+        """, (eid,)) or [[0]]
+        if usu_sem[0][0] > 0:
+            st.session_state["eq_pv_oferecer_vinculo"] = True
+        st.rerun()
+
+    if st.session_state.get("eq_pv_oferecer_vinculo"):
+        st.info("💡 Há usuários PROMOTOR_VENDEDOR sem vínculo. Deseja vincular ao recém cadastrado?")
+        usu_disp = query("""SELECT usuario_id, nome, email FROM usuario
+            WHERE empresa_id=%s AND tipo='PROMOTOR_VENDEDOR' AND ativo=1
+            AND usuario_id NOT IN (SELECT usuario_id FROM promotor WHERE usuario_id IS NOT NULL)
+            ORDER BY nome""", (eid,)) or []
+        ultimo = query("SELECT promotor_id, nome FROM promotor WHERE empresa_id=%s ORDER BY promotor_id DESC LIMIT 1", (eid,)) or []
+        if usu_disp and ultimo:
+            opts = [(u[0], f"{u[1]} ({u[2]})") for u in usu_disp]
+            u_sel = st.selectbox("Usuário", opts, format_func=lambda x: x[1], key="eq_pv_vinc_novo")
+            col_v, col_n = st.columns(2)
+            if col_v.button("🔗 Vincular", key="eq_pv_vinc_btn", type="primary"):
+                execute_write("UPDATE promotor SET usuario_id=%s WHERE promotor_id=%s",
+                              (u_sel[0], ultimo[0][0]))
+                st.session_state.pop("eq_pv_oferecer_vinculo", None)
+                st.session_state["eq_pv_msg"] = f"✅ Vinculado!"
+                st.rerun()
+            if col_n.button("Não vincular agora", key="eq_pv_vinc_skip"):
+                st.session_state.pop("eq_pv_oferecer_vinculo", None)
                 st.rerun()
 
 
