@@ -301,7 +301,7 @@ def _tela_promotores():
                u.email, u.whatsapp
         FROM promotor p
         LEFT JOIN usuario u ON u.usuario_id=p.usuario_id
-        WHERE p.empresa_id=%s AND p.nome != 'Sem promotor'
+        WHERE p.empresa_id=%s AND p.subtipo='PROMOTOR'
         ORDER BY p.nome
     """, (eid,)) or []
 
@@ -414,8 +414,8 @@ def _tela_promotores():
         salvar = st.form_submit_button("Salvar promotor", type="primary")
     if salvar:
         if not np_nome.strip(): st.error("Nome obrigatório."); return
-        execute_write("""INSERT INTO promotor (nome,fone,email,cpf,cidade,estado,bairro,veiculo,observacao,empresa_id,ativo)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)""",
+        execute_write("""INSERT INTO promotor (nome,fone,email,cpf,cidade,estado,bairro,veiculo,observacao,empresa_id,subtipo,ativo)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'PROMOTOR',1)""",
             (np_nome.strip(), np_fone or None, np_email or None, np_cpf or None,
              np_cid or None, np_uf, np_bair or None, np_vei or None, np_obs or None, eid))
         st.session_state["eq_prom_msg"] = f"✅ Promotor '{np_nome}' cadastrado!"
@@ -423,7 +423,9 @@ def _tela_promotores():
         usu_sem_vinc = query("""
             SELECT COUNT(*) FROM usuario
             WHERE empresa_id=%s AND tipo='PROMOTOR' AND ativo=1
-            AND usuario_id NOT IN (SELECT usuario_id FROM promotor WHERE usuario_id IS NOT NULL)
+            AND usuario_id NOT IN (
+                SELECT usuario_id FROM promotor WHERE usuario_id IS NOT NULL AND subtipo='PROMOTOR'
+            )
         """, (eid,)) or [[0]]
         if usu_sem_vinc[0][0] > 0:
             st.session_state["eq_prom_oferecer_vinculo"] = True
@@ -435,11 +437,13 @@ def _tela_promotores():
         usu_disp = query("""
             SELECT usuario_id, nome, email FROM usuario
             WHERE empresa_id=%s AND tipo='PROMOTOR' AND ativo=1
-            AND usuario_id NOT IN (SELECT usuario_id FROM promotor WHERE usuario_id IS NOT NULL)
+            AND usuario_id NOT IN (
+                SELECT usuario_id FROM promotor WHERE usuario_id IS NOT NULL AND subtipo='PROMOTOR'
+            )
             ORDER BY nome
         """, (eid,)) or []
-        # Pega o último promotor cadastrado
-        ultimo = query("SELECT promotor_id, nome FROM promotor WHERE empresa_id=%s ORDER BY promotor_id DESC LIMIT 1", (eid,)) or []
+        # Pega o último promotor cadastrado com subtipo PROMOTOR
+        ultimo = query("SELECT promotor_id, nome FROM promotor WHERE empresa_id=%s AND subtipo='PROMOTOR' ORDER BY promotor_id DESC LIMIT 1", (eid,)) or []
         if usu_disp and ultimo:
             opts = [(u[0], f"{u[1]} ({u[2]})") for u in usu_disp]
             u_sel = st.selectbox("Usuário para vincular ao promotor recém cadastrado",
@@ -469,15 +473,12 @@ def _tela_promotores_vendedores():
     if st.session_state.get("eq_pv_msg"):
         st.success(st.session_state.pop("eq_pv_msg"))
 
-    # Busca promotores com tipo PROMOTOR_VENDEDOR na tabela promotor
-    # e usuarios PROMOTOR_VENDEDOR sem cadastro em promotor
     pvs = query("""
         SELECT p.promotor_id, p.nome, p.fone, p.cidade, p.ativo, p.usuario_id,
                u.email, u.whatsapp
         FROM promotor p
         LEFT JOIN usuario u ON u.usuario_id=p.usuario_id
-        WHERE p.empresa_id=%s
-          AND (u.tipo='PROMOTOR_VENDEDOR' OR u.usuario_id IS NULL)
+        WHERE p.empresa_id=%s AND p.subtipo='PROMOTOR_VENDEDOR'
         ORDER BY p.nome
     """, (eid,)) or []
 
@@ -485,7 +486,10 @@ def _tela_promotores_vendedores():
     sem_cadastro = query("""
         SELECT usuario_id, nome FROM usuario
         WHERE empresa_id=%s AND tipo='PROMOTOR_VENDEDOR' AND ativo=1
-        AND usuario_id NOT IN (SELECT usuario_id FROM promotor WHERE usuario_id IS NOT NULL)
+        AND usuario_id NOT IN (
+            SELECT usuario_id FROM promotor
+            WHERE usuario_id IS NOT NULL AND subtipo='PROMOTOR_VENDEDOR'
+        )
         ORDER BY nome
     """, (eid,)) or []
 
@@ -498,8 +502,8 @@ def _tela_promotores_vendedores():
                 col1.write(f"**{unome}**")
                 if col2.button("➕ Cadastrar", key=f"pv_sc_{uid}"):
                     execute_write("""INSERT INTO promotor
-                        (nome, empresa_id, usuario_id, ativo)
-                        VALUES (%s,%s,%s,1)""", (unome, eid, uid))
+                        (nome, empresa_id, usuario_id, subtipo, ativo)
+                        VALUES (%s,%s,%s,'PROMOTOR_VENDEDOR',1)""", (unome, eid, uid))
                     st.session_state["eq_pv_msg"] = f"✅ {unome} cadastrado!"
                     st.rerun()
 
@@ -610,8 +614,8 @@ def _tela_promotores_vendedores():
     if salvar_pv:
         if not npv_nome.strip(): st.error("Nome obrigatório."); return
         execute_write("""INSERT INTO promotor
-            (nome,fone,email,cidade,estado,bairro,observacao,empresa_id,ativo)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1)""",
+            (nome,fone,email,cidade,estado,bairro,observacao,empresa_id,subtipo,ativo)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'PROMOTOR_VENDEDOR',1)""",
             (npv_nome.strip(), npv_fone or None, npv_email or None,
              npv_cid or None, npv_uf, npv_bair or None, npv_obs or None, eid))
         st.session_state["eq_pv_msg"] = f"✅ '{npv_nome}' cadastrado! Use '🔑 Criar login' para dar acesso ao app."
