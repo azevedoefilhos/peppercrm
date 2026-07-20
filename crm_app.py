@@ -626,7 +626,7 @@ def _tela_busca_global():
 if pagina == "home":
     from permissoes import get_menu, e_admin, e_master, perfil_atual
 
-    col_t, col_b, col_c, col_sair = st.columns([4, 1, 1, 1])
+    col_t, col_b, col_c, col_conta, col_sair = st.columns([3, 1, 1, 1, 1])
     with col_t: st.title(f"{_nome_empresa()}")
     with col_b:
         st.write("")
@@ -634,6 +634,9 @@ if pagina == "home":
     with col_c:
         st.write("")
         if e_admin() and st.button("⚙️ Config.", width="stretch"): ir("configuracao")
+    with col_conta:
+        st.write("")
+        if st.button("👤 Conta", width="stretch"): ir("minha_conta")
     with col_sair:
         st.write("")
         if st.button("🚪 Sair", width="stretch"): logout()
@@ -659,6 +662,7 @@ if pagina == "home":
             _dashboard()
 
 
+elif pagina == "minha_conta":   from minha_conta import tela_minha_conta; tela_minha_conta()
 elif pagina == "configuracao":  from configuracao import tela_configuracao; tela_configuracao()
 elif pagina == "equipe":        from equipe import tela_equipe; tela_equipe()
 elif pagina == "roteiros":      from roteiros import tela_roteiros; tela_roteiros()
