@@ -58,7 +58,7 @@ def _roteiro_vendedor():
     vends = query("""SELECT u.usuario_id, u.nome FROM usuario u
         WHERE u.empresa_id=%s
         AND (u.tipo='REPRESENTANTE_ADM' OR u.tipo='REPRESENTANTE'
-             OR u.tipo='VENDEDOR' OR u.tipo='PROMOTOR_VENDEDOR' OR u.tipo='MASTER')
+             OR u.tipo='VENDEDOR' OR u.tipo='MASTER')
         AND u.ativo=1 ORDER BY u.nome""", (eid,)) or []
 
     if not vends:
@@ -119,7 +119,8 @@ def _roteiro_promotor():
     st.subheader("👤 Atribuição de PDVs por Promotor")
 
     proms = query("""SELECT promotor_id, nome FROM promotor
-        WHERE empresa_id=%s AND ativo!=0 AND nome!='Sem promotor'
+        WHERE empresa_id=%s AND ativo!=0
+        AND (subtipo='PROMOTOR' OR subtipo='PROMOTOR_VENDEDOR')
         ORDER BY nome""", (eid,)) or []
 
     if not proms:
