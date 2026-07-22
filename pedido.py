@@ -6,6 +6,7 @@ import pandas as pd
 import io
 from datetime import date
 from database import conectar, query, get_fornecedores_do_cliente, get_mix_com_preco
+from permissoes import e_admin, e_master, e_promotor_vendedor, e_vendedor, usuario_id_atual
 
 STATUS_PEDIDO = ["ABERTO","ENVIADO","CONFIRMADO","FATURADO","ENTREGUE","CANCELADO","RECUSADO"]
 STATUS_CORES  = {
@@ -37,14 +38,73 @@ def tela_novo_pedido():
                                       help="Ativos = clientes com pedidos regulares\n"
                                            "Outros = prospectos, visitados, inativos")
     with col_cli:
-        if fil_cli_status == "Ativos":
-            _cli_where = "WHERE status='Ativo'"
-        elif fil_cli_status == "Outros":
-            _cli_where = "WHERE status != 'Ativo'"
+        uid = usuario_id_atual()
+
+        if e_promotor_vendedor():
+            # Promotor Vendedor: seleciona PDV diretamente (nao o cliente)
+            # Busca PDVs atribuidos a ele via att_promotor
+            _meus_pdvs = query("""
+                SELECT ap.pdv_id, p.nome_loja, c.nome_fantasia,
+                       c.cliente_id, c.cidade, c.estado, c.status
+                FROM att_promotor ap
+                JOIN pdv p ON ap.pdv_id=p.pdv_id
+                JOIN cliente c ON p.cliente_id=c.cliente_id
+                WHERE ap.promotor_id IN (
+                    SELECT promotor_id FROM promotor
+                    WHERE usuario_id=%s AND ativo!=0
+                ) AND ap.ativo!=0
+                ORDER BY c.nome_fantasia, p.nome_loja
+            """, (uid,)) or []
+
+            if not _meus_pdvs:
+                st.warning("Nenhum PDV atribuido ao seu roteiro. Solicite ao supervisor ou ADM.")
+                return
+
+            pdv_sel_pv = st.selectbox(
+                "Seu PDV",
+                _meus_pdvs,
+                format_func=lambda x: f"{x[2]} — {x[1]} ({x[4]}/{x[5]})",
+                key="ped_pdv_pv"
+            )
+            # Extrai dados do PDV selecionado
+            _pdv_id_pv  = pdv_sel_pv[0]
+            _cli_id_pv  = pdv_sel_pv[3]
+            _pdv_nome   = pdv_sel_pv[1]
+            _cli_nome   = pdv_sel_pv[2]
+            st.caption(f"Cliente: **{_cli_nome}** | PDV: **{_pdv_nome}**")
+
+            # Monta clientes como lista de 1 item para compatibilidade com o restante do fluxo
+            clientes = query("""SELECT cliente_id, nome_fantasia, cidade, estado, status
+                FROM cliente WHERE cliente_id=%s""", (_cli_id_pv,)) or []
+            if not clientes:
+                st.error("Cliente nao encontrado.")
+                return
+            # Pre-seleciona cliente e PDV no session_state
+            st.session_state["ped_cli"]    = clientes[0]
+            st.session_state["ped_pdv_id"] = _pdv_id_pv
+
         else:
-            _cli_where = ""
-        clientes = query(f"""SELECT cliente_id, nome_fantasia, cidade, estado, status
-            FROM cliente {_cli_where} ORDER BY nome_fantasia""")
+            # Vendedor/Representante/ADM: seleciona cliente normalmente
+            if fil_cli_status == "Ativos":
+                _status_where = "c.status='Ativo'"
+            elif fil_cli_status == "Outros":
+                _status_where = "c.status != 'Ativo'"
+            else:
+                _status_where = "1=1"
+
+            if e_admin() or e_master():
+                _perfil_where  = ""
+                _perfil_params = []
+            else:
+                # Vendedor/Representante: apenas sua carteira
+                _perfil_where  = "AND c.vendedor_id=%s"
+                _perfil_params = [uid]
+
+            _cli_sql = f"""SELECT c.cliente_id, c.nome_fantasia, c.cidade, c.estado, c.status
+                FROM cliente c
+                WHERE {_status_where} {_perfil_where}
+                ORDER BY c.nome_fantasia"""
+            clientes = query(_cli_sql, tuple(_perfil_params)) if _perfil_params else query(_cli_sql)
         if not clientes:
             st.warning("Nenhum cliente encontrado para este filtro.")
             return
