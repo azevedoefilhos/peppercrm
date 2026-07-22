@@ -33,25 +33,30 @@ MODULOS = {
         "mix_analise", "concorrentes", "analise_competitiva",
     ],
     'REPRESENTANTE': [
-        "clientes", "pedido", "ver_pedidos", "comissoes",
-        "resultado_operacional", "contatos", "metas",
-        "pesquisa", "despesas", "visitas", "roteiros",
-        "mix_analise", "analise_competitiva",
+        "fornecedores", "clientes", "tabelas_preco",
+        "pedido", "ver_pedidos", "comissoes", "resultado_operacional",
+        "contatos", "metas", "pesquisa", "despesas", "relatorios",
+        "visitas", "roteiros", "configuracao",
+        "mix_analise", "analise_competitiva", "concorrentes",
     ],
     'VENDEDOR': [
-        "clientes", "pedido", "ver_pedidos", "comissoes",
-        "resultado_operacional", "contatos", "metas",
-        "pesquisa", "despesas", "visitas", "roteiros",
+        "clientes",
+        "pedido", "ver_pedidos", "resultado_operacional",
+        "contatos", "metas", "pesquisa", "despesas", "relatorios",
+        "visitas", "roteiros", "configuracao",
     ],
     'PROMOTOR_VENDEDOR': [
-        "clientes", "pedido", "ver_pedidos",
-        "pesquisa", "visitas", "roteiros", "produtos",
+        "clientes", "tabelas_preco",
+        "pedido", "ver_pedidos", "resultado_operacional",
+        "pesquisa", "visitas", "roteiros", "configuracao",
+        "mix_analise", "analise_competitiva", "concorrentes",
     ],
     'SUPERVISOR': [
-        "clientes", "pesquisa", "visitas", "roteiros", "relatorios",
+        "clientes", "pesquisa", "visitas", "roteiros",
+        "relatorios", "configuracao",
     ],
     'PROMOTOR': [
-        "visitas", "pesquisa", "roteiros",
+        "visitas", "pesquisa", "roteiros", "configuracao",
     ],
 }
 
