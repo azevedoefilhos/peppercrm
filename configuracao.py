@@ -31,19 +31,24 @@ def _ufs():
 
 def tela_configuracao():
     st.header("⚙️ Configuração")
-    if st.button("⬅ Voltar"):
+    if st.button("⬅ Voltar", key="cfg_voltar"):
         _ir("home")
 
-    from permissoes import e_master
-    ABAS_CFG = {
-        "empresa": "🏢 Minha Empresa",
-        "sistema": "⚙️ Sistema",
-        "usuarios": "👤 Usuários",
-    }
-    if e_master():
-        ABAS_CFG["empresas"] = "🏢 Empresas"
+    from permissoes import e_master, e_admin, perfil_atual
 
-    if "cfg_aba" not in st.session_state: st.session_state["cfg_aba"] = "empresa"
+    # Abas disponíveis por perfil
+    ABAS_TODOS   = {"conta": "👤 Minha Conta"}
+    ABAS_ADM     = {"empresa": "🏢 Minha Empresa", "sistema": "⚙️ Sistema", "usuarios": "👤 Usuários"}
+    ABAS_MASTER  = {"empresas": "🏢 Empresas"}
+
+    ABAS_CFG = {**ABAS_TODOS}
+    if e_admin():  ABAS_CFG.update(ABAS_ADM)
+    if e_master(): ABAS_CFG.update(ABAS_MASTER)
+
+    if "cfg_aba" not in st.session_state or \
+       st.session_state["cfg_aba"] not in ABAS_CFG:
+        st.session_state["cfg_aba"] = "conta"
+
     cols = st.columns(len(ABAS_CFG))
     for col,(k,v) in zip(cols, ABAS_CFG.items()):
         ativa = st.session_state["cfg_aba"] == k
@@ -51,8 +56,10 @@ def tela_configuracao():
                       type="primary" if ativa else "secondary"):
             st.session_state["cfg_aba"] = k; st.rerun()
     st.divider()
+
     a = st.session_state["cfg_aba"]
-    if a == "empresa":  _tela_minha_empresa()
+    if a == "conta":    _tela_minha_conta()
+    elif a == "empresa": _tela_minha_empresa()
     elif a == "sistema": _tela_sistema()
     elif a == "usuarios":
         from usuarios import tela_usuarios
@@ -63,13 +70,88 @@ def tela_configuracao():
 
 
 # ═══════════════════════════════════════════════════════
-# DADOS DO SISTEMA
+# MINHA CONTA — disponível para todos os perfis
+# ═══════════════════════════════════════════════════════
+
+def _tela_minha_conta():
+    import hashlib
+    from database import execute_write
+    from permissoes import usuario_id_atual, usuario_atual
+
+    def _hash(s): return hashlib.sha256(s.encode()).hexdigest()
+
+    uid = usuario_id_atual()
+    dados = query("SELECT nome, email, whatsapp, tipo FROM usuario WHERE usuario_id=%s", (uid,)) or []
+    if not dados:
+        st.error("Usuário não encontrado."); return
+
+    nome, email, wa, tipo = dados[0][0], dados[0][1], dados[0][2], dados[0][3]
+
+    st.subheader("👤 Minha Conta")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Nome", nome)
+    col2.metric("Perfil", tipo)
+    col3.metric("WhatsApp", wa or "—")
+    st.caption(f"Login: {email}")
+    st.divider()
+
+    with st.expander("✏️ Atualizar dados"):
+        with st.form("form_dados_conta"):
+            novo_nome = st.text_input("Nome", value=nome)
+            novo_wa   = st.text_input("WhatsApp", value=wa or "", placeholder="11 9 9999-9999")
+            salvar    = st.form_submit_button("💾 Salvar", type="primary")
+        if salvar:
+            execute_write("UPDATE usuario SET nome=%s, whatsapp=%s WHERE usuario_id=%s",
+                          (novo_nome.strip(), novo_wa.strip() or None, uid))
+            st.success("✅ Dados atualizados!")
+            st.rerun()
+
+    st.divider()
+    st.subheader("🔑 Alterar senha")
+    with st.form("form_senha_conta"):
+        senha_atual = st.text_input("Senha atual", type="password")
+        nova_senha  = st.text_input("Nova senha", type="password", help="Mínimo 6 caracteres")
+        confirmar   = st.text_input("Confirmar nova senha", type="password")
+        alterar     = st.form_submit_button("🔑 Alterar senha", type="primary")
+
+    if alterar:
+        if not senha_atual or not nova_senha or not confirmar:
+            st.error("Preencha todos os campos.")
+        elif len(nova_senha) < 6:
+            st.error("A nova senha deve ter pelo menos 6 caracteres.")
+        elif nova_senha != confirmar:
+            st.error("A nova senha e a confirmação não coincidem.")
+        else:
+            ok = query("SELECT 1 FROM usuario WHERE usuario_id=%s AND senha_hash=%s",
+                       (uid, _hash(senha_atual))) or []
+            if not ok:
+                st.error("❌ Senha atual incorreta.")
+            else:
+                execute_write("UPDATE usuario SET senha_hash=%s WHERE usuario_id=%s",
+                              (_hash(nova_senha), uid))
+                execute_write("UPDATE sessao_token SET ativo=0 WHERE usuario_id=%s", (uid,))
+                st.success("✅ Senha alterada! Faça login novamente.")
+                for k in ["auth_ok","auth_user","_pepper_token"]:
+                    st.session_state.pop(k, None)
+                st.query_params.clear()
+                st.rerun()
+
+    st.divider()
+    with st.expander("🆘 Esqueci minha senha"):
+        st.info("Solicite ao administrador que redefina sua senha em "
+                "**Configuração → Usuários**. Ele enviará a nova senha via WhatsApp.")
+        if wa: st.caption(f"Seu WhatsApp: {wa}")
+        else:  st.caption("⚠️ Sem WhatsApp cadastrado — peça ao ADM para atualizar.")
+
+
+# ═══════════════════════════════════════════════════════
+# MINHA EMPRESA — ADM e MASTER
 # ═══════════════════════════════════════════════════════
 
 def _tela_minha_empresa():
-    """Une Dados do sistema + Representante em uma unica tela."""
+    from database import execute_write
     st.subheader("🏢 Minha Empresa")
-    st.caption("Dados da empresa/representação — usados em documentos, relatórios e cabeçalhos.")
+    st.caption("Dados da empresa/representação usados em documentos e relatórios.")
     _criar_tabela_configuracao()
 
     conn = conectar()
@@ -81,15 +163,14 @@ def _tela_minha_empresa():
         st.markdown("**Identificação**")
         col1, col2 = st.columns(2)
         with col1:
-            empresa  = st.text_input("Nome fantasia / Representação *",
-                                     value=(rep["nome_fantasia"] if rep else "") or (cfg["empresa_nome"] if cfg else ""))
-            razao    = st.text_input("Razão social",
-                                     value=rep["razao_social"] if rep else "")
-            cnpj     = st.text_input("CNPJ", value=rep["cnpj"] if rep else "")
+            empresa = st.text_input("Nome fantasia *",
+                value=(rep["nome_fantasia"] if rep else "") or (cfg["empresa_nome"] if cfg else ""))
+            razao   = st.text_input("Razão social", value=rep["razao_social"] if rep else "")
+            cnpj    = st.text_input("CNPJ", value=rep["cnpj"] if rep else "")
         with col2:
-            fone     = st.text_input("Telefone", value=rep["fone"] if rep else "")
-            email_r  = st.text_input("E-mail", value=rep["email"] if rep else "")
-            site     = st.text_input("Site", value=rep["site"] if rep else "")
+            fone    = st.text_input("Telefone", value=rep["fone"] if rep else "")
+            email_r = st.text_input("E-mail", value=rep["email"] if rep else "")
+            site    = st.text_input("Site", value=rep["site"] if rep else "")
 
         st.markdown("**Endereço**")
         col3, col4 = st.columns(2)
@@ -97,102 +178,93 @@ def _tela_minha_empresa():
             endereco = st.text_input("Endereço", value=rep["endereco"] if rep else "")
             bairro   = st.text_input("Bairro", value=rep["bairro"] if rep else "")
         with col4:
-            cidade   = st.text_input("Cidade", value=rep["cidade"] if rep else "")
-            ufs_list = _ufs()
-            idx_uf   = ufs_list.index(rep["estado"]) if rep and rep["estado"] in ufs_list else 25
-            estado   = st.selectbox("UF", ufs_list, index=idx_uf)
-
-        obs = st.text_area("Observação", value=rep["observacao"] if rep else "")
-        salvar = st.form_submit_button("💾 Salvar dados da empresa", type="primary")
+            cidade  = st.text_input("Cidade", value=rep["cidade"] if rep else "")
+            ufs_l   = _ufs()
+            idx_uf  = ufs_l.index(rep["estado"]) if rep and rep["estado"] in ufs_l else 25
+            estado  = st.selectbox("UF", ufs_l, index=idx_uf)
+        obs    = st.text_area("Observação", value=rep["observacao"] if rep else "")
+        salvar = st.form_submit_button("💾 Salvar", type="primary")
 
     if salvar:
-        if not empresa.strip():
-            _erro("Nome fantasia é obrigatório."); return
+        if not empresa.strip(): _erro("Nome fantasia é obrigatório."); return
         conn = conectar()
-        # Atualiza configuracao
         if cfg:
             conn.execute("UPDATE configuracao SET empresa_nome=? WHERE config_id=?",
                          (empresa.strip(), cfg["config_id"]))
         else:
             from datetime import date
-            conn.execute("""INSERT INTO configuracao (empresa_nome, modo_operacao, data_instalacao, versao_sistema)
-                VALUES (?,?,?,?)""", (empresa.strip(), 'REPRESENTACAO', str(date.today()), '1.0'))
-        # Atualiza representante
+            conn.execute("INSERT INTO configuracao (empresa_nome,modo_operacao,data_instalacao,versao_sistema) VALUES (?,?,?,?)",
+                         (empresa.strip(),'REPRESENTACAO',str(date.today()),'1.0'))
         if rep:
-            conn.execute("""UPDATE representante SET razao_social=?, nome_fantasia=?, cnpj=?,
-                fone=?, email=?, endereco=?, bairro=?, cidade=?, estado=?, site=?, observacao=?
+            conn.execute("""UPDATE representante SET razao_social=?,nome_fantasia=?,cnpj=?,
+                fone=?,email=?,endereco=?,bairro=?,cidade=?,estado=?,site=?,observacao=?
                 WHERE representante_id=?""",
-                (razao, empresa.strip(), cnpj, fone, email_r, endereco, bairro,
-                 cidade, estado, site, obs, rep["representante_id"]))
+                (razao,empresa.strip(),cnpj,fone,email_r,endereco,bairro,cidade,estado,site,obs,rep["representante_id"]))
         else:
             conn.execute("""INSERT INTO representante (razao_social,nome_fantasia,cnpj,fone,email,
-                endereco,bairro,cidade,estado,site,observacao,ativo)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,1)""",
-                (razao, empresa.strip(), cnpj, fone, email_r, endereco, bairro,
-                 cidade, estado, site, obs))
+                endereco,bairro,cidade,estado,site,observacao,ativo) VALUES (?,?,?,?,?,?,?,?,?,?,?,1)""",
+                (razao,empresa.strip(),cnpj,fone,email_r,endereco,bairro,cidade,estado,site,obs))
         conn.commit(); conn.close()
         _sucesso("Dados da empresa salvos!")
         st.rerun()
 
 
+# ═══════════════════════════════════════════════════════
+# SISTEMA — ADM e MASTER
+# ═══════════════════════════════════════════════════════
+
 def _tela_sistema():
-    """Configuracoes do sistema: modo de operacao, API, seguranca."""
     st.subheader("⚙️ Configurações do sistema")
     _criar_tabela_configuracao()
-
     conn = conectar()
-    cfg = conn.execute("SELECT * FROM configuracao ORDER BY config_id DESC LIMIT 1").fetchone()
+    cfg  = conn.execute("SELECT * FROM configuracao ORDER BY config_id DESC LIMIT 1").fetchone()
     conn.close()
 
-    modo_atual = cfg["modo_operacao"] if cfg else "REPRESENTACAO"
-    api_atual  = cfg["anthropic_api_key"] if cfg and "anthropic_api_key" in cfg.keys() else ""
-    senha_atual = cfg["senha_exclusao"] if cfg and "senha_exclusao" in cfg.keys() else "EXCLUIR123"
+    modo_atual  = cfg["modo_operacao"]    if cfg else "REPRESENTACAO"
+    api_atual   = cfg["anthropic_api_key"] if cfg and "anthropic_api_key" in cfg.keys() else ""
+    senha_atual = cfg["senha_exclusao"]   if cfg and "senha_exclusao"    in cfg.keys() else "EXCLUIR123"
 
     with st.form("form_sistema"):
         st.markdown("**Modo de operação**")
         MODOS = {
-            "REPRESENTACAO":  "Representação Comercial (autônomo, multilinhas)",
-            "DISTRIBUIDOR":   "Distribuidor (compra e revende, foco em vendas)",
-            "FORNECEDOR":     "Fornecedor / Indústria (fabrica e vende diretamente)",
+            "REPRESENTACAO": "Representação Comercial (autônomo, multilinhas)",
+            "DISTRIBUIDOR":  "Distribuidor (compra e revende, foco em vendas)",
+            "FORNECEDOR":    "Fornecedor / Indústria (fabrica e vende diretamente)",
         }
         idx_modo = list(MODOS.keys()).index(modo_atual) if modo_atual in MODOS else 0
-        modo = st.selectbox("Modo", list(MODOS.keys()),
-                            index=idx_modo,
+        modo = st.selectbox("Modo", list(MODOS.keys()), index=idx_modo,
                             format_func=lambda x: MODOS[x])
-        st.caption("Define a terminologia e módulos disponíveis no sistema.")
-
+        st.caption("Define terminologia e módulos disponíveis.")
         st.divider()
         st.markdown("**Inteligência Artificial (opcional)**")
-        api_key = st.text_input("Chave de API Anthropic", value=api_atual or "",
+        api_key = st.text_input("Chave API Anthropic", value=api_atual or "",
                                 type="password", placeholder="sk-ant-...")
         if api_atual:
-            vis = api_atual[:12] + "..." + api_atual[-4:]
-            st.caption(f"✅ Chave configurada: `{vis}`")
-
+            st.caption(f"✅ Chave configurada: `{api_atual[:12]}...{api_atual[-4:]}`")
         st.divider()
         st.markdown("**Segurança**")
-        senha_exc = st.text_input("Senha de exclusão", value=senha_atual,
-                                  type="password", help="Exigida para excluir registros.")
-
-        salvar = st.form_submit_button("💾 Salvar configurações", type="primary")
+        senha_exc = st.text_input("Senha de exclusão", value=senha_atual, type="password")
+        salvar = st.form_submit_button("💾 Salvar", type="primary")
 
     if salvar:
         conn = conectar()
         if cfg:
-            conn.execute("""UPDATE configuracao SET modo_operacao=?,
-                anthropic_api_key=?, senha_exclusao=? WHERE config_id=?""",
-                (modo, api_key.strip() or None, senha_exc.strip() or "EXCLUIR123",
-                 cfg["config_id"]))
+            conn.execute("UPDATE configuracao SET modo_operacao=?,anthropic_api_key=?,senha_exclusao=? WHERE config_id=?",
+                         (modo, api_key.strip() or None, senha_exc.strip() or "EXCLUIR123", cfg["config_id"]))
         else:
             from datetime import date
-            conn.execute("""INSERT INTO configuracao (modo_operacao,anthropic_api_key,
-                senha_exclusao,data_instalacao,versao_sistema)
-                VALUES (?,?,?,?,?)""",
-                (modo, api_key.strip() or None, senha_exc.strip() or "EXCLUIR123",
-                 str(date.today()), "1.0"))
+            conn.execute("INSERT INTO configuracao (modo_operacao,anthropic_api_key,senha_exclusao,data_instalacao,versao_sistema) VALUES (?,?,?,?,?)",
+                         (modo, api_key.strip() or None, senha_exc.strip() or "EXCLUIR123", str(date.today()), "1.0"))
         conn.commit(); conn.close()
         _sucesso("Configurações salvas!")
         st.rerun()
+
+
+# ═══════════════════════════════════════════════════════
+# DADOS DO SISTEMA (legado — mantido por compatibilidade)
+# ═══════════════════════════════════════════════════════
+
+def _tela_dados_sistema():
     st.subheader("Dados do sistema")
     st.caption("Informações gerais sobre esta instalação do PepperCRM.")
 

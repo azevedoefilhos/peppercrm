@@ -34,15 +34,14 @@ _RESET_ABAS = {
     "comissoes":           {"com_aba": "cfg"},
     "relatorios":          {"rel_aba": "cli"},
     "visitas":             {"vis_aba": "prom", "vis_modo": "lista"},
-    "equipe":              {"eq_aba": "vend"},
-    "roteiros":            {"rot_aba": "vend"},
     "mix_analise":         {"mix_aba": "pdv"},
     "metas":               {"mt_nav_aba": "painel", "def_aba": "fat"},
     "analise_competitiva": {"ana_aba": "mc"},
     "concorrentes":        {"cc_aba": "marcas"},
     "ver_pedidos":         {"vp_modo": "lista"},
-    "configuracao":        {"cfg_aba": "empresa"},
+    "configuracao":        {"cfg_aba": "sis"},
     "despesas":            {"desp_aba": "nova"},
+    "catalogo":            {"cat_aba": "catalogo"},
 }
 
 
@@ -626,17 +625,14 @@ def _tela_busca_global():
 if pagina == "home":
     from permissoes import get_menu, e_admin, e_master, perfil_atual
 
-    col_t, col_b, col_c, col_conta, col_sair = st.columns([3, 1, 1, 1, 1])
+    col_t, col_b, col_c, col_sair = st.columns([4, 1, 1, 1])
     with col_t: st.title(f"{_nome_empresa()}")
     with col_b:
         st.write("")
         if st.button("🔍 Busca", width="stretch"): ir("busca_global")
     with col_c:
         st.write("")
-        if e_admin() and st.button("⚙️ Config.", width="stretch"): ir("configuracao")
-    with col_conta:
-        st.write("")
-        if st.button("👤 Conta", width="stretch"): ir("minha_conta")
+        if st.button("⚙️ Config.", width="stretch"): ir("configuracao")
     with col_sair:
         st.write("")
         if st.button("🚪 Sair", width="stretch"): logout()
@@ -662,10 +658,9 @@ if pagina == "home":
             _dashboard()
 
 
-elif pagina == "minha_conta":   from minha_conta import tela_minha_conta; tela_minha_conta()
 elif pagina == "configuracao":  from configuracao import tela_configuracao; tela_configuracao()
-elif pagina == "equipe":        from equipe import tela_equipe; tela_equipe()
-elif pagina == "roteiros":      from roteiros import tela_roteiros; tela_roteiros()
+elif pagina == "usuarios":      from usuarios import tela_usuarios; tela_usuarios()
+elif pagina == "empresas":      from usuarios import tela_empresas; tela_empresas()
 elif pagina == "fornecedores":  from cadastros import tela_fornecedores; tela_fornecedores()
 elif pagina == "produtos":      from cadastros import tela_produtos; tela_produtos()
 elif pagina == "tabelas_preco": from cadastros import tela_tabelas_preco; tela_tabelas_preco()
