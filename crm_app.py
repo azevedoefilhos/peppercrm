@@ -658,6 +658,9 @@ if pagina == "home":
             _dashboard()
 
 
+elif pagina == "minha_conta":   from configuracao import tela_configuracao; st.session_state["cfg_aba"]="conta"; tela_configuracao()
+elif pagina == "equipe":        from equipe import tela_equipe; tela_equipe()
+elif pagina == "roteiros":      from roteiros import tela_roteiros; tela_roteiros()
 elif pagina == "configuracao":  from configuracao import tela_configuracao; tela_configuracao()
 elif pagina == "usuarios":      from usuarios import tela_usuarios; tela_usuarios()
 elif pagina == "empresas":      from usuarios import tela_empresas; tela_empresas()
