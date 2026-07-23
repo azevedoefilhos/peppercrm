@@ -9,6 +9,7 @@ import streamlit as st
 # ═══════════════════════════════════════════════════════════════
 NIVEL = {
     'MASTER':              99,
+    'ADM':                  5,
     'REPRESENTANTE_ADM':    5,
     'REPRESENTANTE':        4,
     'VENDEDOR':             4,
@@ -19,6 +20,13 @@ NIVEL = {
 
 MODULOS = {
     'MASTER': [
+        "fornecedores", "clientes", "produtos", "tabelas_preco",
+        "pedido", "ver_pedidos", "comissoes", "resultado_operacional",
+        "contatos", "metas", "pesquisa", "despesas", "relatorios",
+        "visitas", "equipe", "roteiros", "configuracao",
+        "mix_analise", "concorrentes", "analise_competitiva",
+    ],
+    'ADM': [
         "fornecedores", "clientes", "produtos", "tabelas_preco",
         "pedido", "ver_pedidos", "comissoes", "resultado_operacional",
         "contatos", "metas", "pesquisa", "despesas", "relatorios",
@@ -40,14 +48,14 @@ MODULOS = {
         "mix_analise", "analise_competitiva", "concorrentes",
     ],
     'VENDEDOR': [
-        "clientes",
-        "pedido", "ver_pedidos", "resultado_operacional",
+        "fornecedores", "clientes", "produtos", "tabelas_preco",
+        "pedido", "ver_pedidos",
         "contatos", "metas", "pesquisa", "despesas", "relatorios",
         "visitas", "roteiros", "configuracao",
     ],
     'PROMOTOR_VENDEDOR': [
-        "clientes", "tabelas_preco",
-        "pedido", "ver_pedidos", "resultado_operacional",
+        "clientes", "produtos", "tabelas_preco",
+        "pedido", "ver_pedidos",
         "pesquisa", "visitas", "roteiros", "configuracao",
         "mix_analise", "analise_competitiva", "concorrentes",
     ],
