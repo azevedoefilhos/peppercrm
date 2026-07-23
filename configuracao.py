@@ -37,8 +37,8 @@ def tela_configuracao():
     from permissoes import e_master, e_admin, perfil_atual
 
     # Abas disponíveis por perfil
-    ABAS_TODOS   = {"conta": "👤 Minha Conta"}
-    ABAS_ADM     = {"empresa": "🏢 Minha Empresa", "sistema": "⚙️ Sistema", "usuarios": "👤 Usuários"}
+    ABAS_TODOS   = {"conta": "👤 Minha Conta", "empresa": "🏢 Minha Empresa"}
+    ABAS_ADM     = {"sistema": "⚙️ Sistema", "usuarios": "👤 Usuários"}
     ABAS_MASTER  = {"empresas": "🏢 Empresas"}
 
     ABAS_CFG = {**ABAS_TODOS}
@@ -150,8 +150,13 @@ def _tela_minha_conta():
 
 def _tela_minha_empresa():
     from database import execute_write
+    from permissoes import e_admin, e_master
+    _pode_editar = e_admin() or e_master()
     st.subheader("🏢 Minha Empresa")
-    st.caption("Dados da empresa/representação usados em documentos e relatórios.")
+    if _pode_editar:
+        st.caption("Dados da empresa/representação usados em documentos e relatórios.")
+    else:
+        st.caption("Dados da empresa — somente leitura. Contate o administrador para alterações.")
     _criar_tabela_configuracao()
 
     conn = conectar()
@@ -183,9 +188,9 @@ def _tela_minha_empresa():
             idx_uf  = ufs_l.index(rep["estado"]) if rep and rep["estado"] in ufs_l else 25
             estado  = st.selectbox("UF", ufs_l, index=idx_uf)
         obs    = st.text_area("Observação", value=rep["observacao"] if rep else "")
-        salvar = st.form_submit_button("💾 Salvar", type="primary")
+        salvar = st.form_submit_button("💾 Salvar", type="primary", disabled=not _pode_editar)
 
-    if salvar:
+    if salvar and _pode_editar:
         if not empresa.strip(): _erro("Nome fantasia é obrigatório."); return
         conn = conectar()
         if cfg:
