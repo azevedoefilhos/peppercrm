@@ -2097,7 +2097,7 @@ def _prospeccao():
         FROM cliente c
         WHERE {' AND '.join(where_cli)}
         ORDER BY c.nome_fantasia
-    """, tuple(params_cli))
+    """, tuple(_extra_cli_params + list(params_cli)))
 
     if not clientes:
         st.info("Nenhum cliente encontrado para os filtros selecionados.")

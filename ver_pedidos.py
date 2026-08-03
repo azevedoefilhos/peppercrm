@@ -92,7 +92,23 @@ def _lista_pedidos():
 
     col1, col2, col3, col4 = st.columns(4)
 
-    clientes = [(None,"Todos")] + [(r[0],r[1]) for r in _cache_clientes()]
+    from permissoes import e_admin, e_master, e_promotor_vendedor, e_vendedor, usuario_id_atual
+    _uid_vp = usuario_id_atual()
+    if e_promotor_vendedor():
+        _clis_vp = [(None,"Todos")] + [(r[0],r[1]) for r in (query("""
+            SELECT DISTINCT c.cliente_id, c.nome_fantasia
+            FROM cliente c JOIN pdv p ON p.cliente_id=c.cliente_id
+            JOIN att_promotor ap ON ap.pdv_id=p.pdv_id
+            JOIN promotor pr ON ap.promotor_id=pr.promotor_id
+            WHERE pr.usuario_id=%s AND ap.ativo!=0
+            ORDER BY c.nome_fantasia""", (_uid_vp,)) or [])]
+        clientes = _clis_vp
+    elif e_vendedor() and not (e_admin() or e_master()):
+        clientes = [(None,"Todos")] + [(r[0],r[1]) for r in (query(
+            "SELECT cliente_id, nome_fantasia FROM cliente WHERE vendedor_id=%s ORDER BY nome_fantasia",
+            (_uid_vp,)) or [])]
+    else:
+        clientes = [(None,"Todos")] + [(r[0],r[1]) for r in _cache_clientes()]
     fornecs  = [(None,"Todos")] + [(r[0],r[1]) for r in _cache_fornecedores()]
 
     with col1:
@@ -106,6 +122,18 @@ def _lista_pedidos():
 
     hoje = _date.today().isoformat()
     where, params = ["1=1"], []
+    # Filtro automatico por perfil — vendedor ve apenas seus pedidos
+    if e_promotor_vendedor():
+        where.append("""p.cliente_id IN (
+            SELECT p2.cliente_id FROM att_promotor ap
+            JOIN pdv p2 ON ap.pdv_id=p2.pdv_id
+            JOIN promotor pr ON ap.promotor_id=pr.promotor_id
+            WHERE pr.usuario_id=? AND ap.ativo!=0)""")
+        params.append(_uid_vp)
+    elif e_vendedor() and not (e_admin() or e_master()):
+        where.append("""p.cliente_id IN (
+            SELECT cliente_id FROM cliente WHERE vendedor_id=?)""")
+        params.append(_uid_vp)
     if cli_f and cli_f[0]:
         where.append("p.cliente_id=?"); params.append(cli_f[0])
     if forn_f and forn_f[0]:

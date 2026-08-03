@@ -2002,6 +2002,19 @@ def _lista_clientes():
         where_q.append("c.vendedor_id=?")
         params_q.append(usuario_id_atual())
 
+    # Filtro de carteira por perfil
+    from permissoes import e_admin, e_master, e_promotor_vendedor, e_vendedor, usuario_id_atual
+    _uid_cli = usuario_id_atual()
+    if e_promotor_vendedor():
+        where_q.append("""c.cliente_id IN (
+            SELECT p2.cliente_id FROM att_promotor ap
+            JOIN pdv p2 ON ap.pdv_id=p2.pdv_id
+            JOIN promotor pr ON ap.promotor_id=pr.promotor_id
+            WHERE pr.usuario_id=? AND ap.ativo!=0)""")
+        params_q.append(_uid_cli)
+    elif e_vendedor() and not (e_admin() or e_master()):
+        where_q.append("c.vendedor_id=?")
+        params_q.append(_uid_cli)
     where_sql = ("WHERE " + " AND ".join(where_q)) if where_q else ""
 
     dados = query(f"""
