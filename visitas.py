@@ -989,7 +989,7 @@ def _tela_att_promotor():
     with st.expander("Adicionar PDV ao roteiro do promotor"):
         ids_ja  = {a[11] for a in atts} if atts else set()
         from permissoes import get_lista_clientes
-    clientes = get_lista_clientes(so_ativos=True)
+        clientes = get_lista_clientes(so_ativos=True)
         if not clientes:
             st.caption("Nenhum cliente cadastrado."); return
 
@@ -1088,7 +1088,7 @@ def _tela_att_vendedor():
     with st.expander("Adicionar PDV a carteira do vendedor"):
         ids_ja_v = {a[8] for a in atts_v} if atts_v else set()
         from permissoes import get_lista_clientes
-    clientes = get_lista_clientes(so_ativos=True)
+        clientes = get_lista_clientes(so_ativos=True)
         if clientes:
             cli_add_v = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="att_v_cli")
             pdvs_add_v = query("""SELECT pdv_id, nome_loja, cidade, setor
