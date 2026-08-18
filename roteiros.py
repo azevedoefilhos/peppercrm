@@ -103,12 +103,11 @@ def _roteiro_vendedor():
     st.subheader("➕ Adicionar PDV")
     from permissoes import e_admin, e_master, e_promotor_vendedor, e_vendedor, usuario_id_atual
     _uid_rot = usuario_id_atual()
+    from permissoes import get_lista_clientes
     if e_vendedor() and not (e_admin() or e_master()):
-        clientes = query("""SELECT cliente_id, nome_fantasia FROM cliente
-            WHERE vendedor_id=%s AND ativo!=0 ORDER BY nome_fantasia""", (_uid_rot,)) or []
+        clientes = get_lista_clientes(so_ativos=True)
     else:
         clientes = get_lista_clientes(so_ativos=True)
-    from permissoes import get_lista_clientes
     cli_sel  = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="rv_cli")
     if cli_sel:
         pdvs = query("SELECT pdv_id, COALESCE(nome_loja,'Matriz') FROM pdv WHERE cliente_id=%s AND ativo!=0",
@@ -183,12 +182,11 @@ def _roteiro_promotor():
     st.subheader("➕ Adicionar PDV")
     from permissoes import e_admin, e_master, e_promotor_vendedor, e_vendedor, usuario_id_atual
     _uid_rot = usuario_id_atual()
+    from permissoes import get_lista_clientes
     if e_vendedor() and not (e_admin() or e_master()):
-        clientes = query("""SELECT cliente_id, nome_fantasia FROM cliente
-            WHERE vendedor_id=%s AND ativo!=0 ORDER BY nome_fantasia""", (_uid_rot,)) or []
+        clientes = get_lista_clientes(so_ativos=True)
     else:
         clientes = get_lista_clientes(so_ativos=True)
-    from permissoes import get_lista_clientes
     cli_sel  = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="rp_cli")
     if cli_sel:
         pdvs = query("SELECT pdv_id, COALESCE(nome_loja,'Matriz') FROM pdv WHERE cliente_id=%s AND ativo!=0",

@@ -860,7 +860,7 @@ def _rel_nao_apresentados():
 
     from permissoes import get_where_cliente
     _w_rel, _p_rel = get_where_cliente("c")
-    if _w_rel: where.append(_w_rel.lstrip("AND ").strip()); params.extend(_p_rel)
+    if _w_rel: where.append(_w_rel.lstrip("AND ").strip()); where_params.extend(_p_rel)
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
     fid = forn_sel[0]
