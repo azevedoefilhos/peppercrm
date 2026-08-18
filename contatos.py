@@ -2088,10 +2088,10 @@ def _prospeccao():
             SELECT p2.cliente_id FROM att_promotor ap
             JOIN pdv p2 ON ap.pdv_id=p2.pdv_id
             JOIN promotor pr ON ap.promotor_id=pr.promotor_id
-            WHERE pr.usuario_id=%s AND ap.ativo!=0)""")
+            WHERE pr.usuario_id=? AND ap.ativo!=0)""")
         params_cli.append(_uid_cont)
     elif e_vendedor() and not (e_admin() or e_master()):
-        where_cli.append("c.vendedor_id=%s")
+        where_cli.append("c.vendedor_id=?")
         params_cli.append(_uid_cont)
     if perfis_sel:
         _ph = ",".join("?" * len(perfis_sel))

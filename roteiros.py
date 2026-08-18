@@ -65,8 +65,16 @@ def _roteiro_vendedor():
         st.info("Nenhum vendedor cadastrado.")
         return
 
-    vend_sel = st.selectbox("Vendedor", vends, format_func=lambda x: x[1], key="rv_sel")
-    vend_id  = vend_sel[0]
+    from permissoes import e_admin, e_master, e_vendedor, usuario_id_atual
+    _uid_rv = usuario_id_atual()
+    if e_vendedor() and not (e_admin() or e_master()):
+        # Vendedor ve apenas seu proprio roteiro
+        vend_id = _uid_rv
+        vend_nome = next((v[1] for v in vends if v[0] == vend_id), "Meu Roteiro")
+        st.info(f"Exibindo roteiro de: **{vend_nome}**")
+    else:
+        vend_sel = st.selectbox("Vendedor", vends, format_func=lambda x: x[1], key="rv_sel")
+        vend_id  = vend_sel[0]
 
     # PDVs atribuidos
     atts = query("""SELECT av.att_vendedor_id, c.nome_fantasia,

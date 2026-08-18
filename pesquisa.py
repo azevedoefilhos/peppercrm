@@ -200,9 +200,21 @@ def _tela_lista():
                                   key="fil_per")
 
     # Filtro cliente/PDV e fornecedor
-    todos_cli  = [("","Todos os clientes")] + [
-        (str(r[0]), r[1]) for r in query(
-            "SELECT cliente_id, nome_fantasia FROM cliente ORDER BY nome_fantasia")]
+    from permissoes import e_admin, e_master, e_promotor_vendedor, e_vendedor, usuario_id_atual
+    _uid_pq = usuario_id_atual()
+    if e_promotor_vendedor():
+        _clis_pq = query("""SELECT DISTINCT c.cliente_id, c.nome_fantasia
+            FROM cliente c JOIN pdv p ON p.cliente_id=c.cliente_id
+            JOIN att_promotor ap ON ap.pdv_id=p.pdv_id
+            JOIN promotor pr ON ap.promotor_id=pr.promotor_id
+            WHERE pr.usuario_id=? AND ap.ativo!=0
+            ORDER BY c.nome_fantasia""", (_uid_pq,)) or []
+    elif e_vendedor() and not (e_admin() or e_master()):
+        _clis_pq = query("""SELECT cliente_id, nome_fantasia FROM cliente
+            WHERE vendedor_id=? ORDER BY nome_fantasia""", (_uid_pq,)) or []
+    else:
+        _clis_pq = query("SELECT cliente_id, nome_fantasia FROM cliente ORDER BY nome_fantasia") or []
+    todos_cli  = [("","Todos os clientes")] + [(str(r[0]), r[1]) for r in _clis_pq]
     todos_forn = [("","Todos os fornecedores")] + [
         (str(r[0]), r[1]) for r in query(
             "SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia")]

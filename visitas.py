@@ -129,6 +129,28 @@ def _lista_visitas():
     hoje    = _date.today()
     ano_ini = hoje.strftime("%Y-01-01")
     where, params = ["1=1"], []
+    # Filtro automatico por perfil do usuario logado
+    from permissoes import e_admin, e_master, e_promotor_vendedor, e_vendedor, e_supervisor, usuario_id_atual
+    _uid_vis = usuario_id_atual()
+    if e_promotor_vendedor():
+        where.append("""v.cliente_id IN (
+            SELECT p2.cliente_id FROM att_promotor ap
+            JOIN pdv p2 ON ap.pdv_id=p2.pdv_id
+            JOIN promotor pr ON ap.promotor_id=pr.promotor_id
+            WHERE pr.usuario_id=? AND ap.ativo!=0)""")
+        params.append(_uid_vis)
+    elif e_vendedor() and not (e_admin() or e_master()):
+        where.append("v.cliente_id IN (SELECT cliente_id FROM cliente WHERE vendedor_id=?)")
+        params.append(_uid_vis)
+    elif e_supervisor():
+        where.append("""v.cliente_id IN (
+            SELECT DISTINCT p2.cliente_id FROM supervisor_promotor sp
+            JOIN att_promotor ap ON ap.promotor_id=sp.promotor_id
+            JOIN pdv p2 ON ap.pdv_id=p2.pdv_id
+            WHERE sp.supervisor_id IN (
+                SELECT supervisor_id FROM supervisor WHERE usuario_id=?
+            ) AND sp.ativo=1 AND ap.ativo!=0)""")
+        params.append(_uid_vis)
     if fil_cli[0]:
         where.append("v.cliente_id=?"); params.append(fil_cli[0])
     if fil_tipo != "Todos":
@@ -978,7 +1000,13 @@ def _tela_att_promotor():
     st.divider()
     with st.expander("Adicionar PDV ao roteiro do promotor"):
         ids_ja  = {a[11] for a in atts} if atts else set()
-        clientes = query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo!=0 ORDER BY nome_fantasia")
+        from permissoes import e_admin, e_master, e_vendedor, usuario_id_atual as _uid_att2_fn
+    _uid_att2 = _uid_att2_fn()
+    if e_vendedor() and not (e_admin() or e_master()):
+        clientes = query("""SELECT cliente_id, nome_fantasia FROM cliente
+            WHERE vendedor_id=? AND ativo!=0 ORDER BY nome_fantasia""", (_uid_att2,)) or []
+    else:
+        clientes = query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo!=0 ORDER BY nome_fantasia") or []
         if not clientes:
             st.caption("Nenhum cliente cadastrado."); return
 
@@ -1076,7 +1104,13 @@ def _tela_att_vendedor():
     st.divider()
     with st.expander("Adicionar PDV a carteira do vendedor"):
         ids_ja_v = {a[8] for a in atts_v} if atts_v else set()
-        clientes = query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo!=0 ORDER BY nome_fantasia")
+        from permissoes import e_admin, e_master, e_vendedor, usuario_id_atual as _uid_att2_fn
+    _uid_att2 = _uid_att2_fn()
+    if e_vendedor() and not (e_admin() or e_master()):
+        clientes = query("""SELECT cliente_id, nome_fantasia FROM cliente
+            WHERE vendedor_id=? AND ativo!=0 ORDER BY nome_fantasia""", (_uid_att2,)) or []
+    else:
+        clientes = query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo!=0 ORDER BY nome_fantasia") or []
         if clientes:
             cli_add_v = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="att_v_cli")
             pdvs_add_v = query("""SELECT pdv_id, nome_loja, cidade, setor
