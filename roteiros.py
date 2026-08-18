@@ -107,7 +107,8 @@ def _roteiro_vendedor():
         clientes = query("""SELECT cliente_id, nome_fantasia FROM cliente
             WHERE vendedor_id=%s AND ativo!=0 ORDER BY nome_fantasia""", (_uid_rot,)) or []
     else:
-        clientes = query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo!=0 ORDER BY nome_fantasia") or []
+        clientes = get_lista_clientes(so_ativos=True)
+    from permissoes import get_lista_clientes
     cli_sel  = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="rv_cli")
     if cli_sel:
         pdvs = query("SELECT pdv_id, COALESCE(nome_loja,'Matriz') FROM pdv WHERE cliente_id=%s AND ativo!=0",
@@ -186,7 +187,8 @@ def _roteiro_promotor():
         clientes = query("""SELECT cliente_id, nome_fantasia FROM cliente
             WHERE vendedor_id=%s AND ativo!=0 ORDER BY nome_fantasia""", (_uid_rot,)) or []
     else:
-        clientes = query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo!=0 ORDER BY nome_fantasia") or []
+        clientes = get_lista_clientes(so_ativos=True)
+    from permissoes import get_lista_clientes
     cli_sel  = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="rp_cli")
     if cli_sel:
         pdvs = query("SELECT pdv_id, COALESCE(nome_loja,'Matriz') FROM pdv WHERE cliente_id=%s AND ativo!=0",

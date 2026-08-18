@@ -295,6 +295,54 @@ def exigir_acesso(modulo: str):
         st.stop()
 
 
+def get_where_cliente(alias="c"):
+    """
+    Retorna (where_extra, params) para filtrar clientes pelo perfil logado.
+    where_extra: string SQL com AND ja incluido (vazia se ADM/MASTER)
+    params: lista de parametros para a query
+    Uso: where_extra, params = get_where_cliente()
+         query(f"SELECT * FROM cliente c {where_extra} ORDER BY nome", params)
+    """
+    try:
+        uid = usuario_id_atual()
+        p   = perfil_atual()
+        if p in ('MASTER','REPRESENTANTE_ADM','ADM'):
+            return "", []
+        elif p in ('PROMOTOR_VENDEDOR',):
+            return (f"AND {alias}.cliente_id IN ("
+                    "SELECT p2.cliente_id FROM att_promotor ap "
+                    "JOIN pdv p2 ON ap.pdv_id=p2.pdv_id "
+                    "JOIN promotor pr ON ap.promotor_id=pr.promotor_id "
+                    "WHERE pr.usuario_id=? AND ap.ativo!=0)", [uid])
+        elif p in ('REPRESENTANTE','VENDEDOR'):
+            return f"AND {alias}.vendedor_id=?", [uid]
+        elif p == 'SUPERVISOR':
+            return (f"AND {alias}.cliente_id IN ("
+                    "SELECT DISTINCT p2.cliente_id FROM supervisor_promotor sp "
+                    "JOIN att_promotor ap ON ap.promotor_id=sp.promotor_id "
+                    "JOIN pdv p2 ON ap.pdv_id=p2.pdv_id "
+                    "WHERE sp.supervisor_id IN ("
+                    "SELECT supervisor_id FROM supervisor WHERE usuario_id=?) "
+                    "AND sp.ativo=1 AND ap.ativo!=0)", [uid])
+        return "", []
+    except Exception:
+        return "", []
+
+
+def get_lista_clientes(so_ativos=True, order="nome_fantasia"):
+    """
+    Retorna lista de (cliente_id, nome_fantasia) filtrada pelo perfil logado.
+    Uso direto: clientes = get_lista_clientes()
+    """
+    from database import query as _q
+    where_extra, params = get_where_cliente("c")
+    ativo_sql = "c.ativo!=0" if so_ativos else "1=1"
+    sql = f"""SELECT c.cliente_id, c.nome_fantasia
+        FROM cliente c WHERE {ativo_sql} {where_extra}
+        ORDER BY c.{order}"""
+    return _q(sql, tuple(params)) or []
+
+
 def exigir_admin():
     """Exige perfil ADM ou MASTER. Para execucao se nao tiver."""
     if not e_admin():

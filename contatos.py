@@ -2079,20 +2079,12 @@ def _prospeccao():
     hoje = date.today()
 
     # ── Busca todos os clientes ativos com filtros ────────────────────────
+    from permissoes import get_where_cliente
+    _w_cont, _p_cont = get_where_cliente("c")
     where_cli  = ["c.ativo=1"]
-    params_cli = []
-    from permissoes import e_admin, e_master, e_promotor_vendedor, e_vendedor, usuario_id_atual
-    _uid_cont = usuario_id_atual()
-    if e_promotor_vendedor():
-        where_cli.append("""c.cliente_id IN (
-            SELECT p2.cliente_id FROM att_promotor ap
-            JOIN pdv p2 ON ap.pdv_id=p2.pdv_id
-            JOIN promotor pr ON ap.promotor_id=pr.promotor_id
-            WHERE pr.usuario_id=? AND ap.ativo!=0)""")
-        params_cli.append(_uid_cont)
-    elif e_vendedor() and not (e_admin() or e_master()):
-        where_cli.append("c.vendedor_id=?")
-        params_cli.append(_uid_cont)
+    params_cli = list(_p_cont)
+    if _w_cont:
+        where_cli.append(_w_cont.lstrip("AND ").strip())
     if perfis_sel:
         _ph = ",".join("?" * len(perfis_sel))
         where_cli.append(f"c.perfil IN ({_ph})")

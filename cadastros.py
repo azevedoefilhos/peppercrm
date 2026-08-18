@@ -2002,19 +2002,13 @@ def _lista_clientes():
         where_q.append("c.vendedor_id=?")
         params_q.append(usuario_id_atual())
 
-    # Filtro de carteira por perfil
-    from permissoes import e_admin, e_master, e_promotor_vendedor, e_vendedor, usuario_id_atual
-    _uid_cli = usuario_id_atual()
-    if e_promotor_vendedor():
-        where_q.append("""c.cliente_id IN (
-            SELECT p2.cliente_id FROM att_promotor ap
-            JOIN pdv p2 ON ap.pdv_id=p2.pdv_id
-            JOIN promotor pr ON ap.promotor_id=pr.promotor_id
-            WHERE pr.usuario_id=? AND ap.ativo!=0)""")
-        params_q.append(_uid_cli)
-    elif e_vendedor() and not (e_admin() or e_master()):
-        where_q.append("c.vendedor_id=?")
-        params_q.append(_uid_cli)
+    # Filtro por perfil — usa helper central
+    from permissoes import get_where_cliente
+    _w_extra, _p_extra = get_where_cliente("c")
+    if _w_extra:
+        # Remove o AND inicial para compatibilidade com where_q
+        where_q.append(_w_extra.lstrip("AND ").strip())
+        params_q.extend(_p_extra)
     where_sql = ("WHERE " + " AND ".join(where_q)) if where_q else ""
 
     dados = query(f"""
@@ -2441,7 +2435,7 @@ def _tela_pdvs():
         clientes_all = query("""SELECT cliente_id, nome_fantasia FROM cliente
             WHERE vendedor_id=%s ORDER BY nome_fantasia""", (_uid_all,)) or []
     else:
-        clientes_all = query("SELECT cliente_id, nome_fantasia FROM cliente ORDER BY nome_fantasia") or []
+        clientes_all = get_lista_clientes(so_ativos=False) or []
 
     # ── CORREÇÃO DE TIPO PDV ────────────────────────────────────────────
     with st.expander("🔧 Padronizar tipo de PDV — corrigir duplicatas"):
@@ -2924,7 +2918,7 @@ def _tela_mix_pdv():
         clientes = query("""SELECT cliente_id, nome_fantasia FROM cliente
             WHERE vendedor_id=%s AND ativo=1 ORDER BY nome_fantasia""", (_uid_mix,)) or []
     else:
-        clientes = query("SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo=1 ORDER BY nome_fantasia") or []
+        clientes = get_lista_clientes(so_ativos=True) or []
     if not clientes:
         st.info("Cadastre um cliente primeiro."); return
 
