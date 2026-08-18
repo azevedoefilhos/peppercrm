@@ -271,7 +271,20 @@ as coordenadas aparecem na URL apos o simbolo @
     # Dados da visita
     col1, col2 = st.columns(2)
     with col1:
-        clientes = query("SELECT cliente_id, nome_fantasia FROM cliente ORDER BY nome_fantasia")
+        from permissoes import e_admin, e_master, e_promotor_vendedor, e_vendedor, usuario_id_atual
+        _uid_nv = usuario_id_atual()
+        if e_promotor_vendedor():
+            clientes = query("""SELECT DISTINCT c.cliente_id, c.nome_fantasia
+                FROM cliente c JOIN pdv p ON p.cliente_id=c.cliente_id
+                JOIN att_promotor ap ON ap.pdv_id=p.pdv_id
+                JOIN promotor pr ON ap.promotor_id=pr.promotor_id
+                WHERE pr.usuario_id=%s AND ap.ativo!=0
+                ORDER BY c.nome_fantasia""", (_uid_nv,)) or []
+        elif e_vendedor() and not (e_admin() or e_master()):
+            clientes = query("""SELECT cliente_id, nome_fantasia FROM cliente
+                WHERE vendedor_id=%s ORDER BY nome_fantasia""", (_uid_nv,)) or []
+        else:
+            clientes = query("SELECT cliente_id, nome_fantasia FROM cliente ORDER BY nome_fantasia") or []
         if not clientes:
             st.warning("Nenhum cliente cadastrado."); return
         cli_sel  = st.selectbox("Cliente *", clientes, format_func=lambda x: x[1], key="vis_cli")

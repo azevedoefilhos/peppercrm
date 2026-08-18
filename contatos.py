@@ -2079,8 +2079,20 @@ def _prospeccao():
     hoje = date.today()
 
     # ── Busca todos os clientes ativos com filtros ────────────────────────
-    where_cli = ["1=1"]
+    where_cli  = ["c.ativo=1"]
     params_cli = []
+    from permissoes import e_admin, e_master, e_promotor_vendedor, e_vendedor, usuario_id_atual
+    _uid_cont = usuario_id_atual()
+    if e_promotor_vendedor():
+        where_cli.append("""c.cliente_id IN (
+            SELECT p2.cliente_id FROM att_promotor ap
+            JOIN pdv p2 ON ap.pdv_id=p2.pdv_id
+            JOIN promotor pr ON ap.promotor_id=pr.promotor_id
+            WHERE pr.usuario_id=%s AND ap.ativo!=0)""")
+        params_cli.append(_uid_cont)
+    elif e_vendedor() and not (e_admin() or e_master()):
+        where_cli.append("c.vendedor_id=%s")
+        params_cli.append(_uid_cont)
     if perfis_sel:
         _ph = ",".join("?" * len(perfis_sel))
         where_cli.append(f"c.perfil IN ({_ph})")
@@ -2097,7 +2109,7 @@ def _prospeccao():
         FROM cliente c
         WHERE {' AND '.join(where_cli)}
         ORDER BY c.nome_fantasia
-    """, tuple(_extra_cli_params + list(params_cli)))
+    """, tuple(params_cli))
 
     if not clientes:
         st.info("Nenhum cliente encontrado para os filtros selecionados.")
