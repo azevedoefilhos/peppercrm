@@ -623,6 +623,9 @@ def _tela_busca_global():
 
 
 if pagina == "home":
+    from permissoes import usuario_atual
+    import streamlit as st
+
     from permissoes import get_menu, e_admin, e_master, perfil_atual
 
     col_t, col_b, col_c, col_sair = st.columns([4, 1, 1, 1])
