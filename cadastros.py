@@ -4096,8 +4096,11 @@ def _tela_pdvs_por_setor():
 
     # ── Monta WHERE ──────────────────────────────────────
     # Inativos, Suspensos e Encerrados NUNCA aparecem
+    from permissoes import get_where_cliente
+    _w_s, _p_s = get_where_cliente("c")
     where_s  = ["COALESCE(p.status,'Ativo') NOT IN ('Inativo','Encerrado','Suspenso')"]
-    params_s = []
+    params_s = list(_p_s)
+    if _w_s: where_s.append(_w_s.lstrip('AND ').strip())
     if fil_cidade != "Todas":
         where_s.append("p.cidade=?");  params_s.append(fil_cidade)
     if fil_setor_unico != "Todos os setores":
