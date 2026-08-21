@@ -37,13 +37,7 @@ def _usuario_valido(login: str, senha: str):
     if not rows:
         return None
     r = rows[0]
-    return {
-        "id":         r[0],
-        "nome":       r[1],
-        "email":      r[2],
-        "tipo":       r[3],
-        "empresa_id": r[4] if r[4] else 1,
-    }
+    return {"id": r[0], "nome": r[1], "email": r[2], "tipo": r[3], "empresa_id": r[4] if len(r)>4 else 1}
 
 
 def _criar_token(usuario_id: int, lembrar: bool) -> str:
@@ -78,13 +72,7 @@ def _validar_token(token: str):
             return None
     except Exception:
         return None
-    return {
-        "id":         r[0],
-        "nome":       r[1],
-        "email":      r[2],
-        "tipo":       r[3],
-        "empresa_id": r[5] if r[5] else 1,
-    }
+    return {"id": r[0], "nome": r[1], "email": r[2], "tipo": r[3], "empresa_id": r[4] if len(r)>4 else 1}
 
 
 def logout():
