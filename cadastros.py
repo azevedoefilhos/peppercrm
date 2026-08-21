@@ -1989,8 +1989,11 @@ def _lista_clientes():
             st.session_state.get("massa_cli_filtro", "Todos"),
         )
 
+    from permissoes import get_where_cliente
+    _w_q, _p_q = get_where_cliente("c")
     where_q  = []
-    params_q = []
+    params_q = list(_p_q)
+    if _w_q: where_q.append(_w_q.lstrip("AND ").strip())
     if fil_status != "Todos":
         where_q.append("c.status=?"); params_q.append(fil_status)
     if fil_busca.strip():
@@ -2271,8 +2274,11 @@ def _tela_vinculos_cliente():
     st.subheader("Vínculos cliente ↔ fornecedor")
     st.caption("Defina qual tabela de preço e prazo valem para cada par cliente/fornecedor.")
     # Inclui todos os status — prospectos e visitados precisam de contatos cadastrados
-    from permissoes import get_lista_clientes
+    from permissoes import get_lista_clientes, get_where_cliente, perfil_atual, usuario_id_atual
+    _where_dbg, _params_dbg = get_where_cliente("c")
+    st.caption(f"DEBUG filtro: perfil={perfil_atual()} uid={usuario_id_atual()} where={repr(_where_dbg)} params={_params_dbg}")
     _clis_vinc = get_lista_clientes(so_ativos=False)
+    st.caption(f"DEBUG clientes: {len(_clis_vinc) if _clis_vinc else 0} encontrados")
     clientes = [(r[0], f"{r[1]} ({r[1]})") for r in _clis_vinc] if _clis_vinc else []
     if not clientes:
         st.warning("Cadastre clientes e fornecedores primeiro."); return
@@ -2522,7 +2528,10 @@ def _tela_pdvs():
             cli_fil[0] if cli_fil[0] else None)
 
     # ── QUERY com todos os filtros ────────────────────────────────────────
-    where_p = ["1=1"]; params_p = []
+    from permissoes import get_where_cliente
+    _w_pdv, _p_pdv = get_where_cliente("c")
+    where_p = ["1=1"]; params_p = list(_p_pdv)
+    if _w_pdv: where_p.append(_w_pdv.lstrip("AND ").strip())
     if cli_fil[0]:
         where_p.append("p.cliente_id=?");            params_p.append(cli_fil[0])
     if fil_pdv_st != "Todos":
@@ -3056,8 +3065,11 @@ def _tela_contatos_cliente():
                                    placeholder="Digite parte do nome...")
 
     # Aplica filtro
+    from permissoes import get_where_cliente
+    _w_c, _p_c = get_where_cliente("c")
     where_c = []
-    params_c = []
+    params_c = list(_p_c)
+    if _w_c: where_c.append(_w_c.lstrip("AND ").strip())
     if fil_st_cont != "Todos":
         where_c.append("COALESCE(status,'Ativo')=?"); params_c.append(fil_st_cont)
     if busca_cont.strip():

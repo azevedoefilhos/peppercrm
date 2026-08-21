@@ -139,8 +139,11 @@ def _lista_topicos():
 
     # Query
     hoje  = date.today().isoformat()
+    from permissoes import get_where_cliente
+    _w_cr, _p_cr = get_where_cliente("c")
     where = ["cr.ativo!=0"]
-    params = []
+    params = list(_p_cr)
+    if _w_cr: where.append(_w_cr.lstrip("AND ").strip())
     if fil_tipo != "Todos":
         where.append("COALESCE(cr.tipo_topico,'Contato')=?"); params.append(fil_tipo)
     if fil_status != "Todos":

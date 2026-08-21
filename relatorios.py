@@ -849,8 +849,11 @@ def _rel_nao_apresentados():
         cid_sel  = st.selectbox("Cidade", cid_opts, key="rna_cidade")
 
     # WHERE — usa status (campo correto) em vez de ativo
+    from permissoes import get_where_cliente
+    _w_rel2, _p_rel2 = get_where_cliente("c")
     where        = []
-    where_params = []
+    where_params = list(_p_rel2)
+    if _w_rel2: where.append(_w_rel2.lstrip("AND ").strip())
     if status_sel != "Todos":
         where.append("c.status=?");  where_params.append(status_sel)
     if perf_sel != "Todos":
@@ -996,8 +999,11 @@ def _rel_cobertura():
     # ── WHERE dinâmico — usa status (campo correto) sem c.ativo!=0 ──────────
     # Filtra por perfil do cliente (campo do cadastro) + cidade + status
     # LEFT JOIN pdv mantido para quem já tem PDV, mas não exclui quem não tem
+    from permissoes import get_where_cliente
+    _w_rel3, _p_rel3 = get_where_cliente("c")
     where = []
-    params_base = []
+    params_base = list(_p_rel3)
+    if _w_rel3: where.append(_w_rel3.lstrip("AND ").strip())
     if tipo_sel != "Todos":
         # Filtra por perfil do cliente (Hamburgueria, Padaria, etc.)
         where.append("c.perfil = ?"); params_base.append(tipo_sel)

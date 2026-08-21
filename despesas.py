@@ -293,8 +293,13 @@ def _lista_despesas():
     else:
         d_ini = "2000-01-01"; d_fim = hoje.isoformat()
 
+    from permissoes import e_admin, e_master, usuario_id_atual
+    _uid_desp = usuario_id_atual()
     where = ["d.ativo IS NOT FALSE", "d.data_despesa BETWEEN ? AND ?"]
     params = [d_ini, d_fim]
+    if not (e_admin() or e_master()):
+        where.append("d.usuario_id=?")
+        params.append(_uid_desp)
     if cat_fil != "Todas":
         where.append("d.categoria=?"); params.append(cat_fil)
     if forn_fil[0]:
