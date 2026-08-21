@@ -3046,12 +3046,9 @@ def _tela_contatos_cliente():
     st.caption("Lista todos os clientes — ativos, visitados e prospectos.")
 
     # Todos os clientes independente de status
-    clientes = query("""
-        SELECT cliente_id,
-               nome_fantasia || ' — ' || COALESCE(status,'Ativo') AS label
-        FROM cliente
-        ORDER BY nome_fantasia
-    """)
+    from permissoes import get_lista_clientes
+    _clis_cc = get_lista_clientes(so_ativos=False)
+    clientes = [(r[0], r[1]) for r in _clis_cc] if _clis_cc else []
     if not clientes:
         st.info("Cadastre um cliente primeiro."); return
 
