@@ -357,10 +357,17 @@ def _tela_cabecalho():
         cli_id = cli_id_fixo
     else:
         # Mostra seletor
-        todos_cli = query("""SELECT cliente_id, nome_fantasia, cidade, estado, status
-            FROM cliente ORDER BY
-            CASE status WHEN 'ativo' THEN 0 WHEN 'visitado' THEN 1 WHEN 'prospecto' THEN 2 ELSE 3 END,
-            nome_fantasia""")
+        from permissoes import get_lista_clientes as _gcli_pq
+        _raw_pq = _gcli_pq(so_ativos=False)
+        # Busca detalhes dos clientes filtrados
+        if _raw_pq:
+            _ids = ",".join(str(r[0]) for r in _raw_pq)
+            todos_cli = query(f"""SELECT cliente_id, nome_fantasia, cidade, estado, status
+                FROM cliente WHERE cliente_id IN ({_ids})
+                ORDER BY CASE status WHEN 'ativo' THEN 0 WHEN 'visitado' THEN 1
+                WHEN 'prospecto' THEN 2 ELSE 3 END, nome_fantasia""") or []
+        else:
+            todos_cli = []
 
         cli_opts = [(None,"➕ Cadastrar novo cliente/prospecto...")] + [
             (c[0], f"{c[1]}  ({c[2]}/{c[3]})  [{c[4]}]") for c in todos_cli

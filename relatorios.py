@@ -860,7 +860,7 @@ def _rel_nao_apresentados():
 
     from permissoes import get_where_cliente
     _w_rel, _p_rel = get_where_cliente("c")
-    if _w_rel: where.append(_w_rel.lstrip("AND ").strip()); where_params.extend(_p_rel)
+    if _w_rel: where.append(_w_rel.lstrip("AND ").strip()); params.extend(_p_rel)
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
     fid = forn_sel[0]
@@ -1005,6 +1005,9 @@ def _rel_cobertura():
         where.append("c.cidade = ?"); params_base.append(cid_sel)
     if st_sel != "Todos":
         where.append("c.status = ?"); params_base.append(st_sel)
+    from permissoes import get_where_cliente
+    _w_rr, _p_rr = get_where_cliente("c")
+    if _w_rr: where.append(_w_rr.lstrip("AND ").strip()); params_base.extend(_p_rr)
     where_sql = " AND ".join(where) if where else "1=1"
 
     # ── Dados de cobertura ────────────────────────────────────────────────

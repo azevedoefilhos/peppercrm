@@ -2271,9 +2271,9 @@ def _tela_vinculos_cliente():
     st.subheader("Vínculos cliente ↔ fornecedor")
     st.caption("Defina qual tabela de preço e prazo valem para cada par cliente/fornecedor.")
     # Inclui todos os status — prospectos e visitados precisam de contatos cadastrados
-    clientes = query("""SELECT cliente_id,
-        nome_fantasia || ' (' || COALESCE(status,'Ativo') || ')'
-        FROM cliente ORDER BY nome_fantasia""")
+    from permissoes import get_lista_clientes
+    _clis_vinc = get_lista_clientes(so_ativos=False)
+    clientes = [(r[0], f"{r[1]} ({r[1]})") for r in _clis_vinc] if _clis_vinc else []
     if not clientes:
         st.warning("Cadastre clientes e fornecedores primeiro."); return
 
@@ -2422,8 +2422,20 @@ def _tela_pdvs():
     st.subheader("PDVs (lojas)")
     st.caption("Cadastre as lojas de cada cliente. Clientes sem PDV recebem os pedidos diretamente.")
 
-    from permissoes import get_lista_clientes
-    clientes_all = get_lista_clientes(so_ativos=False) or []
+    from permissoes import e_admin, e_master, e_promotor_vendedor, e_vendedor, usuario_id_atual
+    _uid_all = usuario_id_atual()
+    if e_promotor_vendedor():
+        clientes_all = query("""SELECT DISTINCT c.cliente_id, c.nome_fantasia
+            FROM cliente c JOIN pdv p ON p.cliente_id=c.cliente_id
+            JOIN att_promotor ap ON ap.pdv_id=p.pdv_id
+            JOIN promotor pr ON ap.promotor_id=pr.promotor_id
+            WHERE pr.usuario_id=%s AND ap.ativo!=0
+            ORDER BY c.nome_fantasia""", (_uid_all,)) or []
+    elif e_vendedor() and not (e_admin() or e_master()):
+        clientes_all = query("""SELECT cliente_id, nome_fantasia FROM cliente
+            WHERE vendedor_id=%s ORDER BY nome_fantasia""", (_uid_all,)) or []
+    else:
+        clientes_all = get_lista_clientes(so_ativos=False) or []
 
     # ── CORREÇÃO DE TIPO PDV ────────────────────────────────────────────
     with st.expander("🔧 Padronizar tipo de PDV — corrigir duplicatas"):
@@ -2893,8 +2905,20 @@ def _tela_mix_pdv():
     st.subheader("Mix de produtos por PDV")
     st.caption("Define quais produtos cada loja trabalha. Na tela de pedido só aparecem esses produtos.")
 
-    from permissoes import get_lista_clientes
-    clientes = get_lista_clientes(so_ativos=True) or []
+    from permissoes import e_admin, e_master, e_promotor_vendedor, e_vendedor, usuario_id_atual
+    _uid_mix = usuario_id_atual()
+    if e_promotor_vendedor():
+        clientes = query("""SELECT DISTINCT c.cliente_id, c.nome_fantasia
+            FROM cliente c JOIN pdv p ON p.cliente_id=c.cliente_id
+            JOIN att_promotor ap ON ap.pdv_id=p.pdv_id
+            JOIN promotor pr ON ap.promotor_id=pr.promotor_id
+            WHERE pr.usuario_id=%s AND ap.ativo!=0 AND c.ativo=1
+            ORDER BY c.nome_fantasia""", (_uid_mix,)) or []
+    elif e_vendedor() and not (e_admin() or e_master()):
+        clientes = query("""SELECT cliente_id, nome_fantasia FROM cliente
+            WHERE vendedor_id=%s AND ativo=1 ORDER BY nome_fantasia""", (_uid_mix,)) or []
+    else:
+        clientes = get_lista_clientes(so_ativos=True) or []
     if not clientes:
         st.info("Cadastre um cliente primeiro."); return
 

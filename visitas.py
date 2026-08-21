@@ -104,7 +104,9 @@ def _lista_visitas():
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        clientes = [(None,"Todos os clientes")] + [(r[0],r[1]) for r in _cache_todos_clientes()]
+        from permissoes import get_lista_clientes
+        _clis_vis = get_lista_clientes(so_ativos=False)
+        clientes = [(None,"Todos os clientes")] + [(r[0],r[1]) for r in _clis_vis]
         fil_cli = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="vis_fil_cli")
     with col2:
         fil_per = st.selectbox("Periodo", ["30 dias","60 dias","90 dias","Ano atual","Todos"],
@@ -556,9 +558,9 @@ def _tela_roteiro():
         freqs = ["Todas","Semanal","Quinzenal","Mensal","Bimestral","Sob demanda"]
         fil_freq = st.selectbox("Frequencia", freqs, key="rot_freq")
     with col3:
-        clientes = [(None,"Todos os clientes")] + [
-            (r[0],r[1]) for r in query(
-                "SELECT cliente_id, nome_fantasia FROM cliente WHERE ativo!=0 ORDER BY nome_fantasia")]
+        from permissoes import get_lista_clientes
+        _clis_rot = get_lista_clientes(so_ativos=True)
+        clientes = [(None,"Todos os clientes")] + [(r[0],r[1]) for r in _clis_rot]
         fil_cli  = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="rot_cli")
 
     where, params = ["p.ativo!=0"], []
