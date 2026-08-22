@@ -479,7 +479,10 @@ def _tela_enviar_mensagem():
 
     # ── Dados base (todas as queries juntas no início) ─────────────────────
     fornecs  = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1 ORDER BY nome_fantasia") or []
-    clientes_todos = query("SELECT cliente_id, nome_fantasia, status, perfil FROM cliente ORDER BY nome_fantasia") or []
+    from permissoes import get_where_cliente
+    _w_msg, _p_msg = get_where_cliente("c")
+    _where_msg = f"WHERE {_w_msg.lstrip('AND ').strip()}" if _w_msg else ""
+    clientes_todos = query(f"SELECT c.cliente_id, c.nome_fantasia, c.status, c.perfil FROM cliente c {_where_msg} ORDER BY c.nome_fantasia", tuple(_p_msg)) or []
     vend     = query("SELECT nome FROM vendedor WHERE ativo=1 LIMIT 1")
     nome_vend = vend[0][0] if vend else ""
 
