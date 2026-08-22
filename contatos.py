@@ -1880,9 +1880,13 @@ def _por_entidade():
         tipo_h = st.selectbox("Tipo", ["Cliente","Fornecedor"], key="he_tipo")
     with col2:
         if tipo_h == "Cliente":
-            ents = query("""SELECT DISTINCT c.cliente_id, c.nome_fantasia
+            from permissoes import get_where_cliente
+            _w_he, _p_he = get_where_cliente("c")
+            _where_he = f"AND {_w_he.lstrip('AND ').strip()}" if _w_he else ""
+            ents = query(f"""SELECT DISTINCT c.cliente_id, c.nome_fantasia
                 FROM cliente c JOIN contato_registro cr ON cr.cliente_id=c.cliente_id
-                WHERE cr.ativo!=0 ORDER BY c.nome_fantasia""")
+                WHERE cr.ativo!=0 {_where_he} ORDER BY c.nome_fantasia""",
+                tuple(_p_he))
         else:
             ents = query("""SELECT DISTINCT f.fornecedor_id, f.nome_fantasia
                 FROM fornecedor f JOIN contato_registro cr ON cr.fornecedor_id=f.fornecedor_id
@@ -2063,8 +2067,12 @@ def _prospeccao():
         )
 
     with col3:
-        cidades = query("""SELECT DISTINCT cidade FROM cliente
-            WHERE cidade IS NOT NULL AND cidade != '' ORDER BY cidade""")
+        from permissoes import get_where_cliente
+        _w_cid, _p_cid = get_where_cliente("c")
+        _where_cid = f"AND {_w_cid.lstrip('AND ').strip()}" if _w_cid else ""
+        cidades = query(f"""SELECT DISTINCT c.cidade FROM cliente c
+            WHERE c.cidade IS NOT NULL AND c.cidade != '' {_where_cid}
+            ORDER BY c.cidade""", tuple(_p_cid))
         cidade_opts = ["Todas"] + [r[0] for r in cidades]
         cidade_sel = st.selectbox("Cidade", cidade_opts, key="pr_cidade")
 
