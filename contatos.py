@@ -1586,8 +1586,8 @@ def _form_novo_topico():
     err = st.session_state.pop("ct_novo_err", None)
     if err: st.error(err)
 
-    from database import _cache_todos_clientes
-    clientes = [(r[0],r[1],None) for r in _cache_todos_clientes()]
+    from permissoes import get_lista_clientes
+    clientes = [(r[0],r[1],None) for r in get_lista_clientes(so_ativos=False)]
     fornecs  = cache_fornecedores()
 
     # ── 1. Com quem ───────────────────────────────────────────────────────
@@ -1816,7 +1816,10 @@ def _agenda():
     hoje = date.today()
     semana = (hoje + timedelta(days=7)).isoformat()
 
-    pendentes = query("""
+    from permissoes import get_where_cliente
+    _w_fu, _p_fu = get_where_cliente("c")
+    _where_fu = f"AND {_w_fu.lstrip('AND ').strip()}" if _w_fu else ""
+    pendentes = query(f"""
         SELECT cr.contato_id,
                cr.data_followup,
                cr.via_comunicacao,
@@ -1831,8 +1834,9 @@ def _agenda():
         WHERE cr.ativo!=0
           AND cr.data_followup IS NOT NULL
           AND cr.status NOT IN ('Concluído','Cancelado')
+          {_where_fu}
         ORDER BY cr.data_followup ASC
-    """)
+    """, tuple(_p_fu))
 
     if not pendentes:
         st.success("✅ Agenda limpa — nenhum follow-up pendente.")
@@ -2356,7 +2360,10 @@ def _por_fornecedor():
                             format_func=lambda x: x[1], key="pf_forn")
     if not forn_sel: return
 
-    dados = query("""
+    from permissoes import get_where_cliente
+    _w_pf, _p_pf = get_where_cliente("c")
+    _where_pf = f"AND {_w_pf.lstrip('AND ').strip()}" if _w_pf else ""
+    dados = query(f"""
         SELECT cr.contato_id, cr.assunto, cr.status,
                COALESCE(cr.tipo_topico,'Contato'),
                COALESCE(c.nome_fantasia, f2.nome_fantasia,'—') AS entidade,
@@ -2367,9 +2374,9 @@ def _por_fornecedor():
         JOIN contato_registro cr ON cxf.contato_id=cr.contato_id
         LEFT JOIN cliente    c  ON cr.cliente_id    = c.cliente_id
         LEFT JOIN fornecedor f2 ON cr.fornecedor_id = f2.fornecedor_id
-        WHERE cxf.fornecedor_id=? AND cr.ativo!=0
+        WHERE cxf.fornecedor_id=? AND cr.ativo!=0 {_where_pf}
         ORDER BY cr.data_contato DESC
-    """, (forn_sel[0],))
+    """, tuple([forn_sel[0]] + _p_pf))
 
     if not dados:
         st.info(f"Nenhum tópico registrado para {forn_sel[1]}.")
