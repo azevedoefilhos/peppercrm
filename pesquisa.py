@@ -4066,15 +4066,18 @@ def _ac_por_pdv(where_base, params_base, tipo_rel_where, cat_where, cat_params, 
     forn_p = st.selectbox("Fornecedor", forns_p, format_func=lambda x: x[1], key="ac_pdv_forn")
 
     # 2. Seleciona PDV (somente PDVs que tem pesquisa finalizada para este fornecedor)
-    pdvs_c = query("""
+    from permissoes import get_where_cliente
+    _w_ac, _p_ac = get_where_cliente("cli")
+    _where_ac = f"AND {_w_ac.lstrip('AND ').strip()}" if _w_ac else ""
+    pdvs_c = query(f"""
         SELECT DISTINCT cli.cliente_id, cli.nome_fantasia,
                pdv.pdv_id, COALESCE(pdv.nome_loja,'Matriz') AS pdv_nome
         FROM pesquisa_preco pp
         JOIN cliente cli ON pp.cliente_id=cli.cliente_id
         LEFT JOIN pdv ON pp.pdv_id=pdv.pdv_id
-        WHERE pp.fornecedor_id=? AND pp.status='finalizado'
+        WHERE pp.fornecedor_id=? AND pp.status='finalizado' {_where_ac}
         ORDER BY cli.nome_fantasia, pdv_nome
-    """, (forn_p[0],))
+    """, tuple([forn_p[0]] + _p_ac))
     if not pdvs_c:
         st.info("Nenhuma pesquisa finalizada encontrada para este fornecedor."); return
 
