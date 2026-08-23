@@ -3534,7 +3534,7 @@ def _gerar_pdf_por_pdv(df, pdv_label, forn_nome, tab_nome, filtros_desc):
 
 
 def _tela_analise_consolidada():
-    st.header("Analise Consolidada de Pesquisas")
+    st.header("Análise Consolidada de Pesquisas")
     col1, col2 = st.columns([1, 3])
     with col1:
         if st.button("Voltar a lista", width="stretch"):
@@ -3575,8 +3575,11 @@ def _tela_analise_consolidada():
         "6 meses": "pp.data_pesquisa >= date('now','-6 months')",
         "1 ano":   "pp.data_pesquisa >= date('now','-1 year')",
     }
+    from permissoes import get_where_cliente
+    _w_ac, _p_ac = get_where_cliente("cli")
     where_base  = ["pp.status='finalizado'"]
-    params_base = []
+    params_base = list(_p_ac)
+    if _w_ac: where_base.append(_w_ac.lstrip('AND ').strip())
     if fil_forn[0]:
         where_base.append("pp.fornecedor_id=?"); params_base.append(fil_forn[0])
     if fil_per in per_sql:
