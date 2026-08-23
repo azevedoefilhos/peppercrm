@@ -218,7 +218,10 @@ def _tela_lista():
         TIPOS_PDV_PQ = ['Todos', 'Supermercado', 'Hipermercado', 'Atacadista', 'Mini Mercado', 'Mercearia', 'Emporio', 'Sacolao', 'Hortifruti', 'Acougue', 'Casa de Carnes', 'Peixaria', 'Padaria', 'Confeitaria', 'Delicatessen', 'Hamburgueria', 'Restaurante', 'Lanchonete', 'Bar / Boteco', 'Clube / Associacao', 'Outro']
         fil_tipo_pdv = st.selectbox("Tipo de PDV", TIPOS_PDV_PQ, key="fil_tipo_pdv_pq")
 
-    where, params = ["1=1"], []
+    from permissoes import get_where_cliente
+    _w_pq, _p_pq = get_where_cliente("cli")
+    where, params = ["1=1"], list(_p_pq)
+    if _w_pq: where.append(_w_pq.lstrip("AND ").strip())
     if filtro_status != "Todos":
         where.append("pp.status=?"); params.append(filtro_status)
     for op, sql in {
