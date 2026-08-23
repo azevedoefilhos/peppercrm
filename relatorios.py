@@ -149,8 +149,10 @@ def _rel_cliente():
     with col2:
         forn_id = _filtro_fornecedor("forn_cli")
 
-    where_extra = ""
-    params = []
+    from permissoes import get_where_cliente
+    _w_r, _p_r = get_where_cliente("c")
+    where_extra = f" {_w_r}" if _w_r else ""
+    params = list(_p_r)
     if forn_id:
         where_extra += " AND p.fornecedor_id=?"
         params.append(forn_id)
@@ -244,8 +246,10 @@ def _rel_produto():
         top_n = st.number_input("Exibir top", min_value=5, max_value=100,
                                 value=20, step=5, key="top_prod")
 
-    where_extra = ""
-    params = []
+    from permissoes import get_where_cliente
+    _w_r, _p_r = get_where_cliente("c")
+    where_extra = f" {_w_r}" if _w_r else ""
+    params = list(_p_r)
     if forn_id:
         where_extra += " AND p.fornecedor_id=?"
         params.append(forn_id)
@@ -304,8 +308,10 @@ def _rel_categoria():
     with col2:
         forn_id = _filtro_fornecedor("forn_cat")
 
-    where_extra = ""
-    params = []
+    from permissoes import get_where_cliente
+    _w_r, _p_r = get_where_cliente("c")
+    where_extra = f" {_w_r}" if _w_r else ""
+    params = list(_p_r)
     if forn_id:
         where_extra += " AND p.fornecedor_id=?"
         params.append(forn_id)
@@ -362,8 +368,10 @@ def _rel_evolucao():
         meses = st.number_input("Últimos N meses", min_value=3,
                                 max_value=24, value=12, key="meses_evol")
 
-    where_extra = ""
-    params = []
+    from permissoes import get_where_cliente
+    _w_r, _p_r = get_where_cliente("c")
+    where_extra = f" {_w_r}" if _w_r else ""
+    params = list(_p_r)
     if forn_id:
         where_extra += " AND p.fornecedor_id=?"
         params.append(forn_id)
@@ -433,9 +441,11 @@ def _rel_comparacao():
     with col2:
         forn_id = _filtro_fornecedor("forn_comp")
 
-    where_extra = ""
-    params_a = []
-    params_b = []
+    from permissoes import get_where_cliente
+    _w_r, _p_r = get_where_cliente("c")
+    where_extra = f" {_w_r}" if _w_r else ""
+    params_a = list(_p_r)
+    params_b = list(_p_r)
     if forn_id:
         where_extra += " AND p.fornecedor_id=?"
         params_a.append(forn_id)
@@ -605,8 +615,10 @@ def _rel_ranking_pdv():
         top_n = st.number_input("Exibir top", min_value=5,
                                 max_value=100, value=20, step=5, key="top_pdv")
 
-    where_extra = ""
-    params = []
+    from permissoes import get_where_cliente
+    _w_r, _p_r = get_where_cliente("c")
+    where_extra = f" {_w_r}" if _w_r else ""
+    params = list(_p_r)
     if forn_id:
         where_extra += " AND p.fornecedor_id=?"
         params.append(forn_id)
