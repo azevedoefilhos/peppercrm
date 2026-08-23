@@ -182,7 +182,7 @@ def _tela_lista():
             st.session_state.pop("pq_id", None)
             st.rerun()
     with col3:
-        if st.button("📊 Analise consolidada", width="stretch"):
+        if st.button("📊 Análise consolidada", width="stretch"):
             st.session_state["pq_modo"] = "analise"
             st.rerun()
 
@@ -3312,7 +3312,7 @@ def _gerar_pdf_por_produto(df, prod_nome, forn_nome, preco_tab_unit, filtros_des
     el  = []
 
     _pdf_cabecalho(el, s,
-        "Analise por Produto",
+        "Análise por Produto",
         f"Produto: {prod_nome}  |  Fornecedor: {forn_nome}",
         filtros_desc)
 
@@ -3376,7 +3376,7 @@ def _gerar_pdf_por_marca(df, marca_nome, forn_nome, tab_nome, filtros_desc):
     el  = []
 
     _pdf_cabecalho(el, s,
-        "Analise por Marca Concorrente",
+        "Análise por Marca Concorrente",
         f"Marca: {marca_nome}  |  Fornecedor ref.: {forn_nome}  |  Tabela: {tab_nome or '—'}",
         filtros_desc)
 
@@ -3440,7 +3440,7 @@ def _gerar_pdf_por_categoria(df, cat_nome, filtros_desc):
     el  = []
 
     _pdf_cabecalho(el, s,
-        "Analise por Categoria",
+        "Análise por Categoria",
         f"Categoria: {cat_nome}",
         filtros_desc)
 
@@ -3484,7 +3484,7 @@ def _gerar_pdf_por_pdv(df, pdv_label, forn_nome, tab_nome, filtros_desc):
     el  = []
 
     _pdf_cabecalho(el, s,
-        "Analise por PDV",
+        "Análise por PDV",
         f"PDV: {pdv_label}  |  Fornecedor: {forn_nome}  |  Tabela: {tab_nome or '—'}",
         filtros_desc)
 
