@@ -1,6 +1,0 @@
-c = open('permissoes.py', encoding='utf-8').read()
-idx = c.find('def get_where_cliente')
-print(c[idx:idx+800])
-print("\n---")
-idx2 = c.find('def get_lista_clientes')
-print(c[idx2:idx2+500])

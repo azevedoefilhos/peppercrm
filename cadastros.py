@@ -2274,11 +2274,8 @@ def _tela_vinculos_cliente():
     st.subheader("Vínculos cliente ↔ fornecedor")
     st.caption("Defina qual tabela de preço e prazo valem para cada par cliente/fornecedor.")
     # Inclui todos os status — prospectos e visitados precisam de contatos cadastrados
-    from permissoes import get_lista_clientes, get_where_cliente, perfil_atual, usuario_id_atual
-    _where_dbg, _params_dbg = get_where_cliente("c")
-    st.caption(f"DEBUG filtro: perfil={perfil_atual()} uid={usuario_id_atual()} where={repr(_where_dbg)} params={_params_dbg}")
+    from permissoes import get_lista_clientes
     _clis_vinc = get_lista_clientes(so_ativos=False)
-    st.caption(f"DEBUG clientes: {len(_clis_vinc) if _clis_vinc else 0} encontrados")
     clientes = [(r[0], f"{r[1]} ({r[1]})") for r in _clis_vinc] if _clis_vinc else []
     if not clientes:
         st.warning("Cadastre clientes e fornecedores primeiro."); return
