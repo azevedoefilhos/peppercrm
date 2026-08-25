@@ -656,7 +656,7 @@ def _rel_ranking_pdv():
         JOIN fornecedor f ON p.fornecedor_id=f.fornecedor_id
         LEFT JOIN categoria cat ON pr.categoria_id=cat.categoria_id
         LEFT JOIN pdv ON p.pdv_id=pdv.pdv_id
-        WHERE p.status_pedido != 'CANCELADO'
+        WHERE p.status_pedido NOT IN ('CANCELADO','RECUSADO','SUSPENSO')
           AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO')
           AND p.data_pedido BETWEEN {d_ini} AND {d_fim}
           {where_extra}
