@@ -104,7 +104,22 @@ def _gerar_meses(n=12):
 
 # ── Queries de comissões ──────────────────────────────────────────────────────
 
+def _get_filtro_vendedor():
+    """Retorna (sql_where, params) para filtrar pedidos pelo representante logado."""
+    try:
+        from permissoes import e_admin, e_master, usuario_id_atual, perfil_atual
+        p = perfil_atual()
+        uid = usuario_id_atual()
+        if p in ("MASTER","ADM","REPRESENTANTE_ADM"):
+            return "", []
+        elif p in ("REPRESENTANTE","VENDEDOR"):
+            return "AND p.vendedor_id=?", [uid]
+        return "", []
+    except Exception:
+        return "", []
+
 def _buscar_totais_periodo(visao, d_ini, d_fim):
+    _fv_sql, _fv_params = _get_filtro_vendedor()
     if visao == "previsto":
         # SQLite: sem GROUP BY problema pois SUM envolve tudo
         # PG: comissao_percentual deve ser agregado — usamos MAX() pois é igual por pedido
@@ -139,7 +154,7 @@ def _buscar_totais_periodo(visao, d_ini, d_fim):
                       AND COALESCE(p.data_entrega_realizada, p.data_pedido) BETWEEN %s AND %s
                     GROUP BY p.pedido_id
                 ) sub""",
-            (d_ini, d_fim)
+            tuple([d_ini, d_fim] + _fv_params)
         )
     else:
         r_com = _q(
@@ -153,11 +168,13 @@ def _buscar_totais_periodo(visao, d_ini, d_fim):
         )
 
     r_desp = _q(
-        """SELECT ROUND(SUM(valor), 2) FROM despesa
-           WHERE ativo IS NOT FALSE AND data_despesa BETWEEN ? AND ?""",
-        """SELECT ROUND(SUM(valor)::NUMERIC, 2) FROM despesa
-           WHERE ativo IS NOT FALSE AND data_despesa BETWEEN %s AND %s""",
-        (d_ini, d_fim)
+        f"""SELECT ROUND(SUM(valor), 2) FROM despesa
+           WHERE ativo IS NOT FALSE AND data_despesa BETWEEN ? AND ?
+           {"AND usuario_id=?" if _fv_params else ""}""",
+        f"""SELECT ROUND(SUM(valor)::NUMERIC, 2) FROM despesa
+           WHERE ativo IS NOT FALSE AND data_despesa BETWEEN %s AND %s
+           {"AND usuario_id=%s" if _fv_params else ""}""",
+        tuple([d_ini, d_fim] + _fv_params)
     )
 
     total_com  = float((r_com  or [[0]])[0][0] or 0)
