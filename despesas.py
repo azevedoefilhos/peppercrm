@@ -751,8 +751,9 @@ def tela_despesas():
     _msg = st.session_state.pop("_desp_msg_ok", None)
     if _msg: st.success(_msg)
 
-    from permissoes import e_representante, e_admin, e_master
-    _pode_resultado = e_representante() or e_admin() or e_master()
+    from permissoes import perfil_atual
+    _perfil = perfil_atual()
+    _pode_resultado = _perfil in ("MASTER","ADM","REPRESENTANTE_ADM","REPRESENTANTE")
     ABAS = {"nova":"➕ Nova despesa",
             "lista":"📋 Despesas",
             "relatorio":"📊 Relatório"}
