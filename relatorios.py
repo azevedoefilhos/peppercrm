@@ -120,7 +120,7 @@ def tela_relatorios():
         "cat":"Por categoria","evol":"Evolução mensal","comp":"Comparação",
         "sem":"Sem pedido","rank":"Ranking PDVs",
         "cluster":"🎯 Cluster","napres":"🏭 Não apresentados",
-        "cobertura":"📡 Cobertura","compet":"⚔️ Competitivo"
+        "cobertura":"📡 Cobertura"
     }
     if "rel_aba" not in st.session_state: st.session_state["rel_aba"] = "cli"
     # Linha 1: primeiras 5
@@ -138,7 +138,7 @@ def tela_relatorios():
         "cat":_rel_categoria,"evol":_rel_evolucao,"comp":_rel_comparacao,
         "sem":_rel_sem_pedido,"rank":_rel_ranking_pdv,
         "cluster":_rel_cluster,"napres":_rel_nao_apresentados,
-        "cobertura":_rel_cobertura,"compet":_rel_competitivo
+        "cobertura":_rel_cobertura
     }
     _ABAS_CALL.get(st.session_state["rel_aba"], _rel_cliente)()
     # Dummy para manter compatibilidade de indentação
