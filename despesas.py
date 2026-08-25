@@ -295,8 +295,12 @@ def _lista_despesas():
 
     from permissoes import e_admin, e_master, usuario_id_atual
     _uid_desp = usuario_id_atual()
+    from permissoes import e_admin, e_master, usuario_id_atual
+    _uid_pdf = usuario_id_atual()
     where = ["d.ativo IS NOT FALSE", "d.data_despesa BETWEEN ? AND ?"]
     params = [d_ini, d_fim]
+    if not (e_admin() or e_master()):
+        where.append("d.usuario_id=?"); params.append(_uid_pdf)
     if not (e_admin() or e_master()):
         where.append("d.usuario_id=?")
         params.append(_uid_desp)
@@ -569,8 +573,12 @@ def _relatorio_despesas():
     import calendar
     d_fim = f"{ano}-{mes}-{calendar.monthrange(int(ano), int(mes))[1]}"
 
+    from permissoes import e_admin, e_master, usuario_id_atual
+    _uid_pdf = usuario_id_atual()
     where = ["d.ativo IS NOT FALSE", "d.data_despesa BETWEEN ? AND ?"]
     params = [d_ini, d_fim]
+    if not (e_admin() or e_master()):
+        where.append("d.usuario_id=?"); params.append(_uid_pdf)
     if forn_sel[0]:
         where.append("d.fornecedor_id=?"); params.append(forn_sel[0])
     if apenas_reimb:
@@ -632,8 +640,12 @@ def _pdf_despesas(d_ini, d_fim, forn_nome, apenas_reimb, mes_ano):
     s_r   = ParagraphStyle("r", parent=sty["Normal"], fontSize=7,
                             textColor=colors.grey, alignment=TA_CENTER)
 
+    from permissoes import e_admin, e_master, usuario_id_atual
+    _uid_pdf = usuario_id_atual()
     where = ["d.ativo IS NOT FALSE", "d.data_despesa BETWEEN ? AND ?"]
     params = [d_ini, d_fim]
+    if not (e_admin() or e_master()):
+        where.append("d.usuario_id=?"); params.append(_uid_pdf)
     if forn_nome != "Todos":
         where.append("f.nome_fantasia=?"); params.append(forn_nome)
     if apenas_reimb:
