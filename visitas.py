@@ -563,7 +563,10 @@ def _tela_roteiro():
         clientes = [(None,"Todos os clientes")] + [(r[0],r[1]) for r in _clis_rot]
         fil_cli  = st.selectbox("Cliente", clientes, format_func=lambda x: x[1], key="rot_cli")
 
-    where, params = ["p.ativo!=0"], []
+    from permissoes import get_where_cliente
+    _w_rot, _p_rot = get_where_cliente("c")
+    where, params = ["p.ativo!=0"], list(_p_rot)
+    if _w_rot: where.append(_w_rot.lstrip("AND ").strip())
     if fil_dia != "Todos":
         where.append("p.dia_visita=?"); params.append(fil_dia)
     if fil_freq != "Todas":
