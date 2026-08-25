@@ -751,10 +751,13 @@ def tela_despesas():
     _msg = st.session_state.pop("_desp_msg_ok", None)
     if _msg: st.success(_msg)
 
+    from permissoes import e_representante, e_admin, e_master
+    _pode_resultado = e_representante() or e_admin() or e_master()
     ABAS = {"nova":"➕ Nova despesa",
             "lista":"📋 Despesas",
-            "relatorio":"📊 Relatório",
-            "resultado":"💰 Resultado"}
+            "relatorio":"📊 Relatório"}
+    if _pode_resultado:
+        ABAS["resultado"] = "💰 Resultado"
     if "desp_aba" not in st.session_state:
         st.session_state["desp_aba"] = "nova"
 
