@@ -25,6 +25,15 @@ _FILTRO_BASE = """
       AND pi.status_item NOT IN ('PENDENTE','DEVOLVIDO')
 """
 
+def _filtro_base_params():
+    """Retorna (where_extra, params) de perfil para usar com _FILTRO_BASE."""
+    try:
+        from permissoes import get_where_cliente
+        w, p = get_where_cliente("c")
+        return (f"AND {w.lstrip('AND ').strip()}" if w else ""), p
+    except Exception:
+        return "", []
+
 _VALOR_ITEM = """
     pi.quantidade * pi.preco_final
           * (1 - COALESCE(p.desconto_geral,0)/100.0)
@@ -197,6 +206,7 @@ def _rel_fornecedor():
     st.subheader("Vendas por fornecedor")
     d_ini, d_fim = _filtro_periodo("data_pedido", "Período — fornecedor")
 
+    _wfb, _pfb = _filtro_base_params()
     dados = query(f"""
         SELECT f.nome_fantasia                           AS fornecedor,
                COUNT(DISTINCT p.pedido_id)               AS pedidos,
@@ -204,10 +214,11 @@ def _rel_fornecedor():
                SUM(pi.quantidade)                        AS caixas,
                ROUND(SUM({_VALOR_ITEM}), 2)              AS total
         {_FILTRO_BASE}
+          {_wfb}
           AND p.data_pedido BETWEEN {d_ini} AND {d_fim}
         GROUP BY f.fornecedor_id
         ORDER BY total DESC
-    """)
+    """, tuple(_pfb))
 
     if not dados:
         st.info("Nenhum dado encontrado para o período.")
@@ -541,9 +552,12 @@ def _rel_sem_pedido():
                        "Restaurante","Lanchonete","Bar / Boteco","Clube / Associacao","Outro"]
         fil_tipo_pdv_sp = st.selectbox("Tipo de PDV", TIPOS_PDV_R, key="fil_tipo_pdv_sp")
 
+    from permissoes import get_where_cliente
+    _w_sp, _p_sp = get_where_cliente("c")
+    _where_sp = f"AND {_w_sp.lstrip('AND ').strip()}" if _w_sp else ""
     where_forn = "AND p2.fornecedor_id=?" if forn_id else ""
-    params = [forn_id] if forn_id else []
-    params_sub = [forn_id] if forn_id else []
+    params = list(_p_sp) + ([forn_id] if forn_id else [])
+    params_sub = list(_p_sp) + ([forn_id] if forn_id else [])
     where_tipo_pdv = ""
     if fil_tipo_pdv_sp != "Todos":
         where_tipo_pdv = """AND EXISTS (
@@ -562,6 +576,7 @@ def _rel_sem_pedido():
             AND p2.status_pedido NOT IN ('CANCELADO','RECUSADO')
             {where_forn}
         WHERE c.ativo!=0
+          {_where_sp}
           {where_tipo_pdv}
           AND NOT EXISTS (
               SELECT 1 FROM pedido p3
@@ -704,9 +719,12 @@ def _rel_cluster():
     st.markdown("#### 📊 Cobertura por cluster — clientes ativos vs abordados")
     st.caption("Mostra quantos PDVs de cada cluster já compraram de cada fornecedor.")
 
+    from permissoes import get_where_cliente
+    _w_cl, _p_cl = get_where_cliente("c")
+    _where_cl = f"AND {_w_cl.lstrip('AND ').strip()}" if _w_cl else ""
     _forn_id_cob = int(forn_sel[0]) if str(forn_sel[0]).lower() != 'todos' else None
     _forn_where  = "AND p.fornecedor_id = ?" if _forn_id_cob else ""
-    _forn_params = (_forn_id_cob,) if _forn_id_cob else ()
+    _forn_params = ((_forn_id_cob,) if _forn_id_cob else ()) + tuple(_p_cl)
     cob = query(f"""
         SELECT
             pdv.cluster,
@@ -718,11 +736,12 @@ def _rel_cluster():
                   THEN c.cliente_id END) * 100.0
                   / NULLIF(COUNT(DISTINCT c.cliente_id),0), 1)        AS cobertura_pct
         FROM cliente c
-        JOIN pdv ON pdv.pdv_id = c.cliente_id
+        JOIN pdv ON pdv.cliente_id = c.cliente_id
         LEFT JOIN pedido p ON p.cliente_id = c.cliente_id
             AND p.status_pedido NOT IN ('CANCELADO','RECUSADO')
             {_forn_where}
         WHERE c.status NOT IN ('Inativo','Encerrado')
+          {_where_cl}
           AND (? = 'Todos' OR pdv.cluster = ?)
           AND (? = 'Todos' OR pdv.tamanho_pdv = ?)
         GROUP BY pdv.cluster, pdv.tamanho_pdv
@@ -1345,6 +1364,9 @@ def _rel_competitivo():
     prod_peso = prod_sel[3]
     prod_um   = prod_sel[4]
     dias      = int(per_sel[0])
+    from permissoes import get_where_cliente
+    _w_comp, _p_comp = get_where_cliente("c")
+    _w_comp_sql = _w_comp if _w_comp else ""
 
     # ── Busca preço nosso mais recente ────────────────────────────────────
     nosso_preco = query(f"""
@@ -1360,9 +1382,10 @@ def _rel_competitivo():
           AND pp.status='finalizado'
           AND pp.data_pesquisa >= date('now','-{dias} days')
           AND ppi.preco IS NOT NULL
+          AND pp.cliente_id IN (SELECT cliente_id FROM cliente c WHERE 1=1 {_w_comp_sql})
         ORDER BY pp.data_pesquisa DESC
         LIMIT 1
-    """, (pid, forn_sel[0]))
+    """, tuple([pid, forn_sel[0]] + _p_comp))
 
     preco_ref = nosso_preco[0][0] if nosso_preco else None
     data_ref  = nosso_preco[0][1][:10] if nosso_preco else None
