@@ -2438,7 +2438,8 @@ def _tela_pdvs():
         clientes_all = query("""SELECT cliente_id, nome_fantasia FROM cliente
             WHERE vendedor_id=%s ORDER BY nome_fantasia""", (_uid_all,)) or []
     else:
-        clientes_all = get_lista_clientes(so_ativos=False) or []
+        from permissoes import get_lista_clientes
+    clientes_all = get_lista_clientes(so_ativos=False) or []
 
     # ── CORREÇÃO DE TIPO PDV ────────────────────────────────────────────
     with st.expander("🔧 Padronizar tipo de PDV — corrigir duplicatas"):
