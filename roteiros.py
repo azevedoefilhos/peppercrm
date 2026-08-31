@@ -256,7 +256,7 @@ def _tela_setores():
     resumo = query("""SELECT s.nome, COUNT(p.pdv_id) as total,
             SUM(CASE WHEN p.aceita_promotor THEN 1 ELSE 0 END) as c_prom
         FROM setor s
-        LEFT JOIN pdv p ON p.setor_id=s.setor_id AND p.ativo!=0
+        LEFT JOIN pdv p ON p.setor_id=s.setor_id
         WHERE s.empresa_id=%s GROUP BY s.setor_id, s.nome
         ORDER BY s.codigo""", (eid,)) or []
 
