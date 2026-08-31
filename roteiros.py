@@ -467,14 +467,17 @@ def _tela_roteiro_vendedor(pode_editar_prom=False):
     # Adicionar PDV ao roteiro
     with st.expander("➕ Adicionar PDV ao roteiro"):
         with st.form("form_add_rv"):
-            if e_admin() or e_master():
-                clientes = query("""SELECT cliente_id, nome_fantasia,
-                    COALESCE(status,'Ativo') FROM cliente
-                    WHERE empresa_id=%s ORDER BY nome_fantasia""", (eid,)) or []
-            else:
-                clientes = query("""SELECT cliente_id, nome_fantasia,
-                    COALESCE(status,'Ativo') FROM cliente
-                    WHERE vendedor_id=%s ORDER BY nome_fantasia""", (vend_uid,)) or []
+            # Clientes conforme carteira do vendedor selecionado
+            clientes = query("""SELECT c.cliente_id, c.nome_fantasia,
+                    COALESCE(c.status,'Ativo') FROM cliente c
+                    WHERE c.vendedor_id=%s
+                    ORDER BY c.nome_fantasia""", (vend_uid,)) or []
+            # ADM/MASTER sem vendedor selecionado: ve todos
+            if not clientes and (e_admin() or e_master()):
+                clientes = query("""SELECT c.cliente_id, c.nome_fantasia,
+                    COALESCE(c.status,'Ativo') FROM cliente c
+                    WHERE c.empresa_id=%s
+                    ORDER BY c.nome_fantasia""", (eid,)) or []
 
             cli_sel = st.selectbox("Cliente", clientes,
                                    format_func=lambda x: f"{x[1]} [{x[2] if len(x)>2 else ''}]", key="rv2_cli")
@@ -676,18 +679,17 @@ def _tela_roteiro_promotor():
     with st.expander("➕ Adicionar PDV ao roteiro do promotor"):
         with st.form("form_add_rp"):
             # Filtra PDVs que aceitam promotor
-            if e_admin() or e_master():
+            # Clientes ativos com PDVs
+            if e_admin() or e_master() or e_supervisor():
                 clientes_p = query("""SELECT DISTINCT c.cliente_id, c.nome_fantasia
                     FROM cliente c JOIN pdv p ON p.cliente_id=c.cliente_id
-                    WHERE p.aceita_promotor=TRUE AND p.ativo!=0 AND c.empresa_id=%s
+                    WHERE p.ativo!=0 AND c.empresa_id=%s AND c.status='Ativo'
                     ORDER BY c.nome_fantasia""", (eid,)) or []
             else:
                 clientes_p = query("""SELECT DISTINCT c.cliente_id, c.nome_fantasia
                     FROM cliente c JOIN pdv p ON p.cliente_id=c.cliente_id
-                    WHERE p.aceita_promotor=TRUE AND p.ativo!=0
-                    AND c.vendedor_id=%s
+                    WHERE p.ativo!=0 AND c.vendedor_id=%s AND c.status='Ativo'
                     ORDER BY c.nome_fantasia""", (uid,)) or []
-
             cli_p = st.selectbox("Cliente", clientes_p,
                                  format_func=lambda x: x[1], key="rp2_cli")
 
