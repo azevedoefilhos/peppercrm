@@ -257,6 +257,7 @@ def _tela_setores():
             SUM(CASE WHEN p.aceita_promotor THEN 1 ELSE 0 END) as c_prom
         FROM setor s
         LEFT JOIN pdv p ON p.setor_id=s.setor_id AND p.ativo!=0
+        LEFT JOIN cliente cli ON p.cliente_id=cli.cliente_id
         WHERE s.empresa_id=%s GROUP BY s.setor_id, s.nome
         ORDER BY s.codigo""", (eid,)) or []
 
@@ -466,11 +467,17 @@ def _tela_roteiro_vendedor(pode_editar_prom=False):
     # Adicionar PDV ao roteiro
     with st.expander("➕ Adicionar PDV ao roteiro"):
         with st.form("form_add_rv"):
-            clientes = get_lista_clientes(so_ativos=False) if not (e_admin() or e_master()) else \
-                       query("SELECT cliente_id, nome_fantasia FROM cliente WHERE empresa_id=%s AND ativo!=0 ORDER BY nome_fantasia", (eid,)) or []
+            if e_admin() or e_master():
+                clientes = query("""SELECT cliente_id, nome_fantasia,
+                    COALESCE(status,'Ativo') FROM cliente
+                    WHERE empresa_id=%s ORDER BY nome_fantasia""", (eid,)) or []
+            else:
+                clientes = query("""SELECT cliente_id, nome_fantasia,
+                    COALESCE(status,'Ativo') FROM cliente
+                    WHERE vendedor_id=%s ORDER BY nome_fantasia""", (vend_uid,)) or []
 
             cli_sel = st.selectbox("Cliente", clientes,
-                                   format_func=lambda x: x[1], key="rv2_cli")
+                                   format_func=lambda x: f"{x[1]} [{x[2] if len(x)>2 else ''}]", key="rv2_cli")
             if cli_sel:
                 pdvs_disp = query("""SELECT p.pdv_id, p.nome_loja, p.cidade,
                         COALESCE(s.nome,'Sem setor')
@@ -686,9 +693,9 @@ def _tela_roteiro_promotor():
 
             if cli_p:
                 pdvs_p = query("""SELECT p.pdv_id, p.nome_loja, p.cidade,
-                        COALESCE(s.nome,'Sem setor')
+                        COALESCE(s.nome,'Sem setor'), p.aceita_promotor
                     FROM pdv p LEFT JOIN setor s ON p.setor_id=s.setor_id
-                    WHERE p.cliente_id=%s AND p.ativo!=0 AND p.aceita_promotor=TRUE
+                    WHERE p.cliente_id=%s AND p.ativo!=0
                     ORDER BY p.nome_loja""", (cli_p[0],)) or []
 
                 pdv_p = st.selectbox("PDV", pdvs_p,
