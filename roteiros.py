@@ -257,7 +257,6 @@ def _tela_setores():
             SUM(CASE WHEN p.aceita_promotor THEN 1 ELSE 0 END) as c_prom
         FROM setor s
         LEFT JOIN pdv p ON p.setor_id=s.setor_id AND p.ativo!=0
-        LEFT JOIN cliente cli ON p.cliente_id=cli.cliente_id
         WHERE s.empresa_id=%s GROUP BY s.setor_id, s.nome
         ORDER BY s.codigo""", (eid,)) or []
 
@@ -467,17 +466,18 @@ def _tela_roteiro_vendedor(pode_editar_prom=False):
     # Adicionar PDV ao roteiro
     with st.expander("➕ Adicionar PDV ao roteiro"):
         with st.form("form_add_rv"):
-            # Clientes conforme carteira do vendedor selecionado
-            clientes = query("""SELECT c.cliente_id, c.nome_fantasia,
+            # Clientes da carteira do vendedor selecionado
+            # ADM/MASTER: ve todos os clientes da empresa
+            if e_admin() or e_master():
+                clientes = query("""SELECT c.cliente_id, c.nome_fantasia,
                     COALESCE(c.status,'Ativo') FROM cliente c
                     WHERE c.vendedor_id=%s
                     ORDER BY c.nome_fantasia""", (vend_uid,)) or []
-            # ADM/MASTER sem vendedor selecionado: ve todos
-            if not clientes and (e_admin() or e_master()):
+            else:
                 clientes = query("""SELECT c.cliente_id, c.nome_fantasia,
                     COALESCE(c.status,'Ativo') FROM cliente c
-                    WHERE c.empresa_id=%s
-                    ORDER BY c.nome_fantasia""", (eid,)) or []
+                    WHERE c.vendedor_id=%s
+                    ORDER BY c.nome_fantasia""", (vend_uid,)) or []
 
             cli_sel = st.selectbox("Cliente", clientes,
                                    format_func=lambda x: f"{x[1]} [{x[2] if len(x)>2 else ''}]", key="rv2_cli")
