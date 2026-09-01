@@ -2848,11 +2848,22 @@ def _form_editar_pdv(pdv_id):
             encarregado      = st.text_input("Encarregado / Resp.",  p["encarregado"]       or "")
             fone_encarregado = st.text_input("Fone encarregado",     p["fone_encarregado"]  or "")
             horario          = st.text_input("Horario recebimento",  p["horario_recebimento"] or "")
-            setor_at = p["setor"] if "setor" in p.keys() and p["setor"] else ""
-            setor       = st.text_input("Setor", value=setor_at,
-                                        placeholder="Ex: Setor Centro, Setor Leste",
-                                        key=f"pdv_setor_{pdv_id}",
-                                        help="Setor geografico para planejamento de roteiro")
+            from database import query as _q
+            from permissoes import empresa_id_atual as _eid
+            _setores_ed = _q("SELECT setor_id, codigo, nome FROM setor WHERE empresa_id=%s AND ativo=TRUE ORDER BY codigo", (_eid(),)) or []
+            _set_opts_ed = [(None,"— Sem setor —")] + [(s[0], f"{s[1]} — {s[2]}") for s in _setores_ed]
+            _sid_atual = p["setor_id"] if "setor_id" in p.keys() else None
+            _set_idx = next((i for i,s in enumerate(_set_opts_ed) if s[0]==_sid_atual), 0)
+            _set_sel_ed = st.selectbox("Setor geográfico", _set_opts_ed,
+                                        index=_set_idx,
+                                        format_func=lambda x: x[1],
+                                        key=f"pdv_setor_ed_{pdv_id}")
+            setor_id_ed = _set_sel_ed[0] if _set_sel_ed else None
+            setor = _set_sel_ed[1].split(" — ",1)[-1] if _set_sel_ed and _set_sel_ed[0] else ""
+            _ap_atual = p["aceita_promotor"] if "aceita_promotor" in p.keys() else True
+            aceita_prom_ed = st.checkbox("Comporta promotor",
+                                         value=bool(_ap_atual),
+                                         key=f"pdv_aceita_prom_{pdv_id}")
             _cl_opts = ["A/B","B/C","C/D","A","B","C","D","—"]
             _tm_opts = ["GG","G","M","P","PP","—"]
             _cl_at   = p["cluster"]     if "cluster"     in p.keys() and p["cluster"]     else "—"
