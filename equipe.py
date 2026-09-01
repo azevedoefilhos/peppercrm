@@ -781,6 +781,72 @@ def _tela_supervisores():
                             st.rerun()
 
     st.divider()
+    # ── Equipe de promotores do supervisor ──────────────────────────────
+    st.subheader("👥 Equipe de promotores por supervisor")
+    st.caption("Vincule promotores à equipe de cada supervisor para controle de roteiros e cobertura.")
+
+    for sup in (sups or []):
+        sid, s_nome = sup[0], sup[1]
+        with st.expander(f"👤 {s_nome}"):
+            # Promotores ja vinculados
+            vinculados = query("""SELECT sp.supervisor_promotor_id,
+                    pr.promotor_id, pr.nome, u.tipo,
+                    sp.ativo
+                FROM supervisor_promotor sp
+                JOIN promotor pr ON sp.promotor_id=pr.promotor_id
+                LEFT JOIN usuario u ON pr.usuario_id=u.usuario_id
+                WHERE sp.supervisor_id=%s
+                ORDER BY pr.nome""", (sid,)) or []
+
+            if vinculados:
+                for v in vinculados:
+                    sp_id, pr_id, pr_nome, pr_tipo, ativo = v
+                    col_n, col_t, col_a, col_r = st.columns([3,1.5,1,0.8])
+                    col_n.write(pr_nome)
+                    col_t.write(pr_tipo or "PROMOTOR")
+                    col_a.write("✅ Ativo" if ativo else "❌ Inativo")
+                    if col_r.button("🗑️", key=f"rem_sp_{sp_id}",
+                                   help="Remover da equipe"):
+                        execute_write(
+                            "UPDATE supervisor_promotor SET ativo=0 WHERE supervisor_promotor_id=%s",
+                            (sp_id,))
+                        st.rerun()
+            else:
+                st.caption("Nenhum promotor vinculado ainda.")
+
+            # Adicionar promotor
+            proms_disp = query("""SELECT pr.promotor_id, pr.nome, u.tipo
+                FROM promotor pr
+                LEFT JOIN usuario u ON pr.usuario_id=u.usuario_id
+                WHERE pr.empresa_id=%s AND pr.ativo!=0
+                AND pr.promotor_id NOT IN (
+                    SELECT promotor_id FROM supervisor_promotor
+                    WHERE supervisor_id=%s AND ativo=1)
+                ORDER BY pr.nome""", (eid, sid)) or []
+
+            if proms_disp:
+                with st.form(f"add_prom_sup_{sid}"):
+                    p_sel = st.selectbox("Adicionar promotor",
+                        proms_disp,
+                        format_func=lambda x: f"{x[1]} ({x[2] or 'PROMOTOR'})",
+                        key=f"ps_add_{sid}")
+                    if st.form_submit_button("➕ Adicionar à equipe", type="primary"):
+                        # Verifica se ja existe registro inativo
+                        existe = query(
+                            "SELECT supervisor_promotor_id FROM supervisor_promotor WHERE supervisor_id=%s AND promotor_id=%s",
+                            (sid, p_sel[0])) or []
+                        if existe:
+                            execute_write(
+                                "UPDATE supervisor_promotor SET ativo=1 WHERE supervisor_promotor_id=%s",
+                                (existe[0][0],))
+                        else:
+                            execute_write(
+                                "INSERT INTO supervisor_promotor (supervisor_id, promotor_id, ativo) VALUES (%s,%s,1)",
+                                (sid, p_sel[0]))
+                        st.success(f"{p_sel[1]} adicionado à equipe de {s_nome}!")
+                        st.rerun()
+
+    st.divider()
     st.subheader("➕ Novo supervisor")
     with st.form("novo_sup_eq", clear_on_submit=True):
         col1, col2 = st.columns(2)
