@@ -253,18 +253,24 @@ def _tela_setores():
 
     # PDVs por setor
     st.markdown("#### 📊 PDVs por setor")
-    resumo = query("""SELECT s.nome, COUNT(p.pdv_id) as total,
-            SUM(CASE WHEN p.aceita_promotor THEN 1 ELSE 0 END) as c_prom
+    resumo = query("""SELECT s.nome,
+            COUNT(p.pdv_id) as total,
+            SUM(CASE WHEN p.aceita_promotor THEN 1 ELSE 0 END) as comporta,
+            COUNT(DISTINCT ap.att_promotor_id) as tem_promotor
         FROM setor s
         LEFT JOIN pdv p ON p.setor_id=s.setor_id
+        LEFT JOIN att_promotor ap ON ap.pdv_id=p.pdv_id AND ap.ativo!=0
         WHERE s.empresa_id=%s GROUP BY s.setor_id, s.nome
         ORDER BY s.codigo""", (eid,)) or []
 
     for r in resumo:
-        nome_s, total, c_prom = r
-        sem_prom = (total or 0) - (c_prom or 0)
-        st.write(f"**{nome_s}** — {total or 0} PDVs "
-                 f"({c_prom or 0} com promotor, {sem_prom} sem promotor)")
+        nome_s, total = r[0], r[1]
+        comporta = r[2] or 0
+        tem_prom = r[3] or 0
+        nao_comp = (total or 0) - comporta
+        st.write(f"**{nome_s}** — {total or 0} PDVs | "
+                 f"{comporta} comportam promotor ({tem_prom} com promotor ativo) | "
+                 f"{nao_comp} não comportam")
 
     st.divider()
 
