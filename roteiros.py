@@ -836,21 +836,32 @@ def _tela_roteiro_promotor():
 
     # Seletor de promotor
     if e_admin() or e_master():
-        proms = query("""SELECT u.usuario_id, u.nome, u.tipo FROM usuario u
-            WHERE u.empresa_id=%s
-            AND u.tipo IN ('PROMOTOR','PROMOTOR_VENDEDOR')
-            AND u.ativo=1 ORDER BY u.nome""", (eid,)) or []
+        # Busca promotores com E sem login
+        proms = query("""SELECT
+                COALESCE(u.usuario_id, 0) as uid,
+                COALESCE(u.nome, pr.nome) as nome,
+                COALESCE(u.tipo, 'PROMOTOR') as tipo,
+                pr.promotor_id
+            FROM promotor pr
+            LEFT JOIN usuario u ON pr.usuario_id=u.usuario_id
+            WHERE pr.empresa_id=%s AND pr.ativo!=0
+            AND pr.nome != 'Sem promotor'
+            ORDER BY nome""", (eid,)) or []
     elif e_supervisor():
         # Apenas promotores da equipe do supervisor
         sup = query("SELECT supervisor_id FROM supervisor WHERE usuario_id=%s LIMIT 1",
                     (uid,)) or []
         sup_id = sup[0][0] if sup else None
-        proms = query("""SELECT u.usuario_id, u.nome, u.tipo
+        proms = query("""SELECT
+                COALESCE(u.usuario_id, 0) as uid,
+                COALESCE(u.nome, pr.nome) as nome,
+                COALESCE(u.tipo, 'PROMOTOR') as tipo,
+                pr.promotor_id
             FROM supervisor_promotor sp
             JOIN promotor pr ON sp.promotor_id=pr.promotor_id
-            JOIN usuario u ON pr.usuario_id=u.usuario_id
-            WHERE sp.supervisor_id=%s AND sp.ativo=1 AND u.ativo=1
-            ORDER BY u.nome""", (sup_id,)) or [] if sup_id else []
+            LEFT JOIN usuario u ON pr.usuario_id=u.usuario_id
+            WHERE sp.supervisor_id=%s AND sp.ativo=1
+            ORDER BY nome""", (sup_id,)) or [] if sup_id else []
     else:
         # Vendedor habilitado: promotores dos seus clientes
         proms = query("""SELECT DISTINCT u.usuario_id, u.nome, u.tipo
@@ -869,7 +880,9 @@ def _tela_roteiro_promotor():
     prom_sel = st.selectbox("Promotor", proms,
                             format_func=lambda x: f"{x[1]} ({x[2]})",
                             key="rp2_sel")
-    prom_uid = prom_sel[0]
+    prom_uid      = prom_sel[0]  # usuario_id (0 se sem login)
+    prom_promotor_id = prom_sel[3] if len(prom_sel) > 3 else None
+    prom_tem_login = prom_uid > 0
 
     # Ponto de base do promotor
     base = query("""SELECT lat_base, lng_base, end_base
@@ -895,8 +908,11 @@ def _tela_roteiro_promotor():
         JOIN pdv p ON ri.pdv_id=p.pdv_id
         JOIN cliente c ON p.cliente_id=c.cliente_id
         LEFT JOIN setor s ON p.setor_id=s.setor_id
-        WHERE ri.usuario_id=%s AND ri.tipo_roteiro='promotor' AND ri.ativo=TRUE
-        ORDER BY ri.dia_semana, ri.turno, ri.ordem_rota""", (prom_uid,)) or []
+        WHERE ri.tipo_roteiro='promotor' AND ri.ativo=TRUE
+          AND (ri.usuario_id=%s OR ri.promotor_id=%s)
+        ORDER BY ri.dia_semana, ri.turno, ri.ordem_rota""",
+        (prom_uid if prom_tem_login else -1,
+         prom_promotor_id if not prom_tem_login else -1)) or []
 
     por_dia = {d: [] for d in range(1, 6)}
     for r in roteiro:
@@ -1022,14 +1038,24 @@ def _tela_roteiro_promotor():
                         (prom_uid, dia_p[0], turno_p)) or [[0]]
                     nova_ord = (max_ord[0][0] or 0) + 1
 
-                    execute_write("""INSERT INTO roteiro_item
-                        (tipo_roteiro, usuario_id, pdv_id, dia_semana, turno,
-                         ordem_rota, frequencia, ativo, empresa_id, criado_por)
-                        VALUES ('promotor',%s,%s,%s,%s,%s,%s,TRUE,%s,%s)
-                        ON CONFLICT (tipo_roteiro,usuario_id,pdv_id,dia_semana,turno)
-                        DO UPDATE SET ativo=TRUE, frequencia=EXCLUDED.frequencia""",
-                        (prom_uid, pdv_p[0], dia_p[0], turno_p,
-                         nova_ord, freq_p, eid, uid))
+                    if prom_tem_login:
+                        execute_write("""INSERT INTO roteiro_item
+                            (tipo_roteiro, usuario_id, pdv_id, dia_semana, turno,
+                             ordem_rota, frequencia, ativo, empresa_id, criado_por)
+                            VALUES ('promotor',%s,%s,%s,%s,%s,%s,TRUE,%s,%s)
+                            ON CONFLICT (tipo_roteiro,usuario_id,pdv_id,dia_semana,turno)
+                            DO UPDATE SET ativo=TRUE, frequencia=EXCLUDED.frequencia""",
+                            (prom_uid, pdv_p[0], dia_p[0], turno_p,
+                             nova_ord, freq_p, eid, uid))
+                    else:
+                        execute_write("""INSERT INTO roteiro_item
+                            (tipo_roteiro, promotor_id, pdv_id, dia_semana, turno,
+                             ordem_rota, frequencia, ativo, empresa_id, criado_por)
+                            VALUES ('promotor',%s,%s,%s,%s,%s,%s,TRUE,%s,%s)
+                            ON CONFLICT (tipo_roteiro,promotor_id,pdv_id,dia_semana,turno)
+                            DO UPDATE SET ativo=TRUE, frequencia=EXCLUDED.frequencia""",
+                            (prom_promotor_id, pdv_p[0], dia_p[0], turno_p,
+                             nova_ord, freq_p, eid, uid))
                     st.success("PDV adicionado ao roteiro!")
                     st.rerun()
 
