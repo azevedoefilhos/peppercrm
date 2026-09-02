@@ -282,7 +282,7 @@ def _tela_setores():
 
     col_sg, _ = st.columns([2,2])
     setor_gest = col_sg.selectbox("Setor para gerenciar",
-        [(s[0], s[1]) for s in setores],
+        [(s[0], f"{s[1]} — {s[2]}") for s in setores],
         format_func=lambda x: x[1],
         key="set_gest_sel")
 
@@ -315,7 +315,7 @@ def _tela_setores():
 
             if st.session_state.get(f"mv_pdv_{pdv_id}"):
                 with st.form(f"form_mv_{pdv_id}"):
-                    opts_mv = [(s[0], s[1]) for s in setores if s[0] != sid_gest]
+                    opts_mv = [(s[0], f"{s[1]} — {s[2]}") for s in setores if s[0] != sid_gest]
                     novo_set = st.selectbox("Mover para", opts_mv,
                         format_func=lambda x: x[1], key=f"mv_dest_{pdv_id}")
                     ca, cb = st.columns(2)
