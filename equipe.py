@@ -789,7 +789,7 @@ def _tela_supervisores():
         sid, s_nome = sup[0], sup[1]
         with st.expander(f"👤 {s_nome}"):
             # Promotores ja vinculados
-            vinculados = query("""SELECT sp.supervisor_promotor_id,
+            vinculados = query("""SELECT sp.id,
                     pr.promotor_id, pr.nome, u.tipo,
                     sp.ativo
                 FROM supervisor_promotor sp
@@ -808,7 +808,7 @@ def _tela_supervisores():
                     if col_r.button("🗑️", key=f"rem_sp_{sp_id}",
                                    help="Remover da equipe"):
                         execute_write(
-                            "UPDATE supervisor_promotor SET ativo=0 WHERE supervisor_promotor_id=%s",
+                            "UPDATE supervisor_promotor SET ativo=0 WHERE id=%s",
                             (sp_id,))
                         st.rerun()
             else:
@@ -833,16 +833,16 @@ def _tela_supervisores():
                     if st.form_submit_button("➕ Adicionar à equipe", type="primary"):
                         # Verifica se ja existe registro inativo
                         existe = query(
-                            "SELECT supervisor_promotor_id FROM supervisor_promotor WHERE supervisor_id=%s AND promotor_id=%s",
+                            "SELECT id FROM supervisor_promotor WHERE supervisor_id=%s AND promotor_id=%s",
                             (sid, p_sel[0])) or []
                         if existe:
                             execute_write(
-                                "UPDATE supervisor_promotor SET ativo=1 WHERE supervisor_promotor_id=%s",
+                                "UPDATE supervisor_promotor SET ativo=1 WHERE id=%s",
                                 (existe[0][0],))
                         else:
                             execute_write(
-                                "INSERT INTO supervisor_promotor (supervisor_id, promotor_id, ativo) VALUES (%s,%s,1)",
-                                (sid, p_sel[0]))
+                                "INSERT INTO supervisor_promotor (supervisor_id, promotor_id, empresa_id, ativo) VALUES (%s,%s,%s,1)",
+                                (sid, p_sel[0], eid))
                         st.success(f"{p_sel[1]} adicionado à equipe de {s_nome}!")
                         st.rerun()
 
