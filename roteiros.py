@@ -276,6 +276,75 @@ def _tela_setores():
 
     st.divider()
 
+    # ── Gestao de PDVs por setor ────────────────────────────────────
+    st.markdown("#### 🔧 Atribuir / mover PDVs entre setores")
+    st.caption("Selecione um setor para ver seus PDVs e mover entre setores.")
+
+    col_sg, _ = st.columns([2,2])
+    setor_gest = col_sg.selectbox("Setor para gerenciar",
+        [(s[0], s[1]) for s in setores],
+        format_func=lambda x: x[1],
+        key="set_gest_sel")
+
+    if setor_gest:
+        sid_gest = setor_gest[0]
+        pdvs_setor_gest = query("""SELECT p.pdv_id,
+                COALESCE(p.nome_loja,'Matriz') as loja,
+                c.nome_fantasia, p.cidade, p.aceita_promotor
+            FROM pdv p JOIN cliente c ON p.cliente_id=c.cliente_id
+            WHERE p.setor_id=%s ORDER BY c.nome_fantasia, p.nome_loja""",
+            (sid_gest,)) or []
+
+        st.caption(f"{len(pdvs_setor_gest)} PDV(s) neste setor")
+
+        for pdv in pdvs_setor_gest:
+            pdv_id, loja, cliente, cidade, aceita = pdv
+            c1, c2, c3, c4 = st.columns([3, 2, 1.5, 0.8])
+            c1.write(f"**{loja}** — {cliente}")
+            c2.write(cidade or "—")
+            c3.write("✅ Promotor" if aceita else "❌ Sem promotor")
+            if c4.button("✏️", key=f"mv_pdv_{pdv_id}", help="Mover de setor"):
+                st.session_state[f"mv_pdv_{pdv_id}"] = True
+
+            if st.session_state.get(f"mv_pdv_{pdv_id}"):
+                with st.form(f"form_mv_{pdv_id}"):
+                    opts_mv = [(s[0], s[1]) for s in setores if s[0] != sid_gest]
+                    novo_set = st.selectbox("Mover para", opts_mv,
+                        format_func=lambda x: x[1], key=f"mv_dest_{pdv_id}")
+                    ca, cb = st.columns(2)
+                    if ca.form_submit_button("✅ Mover", type="primary"):
+                        nome_s = novo_set[1].split(" — ",1)[-1] if " — " in novo_set[1] else novo_set[1]
+                        execute_write(
+                            "UPDATE pdv SET setor_id=%s, setor=%s WHERE pdv_id=%s",
+                            (novo_set[0], nome_s, pdv_id))
+                        st.session_state.pop(f"mv_pdv_{pdv_id}", None)
+                        st.success("PDV movido!"); st.rerun()
+                    if cb.form_submit_button("Cancelar"):
+                        st.session_state.pop(f"mv_pdv_{pdv_id}", None); st.rerun()
+
+        st.divider()
+        with st.expander("➕ Adicionar PDV sem setor a este setor"):
+            pdvs_ss = query("""SELECT p.pdv_id,
+                    COALESCE(p.nome_loja,'Matriz'), c.nome_fantasia, p.cidade
+                FROM pdv p JOIN cliente c ON p.cliente_id=c.cliente_id
+                WHERE p.setor_id IS NULL AND c.empresa_id=%s
+                ORDER BY c.nome_fantasia, p.nome_loja""", (eid,)) or []
+            if not pdvs_ss:
+                st.caption("Todos os PDVs já têm setor. ✅")
+            else:
+                with st.form("form_add_pdv_s"):
+                    pdv_add = st.selectbox("PDV", pdvs_ss,
+                        format_func=lambda x: f"{x[1]} — {x[2]}",
+                        key="set_add_pdv2")
+                    if st.form_submit_button("➕ Adicionar", type="primary"):
+                        nome_s2 = setor_gest[1].split(" — ",1)[-1] if " — " in setor_gest[1] else setor_gest[1]
+                        execute_write(
+                            "UPDATE pdv SET setor_id=%s, setor=%s WHERE pdv_id=%s",
+                            (sid_gest, nome_s2, pdv_add[0]))
+                        st.success("PDV adicionado!"); st.rerun()
+
+    st.divider()
+
     # Novo setor
     with st.expander("➕ Novo setor"):
         with st.form("form_novo_set"):
