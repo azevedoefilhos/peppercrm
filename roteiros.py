@@ -300,11 +300,18 @@ def _tela_setores():
         for pdv in pdvs_setor_gest:
             pdv_id, loja, cliente, cidade, aceita = pdv
             c1, c2, c3, c4 = st.columns([3, 2, 1.5, 0.8])
+            # Verifica se tem promotor ativo atribuido
+            n_prom_pdv = query(
+                "SELECT COUNT(*) FROM att_promotor WHERE pdv_id=%s AND ativo!=0",
+                (pdv_id,)) or [[0]]
+            tem_prom_pdv = (n_prom_pdv[0][0] or 0) > 0
             c1.write(f"**{loja}** — {cliente}")
-            c2.write(cidade or "—")
-            c3.write("✅ Promotor" if aceita else "❌ Sem promotor")
-            if c4.button("✏️", key=f"mv_pdv_{pdv_id}", help="Mover de setor"):
-                st.session_state[f"mv_pdv_{pdv_id}"] = True
+            c2.caption(cidade or "—")
+            if tem_prom_pdv:
+                c3.caption("🟢 com promotor")
+            if c4.button("✏️", key=f"btn_mv_{pdv_id}", help="Mover de setor",
+                        on_click=lambda pid=pdv_id: st.session_state.update({f"mv_pdv_{pid}": True})):
+                pass
 
             if st.session_state.get(f"mv_pdv_{pdv_id}"):
                 with st.form(f"form_mv_{pdv_id}"):
