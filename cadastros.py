@@ -6,6 +6,7 @@ import streamlit as st
 import io
 import pandas as pd
 from database import conectar, query
+from permissoes import e_admin
 # api key buscada diretamente no banco (evita importacao circular)
 
 # ─────────────────────────────────────────────────────
@@ -38,9 +39,19 @@ def tela_fornecedores():
     if st.button("⬅ Voltar"):
         _ir("home")
 
-    ABAS_FORN = {"lista":"Lista","novo":"Novo Fornecedor","ct":"Contatos"}
+    admin = e_admin()
+
+    ABAS_FORN = {"lista": "Lista"}
+    if admin:
+        ABAS_FORN["novo"] = "Novo Fornecedor"
+    ABAS_FORN["ct"] = "Contatos"
+
     if "forn_aba" not in st.session_state: st.session_state["forn_aba"] = "lista"
-    cols = st.columns(3)
+    # se o usuário perdeu acesso à aba selecionada (ex: downgrade de perfil), volta pra lista
+    if st.session_state["forn_aba"] not in ABAS_FORN:
+        st.session_state["forn_aba"] = "lista"
+
+    cols = st.columns(len(ABAS_FORN))
     for col,(k,v) in zip(cols, ABAS_FORN.items()):
         ativa = st.session_state["forn_aba"] == k
         if col.button(v, key=f"fnav_{k}", width="stretch",
@@ -55,18 +66,28 @@ def tela_fornecedores():
             df["Ativo"] = df["Ativo"].map({1: "✅", 0: "❌"})
             st.dataframe(df, width="stretch", hide_index=True)
             st.divider()
-            st.subheader("Editar fornecedor")
             ids = [(r[0], r[1]) for r in dados]
-            sel = st.selectbox("Selecione", ids, format_func=lambda x: x[1])
-            if sel:
-                _form_editar_fornecedor(sel[0])
+            if admin:
+                st.subheader("Editar fornecedor")
+                sel = st.selectbox("Selecione", ids, format_func=lambda x: x[1])
+                if sel:
+                    _form_editar_fornecedor(sel[0])
+            else:
+                st.subheader("Detalhes do fornecedor")
+                sel = st.selectbox("Selecione", ids, format_func=lambda x: x[1])
+                if sel:
+                    _ver_detalhes_fornecedor(sel[0])
         else:
             st.info("Nenhum fornecedor cadastrado.")
-    elif a == "novo": _form_novo_fornecedor()
-    elif a == "ct":   _tela_contatos_fornecedor()
+    elif a == "novo" and admin:
+        _form_novo_fornecedor()
+    elif a == "ct":
+        _tela_contatos_fornecedor()
 
 
 def _form_novo_fornecedor():
+    if not e_admin():
+        return
     st.subheader("Novo fornecedor")
     with st.form("form_novo_forn", clear_on_submit=True):
         col1, col2 = st.columns(2)
@@ -102,7 +123,34 @@ def _form_novo_fornecedor():
         _sucesso(f"Fornecedor '{fantasia}' cadastrado!")
 
 
+def _ver_detalhes_fornecedor(forn_id):
+    """Visualização somente-leitura — para perfis sem status de ADM."""
+    conn = conectar()
+    f = conn.execute("SELECT * FROM fornecedor WHERE fornecedor_id=?", (forn_id,)).fetchone()
+    conn.close()
+    if not f:
+        return
+    col1, col2 = st.columns(2)
+    with col1:
+        st.text_input("Razão social", f["razao_social"] or "", disabled=True)
+        st.text_input("Nome fantasia", f["nome_fantasia"] or "", disabled=True)
+        st.text_input("CNPJ", f["cnpj"] or "", disabled=True)
+        st.text_input("IE", f["ie"] or "", disabled=True)
+    with col2:
+        st.text_input("Endereço", f["endereco"] or "", disabled=True)
+        st.text_input("Bairro", f["bairro"] or "", disabled=True)
+        st.text_input("Cidade", f["cidade"] or "", disabled=True)
+        st.text_input("UF", f["estado"] or "", disabled=True)
+    st.number_input("💰 Pedido mínimo (R$)",
+                     value=float(f["pedido_minimo"]) if f["pedido_minimo"] else 0.0,
+                     format="%.2f", disabled=True)
+    st.text_area("Observação", f["observacao"] or "", disabled=True)
+    st.checkbox("Ativo", value=bool(f["ativo"]), disabled=True)
+
+
 def _form_editar_fornecedor(forn_id):
+    if not e_admin():
+        return  # segurança adicional: bloqueia edição mesmo se a aba for forçada
     conn = conectar()
     f = conn.execute("SELECT * FROM fornecedor WHERE fornecedor_id=?", (forn_id,)).fetchone()
     conn.close()
@@ -161,6 +209,10 @@ def _tela_contatos_fornecedor():
                      width="stretch", hide_index=True)
     else:
         st.info("Nenhum contato cadastrado para este fornecedor.")
+
+    if not e_admin():
+        return  # visualização liberada; inclusão restrita a ADM
+
     st.subheader("Adicionar contato")
     with st.form(f"novo_contato_forn_{forn_id}", clear_on_submit=True):
         col1, col2 = st.columns(2)
