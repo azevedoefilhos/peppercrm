@@ -1074,12 +1074,21 @@ def tela_tabelas_preco():
     st.header("Tabelas de Preço")
     if st.button("⬅ Voltar"):
         _ir("home")
-    ABAS_TAB = {"lista":"Lista","nova":"Nova Tabela",
-                "import":"Importar Excel","historico":"📈 Histórico de Preços",
-                "catalogo":"📄 Catálogo PDF"}
+
+    admin = e_admin()
+    ABAS_TAB = {"lista": "Lista"}
+    if admin:
+        ABAS_TAB["nova"] = "Nova Tabela"
+        ABAS_TAB["import"] = "Importar Excel"
+    ABAS_TAB["historico"] = "📈 Histórico de Preços"
+    ABAS_TAB["catalogo"] = "📄 Catálogo PDF"
+
     if "tab_preco_aba" not in st.session_state:
         st.session_state["tab_preco_aba"] = "lista"
-    cols = st.columns(5)
+    if st.session_state["tab_preco_aba"] not in ABAS_TAB:
+        st.session_state["tab_preco_aba"] = "lista"
+
+    cols = st.columns(len(ABAS_TAB))
     for col,(k,v) in zip(cols, ABAS_TAB.items()):
         ativa = st.session_state["tab_preco_aba"] == k
         if col.button(v, key=f"tpnav_{k}", width="stretch",
@@ -1088,8 +1097,8 @@ def tela_tabelas_preco():
     st.divider()
     a = st.session_state["tab_preco_aba"]
     if a=="lista":      _lista_tabelas()
-    elif a=="nova":     _form_nova_tabela()
-    elif a=="import":   _importar_tabela_excel()
+    elif a=="nova" and admin:     _form_nova_tabela()
+    elif a=="import" and admin:   _importar_tabela_excel()
     elif a=="historico":_historico_precos()
     elif a=="catalogo":
         from catalogo import _tela_catalogo
@@ -1097,6 +1106,7 @@ def tela_tabelas_preco():
 
 
 def _lista_tabelas():
+    admin = e_admin()
     dados = query("""
         SELECT tp.tabela_preco_id, f.fornecedor_id, f.nome_fantasia, tp.nome_tabela,
                tp.tipo_tabela, tp.prazo_pagamento, tp.frete,
@@ -1234,70 +1244,78 @@ def _lista_tabelas():
      frete_at, ini_at, fim_at, ativo_at, _) = tab_row
 
     # ── 1. Editar cabeçalho da tabela ─────────────────
-    # Chave de feedback: "cab_salvo_{tab_id}" indica que acabou de ser salvo
-    cab_salvo = st.session_state.pop(f"cab_salvo_{tab_id}", False)
-
-    # Botão/label que abre o expander — verde se acabou de salvar, normal caso contrário
-    if cab_salvo:
-        lbl_expander = "✅ Cabeçalho salvo"
-        expandido    = False   # fecha após salvar
+    if not admin:
+        st.markdown(f"**Fornecedor:** {forn_nome_at or '—'}")
+        st.markdown(f"**Tipo:** {tipo_at or '—'}")
+        st.markdown(f"**Prazo de pagamento:** {prazo_at or '—'}")
+        st.markdown(f"**Frete:** {frete_at or '—'}")
+        st.markdown(f"**Vigência:** {ini_at or '—'} até {fim_at or '— sem prazo'}")
+        st.markdown(f"**Status:** {'✅ Ativa' if ativo_at else '❌ Inativa'}")
     else:
-        lbl_expander = "✏️ Editar cabeçalho da tabela"
-        expandido    = False
+        # Chave de feedback: "cab_salvo_{tab_id}" indica que acabou de ser salvo
+        cab_salvo = st.session_state.pop(f"cab_salvo_{tab_id}", False)
 
-    # Exibe o banner de sucesso FORA do expander para ficar sempre visível
-    if cab_salvo:
-        st.success(f"✅ Cabeçalho de **{nome_at}** salvo com sucesso!")
+        # Botão/label que abre o expander — verde se acabou de salvar, normal caso contrário
+        if cab_salvo:
+            lbl_expander = "✅ Cabeçalho salvo"
+            expandido    = False   # fecha após salvar
+        else:
+            lbl_expander = "✏️ Editar cabeçalho da tabela"
+            expandido    = False
 
-    with st.expander(lbl_expander, expanded=expandido):
-        import datetime
-        def _parse_date(s):
-            if not s: return None
-            return datetime.date.fromisoformat(str(s).strip()[:10])
+        # Exibe o banner de sucesso FORA do expander para ficar sempre visível
+        if cab_salvo:
+            st.success(f"✅ Cabeçalho de **{nome_at}** salvo com sucesso!")
 
-        forns_e     = cache_fornecedores()
-        forn_ids_e  = [f[0] for f in forns_e]
-        idx_forn_e  = forn_ids_e.index(forn_id_at) if forn_id_at in forn_ids_e else 0
-        tipos_e     = ["Atacado", "Distribuidor", "Rede", "Varejo"]
-        tipo_at_cap = tipo_at.capitalize() if tipo_at else "Varejo"
-        idx_tipo_e  = tipos_e.index(tipo_at_cap) if tipo_at_cap in tipos_e else 0
-        fretes_e    = ["FOB","CIF","—"]
-        idx_frete_e = fretes_e.index(frete_at) if frete_at in fretes_e else 2
+        with st.expander(lbl_expander, expanded=expandido):
+            import datetime
+            def _parse_date(s):
+                if not s: return None
+                return datetime.date.fromisoformat(str(s).strip()[:10])
 
-        with st.form(f"edit_cab_tab_{tab_id}"):
-            col1, col2 = st.columns(2)
-            with col1:
-                forn_e2 = st.selectbox("Fornecedor", forns_e, index=idx_forn_e,
-                                       format_func=lambda x: x[1])
-                nome_e2 = st.text_input("Nome da tabela", value=nome_at or "")
-                tipo_e2 = st.selectbox("Tipo", tipos_e, index=idx_tipo_e)
-            with col2:
-                prazo_e2 = st.text_input("Prazo de pagamento", value=prazo_at or "")
-                frete_e2 = st.selectbox("Frete", fretes_e, index=idx_frete_e)
-                ini_e2   = st.date_input("Vigência — início",
-                                         value=_parse_date(ini_at) or datetime.date.today())
-                fim_e2   = st.date_input("Vigência — fim (opcional)",
-                                         value=_parse_date(fim_at))
-                ativo_e2 = st.checkbox("Ativa", value=bool(ativo_at))
-            salvar_cab = st.form_submit_button("💾 Salvar cabeçalho", type="primary")
+            forns_e     = cache_fornecedores()
+            forn_ids_e  = [f[0] for f in forns_e]
+            idx_forn_e  = forn_ids_e.index(forn_id_at) if forn_id_at in forn_ids_e else 0
+            tipos_e     = ["Atacado", "Distribuidor", "Rede", "Varejo"]
+            tipo_at_cap = tipo_at.capitalize() if tipo_at else "Varejo"
+            idx_tipo_e  = tipos_e.index(tipo_at_cap) if tipo_at_cap in tipos_e else 0
+            fretes_e    = ["FOB","CIF","—"]
+            idx_frete_e = fretes_e.index(frete_at) if frete_at in fretes_e else 2
 
-        if salvar_cab:
-            if not nome_e2.strip() or not prazo_e2.strip():
-                _erro("Nome e prazo são obrigatórios.")
-            else:
-                conn = conectar()
-                conn.execute("""UPDATE tabela_preco SET
-                    fornecedor_id=?, nome_tabela=?, tipo_tabela=?, prazo_pagamento=?,
-                    frete=?, data_inicio=?, data_fim=?, ativo=?
-                    WHERE tabela_preco_id=?""",
-                    (forn_e2[0], nome_e2.strip(), tipo_e2, prazo_e2.strip(),
-                     frete_e2 if frete_e2 != "—" else None,
-                     str(ini_e2), str(fim_e2) if fim_e2 else None,
-                     1 if ativo_e2 else 0, tab_id))
-                conn.commit(); conn.close()
-                st.session_state["tab_editando_id"] = tab_id
-                st.session_state[f"cab_salvo_{tab_id}"] = True
-                st.rerun()
+            with st.form(f"edit_cab_tab_{tab_id}"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    forn_e2 = st.selectbox("Fornecedor", forns_e, index=idx_forn_e,
+                                           format_func=lambda x: x[1])
+                    nome_e2 = st.text_input("Nome da tabela", value=nome_at or "")
+                    tipo_e2 = st.selectbox("Tipo", tipos_e, index=idx_tipo_e)
+                with col2:
+                    prazo_e2 = st.text_input("Prazo de pagamento", value=prazo_at or "")
+                    frete_e2 = st.selectbox("Frete", fretes_e, index=idx_frete_e)
+                    ini_e2   = st.date_input("Vigência — início",
+                                             value=_parse_date(ini_at) or datetime.date.today())
+                    fim_e2   = st.date_input("Vigência — fim (opcional)",
+                                             value=_parse_date(fim_at))
+                    ativo_e2 = st.checkbox("Ativa", value=bool(ativo_at))
+                salvar_cab = st.form_submit_button("💾 Salvar cabeçalho", type="primary")
+
+            if salvar_cab:
+                if not nome_e2.strip() or not prazo_e2.strip():
+                    _erro("Nome e prazo são obrigatórios.")
+                else:
+                    conn = conectar()
+                    conn.execute("""UPDATE tabela_preco SET
+                        fornecedor_id=?, nome_tabela=?, tipo_tabela=?, prazo_pagamento=?,
+                        frete=?, data_inicio=?, data_fim=?, ativo=?
+                        WHERE tabela_preco_id=?""",
+                        (forn_e2[0], nome_e2.strip(), tipo_e2, prazo_e2.strip(),
+                         frete_e2 if frete_e2 != "—" else None,
+                         str(ini_e2), str(fim_e2) if fim_e2 else None,
+                         1 if ativo_e2 else 0, tab_id))
+                    conn.commit(); conn.close()
+                    st.session_state["tab_editando_id"] = tab_id
+                    st.session_state[f"cab_salvo_{tab_id}"] = True
+                    st.rerun()
 
     # ── 2. Itens da tabela com filtros e busca ───────────────────────────
     st.subheader("Produtos desta tabela")
@@ -1356,21 +1374,32 @@ def _lista_tabelas():
         contexto  = ""
         if busca_item.strip() or fil_cat != "Todas" or fil_lin != "Todas":
             contexto = f" (filtrado: {filtrados} de {total_tab})"
-        st.caption(f"{total_tab} produto(s){contexto} — ✏️ editar preço  |  🗑️ remover")
+        if admin:
+            st.caption(f"{total_tab} produto(s){contexto} — ✏️ editar preço  |  🗑️ remover")
+        else:
+            st.caption(f"{total_tab} produto(s){contexto}")
 
         # Cabeçalho
-        hc = st.columns([1.0, 1.5, 3.0, 1.8, 1.8, 1.0])
-        for col, txt in zip(hc, ["Código","Categoria","Descrição","Preço/Cx (R$)","Desc. Máx (%)","Ações"]):
+        n_cols = 6 if admin else 5
+        larguras = [1.0, 1.5, 3.0, 1.8, 1.8, 1.0][:n_cols]
+        hc = st.columns(larguras)
+        titulos = ["Código","Categoria","Descrição","Preço/Cx (R$)","Desc. Máx (%)"]
+        if admin: titulos.append("Ações")
+        for col, txt in zip(hc, titulos):
             col.markdown(f"<small><b>{txt}</b></small>", unsafe_allow_html=True)
 
         for item in itens:
             iid, pid, cod, desc, preco_cx, desc_max, cat_i, lin_i, ean_i = item
-            c1, c2, c3, c4, c5, c6 = st.columns([1.0, 1.5, 3.0, 1.8, 1.8, 1.0])
+            cols_item = st.columns(larguras)
+            c1, c2, c3, c4, c5 = cols_item[:5]
             c1.caption(cod or "—")
             c2.caption(cat_i if cat_i != "—" else lin_i if lin_i != "—" else "—")
             c3.write(desc or "—")
             c4.caption(f"R$ {preco_cx:,.2f}".replace(",","X").replace(".",",").replace("X",".") if preco_cx else "—")
             c5.caption(f"{desc_max:.1f}%" if desc_max else "—")
+            if not admin:
+                continue
+            c6 = cols_item[5]
             with c6:
                 b1, b2 = st.columns(2)
                 with b1:
@@ -1442,43 +1471,46 @@ def _lista_tabelas():
                         st.rerun()
 
     # ── 3. Adicionar produto à tabela ──────────────────
-    st.divider()
-    with st.expander("➕ Adicionar produto à tabela"):
-        ids_ja = {r[1] for r in itens} if itens else set()
-        prods_disp = query("""SELECT produto_id, codigo_produto, descricao_curta
-            FROM produto WHERE fornecedor_id=? AND ativo=1
-            ORDER BY descricao_curta""", (forn_id_at,))
-        prods_disp = [p for p in prods_disp if p[0] not in ids_ja]
+    if admin:
+        st.divider()
+        with st.expander("➕ Adicionar produto à tabela"):
+            ids_ja = {r[1] for r in itens} if itens else set()
+            prods_disp = query("""SELECT produto_id, codigo_produto, descricao_curta
+                FROM produto WHERE fornecedor_id=? AND ativo=1
+                ORDER BY descricao_curta""", (forn_id_at,))
+            prods_disp = [p for p in prods_disp if p[0] not in ids_ja]
 
-        if not prods_disp:
-            st.caption("Todos os produtos deste fornecedor já estão na tabela.")
-        else:
-            with st.form(f"add_item_tab_{tab_id}", clear_on_submit=True):
-                prod_add = st.selectbox("Produto", prods_disp,
-                                        format_func=lambda x: f"{x[1]} — {x[2]}")
-                col1, col2 = st.columns(2)
-                with col1:
-                    preco_add = st.number_input("Preço/Cx (R$)", min_value=0.0,
-                                                step=0.01, format="%.2f")
-                with col2:
-                    desc_add  = st.number_input("Desc. Máx (%)", min_value=0.0,
-                                                max_value=100.0, step=0.1, format="%.1f")
-                if st.form_submit_button("Adicionar", type="primary"):
-                    if preco_add <= 0:
-                        _erro("Informe o preço.")
-                    else:
-                        conn = conectar()
-                        conn.execute("""INSERT OR REPLACE INTO tabela_preco_item
-                            (tabela_preco_id, produto_id, preco_caixa, desconto_maximo)
-                            VALUES (?,?,?,?)""",
-                            (tab_id, prod_add[0], preco_add, desc_add))
-                        conn.commit(); conn.close()
-                        st.session_state["tab_editando_id"] = tab_id
-                        _sucesso(f"'{prod_add[2]}' adicionado à tabela!")
-                        st.rerun()
+            if not prods_disp:
+                st.caption("Todos os produtos deste fornecedor já estão na tabela.")
+            else:
+                with st.form(f"add_item_tab_{tab_id}", clear_on_submit=True):
+                    prod_add = st.selectbox("Produto", prods_disp,
+                                            format_func=lambda x: f"{x[1]} — {x[2]}")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        preco_add = st.number_input("Preço/Cx (R$)", min_value=0.0,
+                                                    step=0.01, format="%.2f")
+                    with col2:
+                        desc_add  = st.number_input("Desc. Máx (%)", min_value=0.0,
+                                                    max_value=100.0, step=0.1, format="%.1f")
+                    if st.form_submit_button("Adicionar", type="primary"):
+                        if preco_add <= 0:
+                            _erro("Informe o preço.")
+                        else:
+                            conn = conectar()
+                            conn.execute("""INSERT OR REPLACE INTO tabela_preco_item
+                                (tabela_preco_id, produto_id, preco_caixa, desconto_maximo)
+                                VALUES (?,?,?,?)""",
+                                (tab_id, prod_add[0], preco_add, desc_add))
+                            conn.commit(); conn.close()
+                            st.session_state["tab_editando_id"] = tab_id
+                            _sucesso(f"'{prod_add[2]}' adicionado à tabela!")
+                            st.rerun()
 
 
 def _form_nova_tabela():
+    if not e_admin():
+        return
     st.subheader("Nova tabela de preço")
     forns = query("SELECT fornecedor_id, nome_fantasia FROM fornecedor WHERE ativo=1")
     if not forns:
@@ -1727,6 +1759,8 @@ def _historico_precos():
 
 
 def _importar_tabela_excel():
+    if not e_admin():
+        return
     st.subheader("Importar tabela de precos via Excel")
 
     # Template para download
