@@ -2512,7 +2512,7 @@ def _tela_pdvs():
             WHERE vendedor_id=%s ORDER BY nome_fantasia""", (_uid_all,)) or []
     else:
         from permissoes import get_lista_clientes
-    clientes_all = get_lista_clientes(so_ativos=False) or []
+        clientes_all = get_lista_clientes(so_ativos=False) or []
 
     # ── CORREÇÃO DE TIPO PDV ────────────────────────────────────────────
     with st.expander("🔧 Padronizar tipo de PDV — corrigir duplicatas"):
@@ -4446,8 +4446,13 @@ def _tela_central_compras():
     st.divider()
     st.subheader("Cadastrar central de compras")
 
-    clientes_cc = query("""SELECT cliente_id, nome_fantasia || ' (' || COALESCE(status,'Ativo') || ')'
-        FROM cliente ORDER BY nome_fantasia""")
+    # Cliente (rede) restrito à carteira do usuário — mesma lógica usada em
+    # Clientes/PDVs (get_where_cliente). A listagem de centrais já cadastradas
+    # acima permanece aberta a todos, como nas Associações.
+    from permissoes import get_where_cliente
+    _w_cc, _p_cc = get_where_cliente("c")
+    clientes_cc = query(f"""SELECT c.cliente_id, c.nome_fantasia || ' (' || COALESCE(c.status,'Ativo') || ')'
+        FROM cliente c WHERE 1=1 {_w_cc} ORDER BY c.nome_fantasia""", tuple(_p_cc))
     if not clientes_cc:
         st.info("Nenhum cliente cadastrado."); return
 
