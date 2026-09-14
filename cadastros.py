@@ -292,11 +292,21 @@ def _load_produtos():
 def tela_produtos():
     st.header("Produtos")
     if st.button("⬅ Voltar"): _ir("home")
-    ABAS_PROD = {"lista":"Lista","novo":"Novo Produto",
-                 "import":"Importar Excel","catalogo":"📄 Catálogo PDF",
-                 "excluir":"⚠️ Excluir em lote"}
+
+    admin = e_admin()
+    ABAS_PROD = {"lista": "Lista"}
+    if admin:
+        ABAS_PROD["novo"] = "Novo Produto"
+        ABAS_PROD["import"] = "Importar Excel"
+    ABAS_PROD["catalogo"] = "📄 Catálogo PDF"
+    if admin:
+        ABAS_PROD["excluir"] = "⚠️ Excluir em lote"
+
     if "prod_aba" not in st.session_state:
         st.session_state["prod_aba"] = "lista"
+    if st.session_state["prod_aba"] not in ABAS_PROD:
+        st.session_state["prod_aba"] = "lista"
+
     cols = st.columns(len(ABAS_PROD))
     for col,(k,v) in zip(cols, ABAS_PROD.items()):
         ativa = st.session_state["prod_aba"] == k
@@ -306,12 +316,12 @@ def tela_produtos():
     st.divider()
     a = st.session_state["prod_aba"]
     if a=="lista":    _lista_produtos()
-    elif a=="novo":   _form_novo_produto()
-    elif a=="import": _importar_produtos_excel()
+    elif a=="novo" and admin:   _form_novo_produto()
+    elif a=="import" and admin: _importar_produtos_excel()
     elif a=="catalogo":
         from catalogo import _tela_catalogo
         _tela_catalogo()
-    elif a=="excluir":_excluir_produtos_lote()
+    elif a=="excluir" and admin: _excluir_produtos_lote()
 
 
 def _lista_produtos():
@@ -425,9 +435,13 @@ def _lista_produtos():
     st.divider()
 
     # ── CABEÇALHO DA LISTA ────────────────────────────────────────────────
-    h1, h2, h3, h4, h5, h6, h7, h8, h9 = st.columns([0.4, 1.5, 1.3, 1.0, 2.8, 0.6, 0.5, 0.5, 0.5])
-    for col, txt in zip([h1,h2,h3,h4,h5,h6,h7,h8,h9],
-                        ["ID","Fornecedor","Marca","Código","Descrição","Un/Cx","UM","",""]):
+    admin = e_admin()
+    base_larguras = [0.4, 1.5, 1.3, 1.0, 2.8, 0.6, 0.5]   # ID,Forn,Marca,Cod,Desc,Un/Cx,UM
+    larguras_p = base_larguras + [0.5, 0.5] if admin else base_larguras
+    cols_h = st.columns(larguras_p)
+    titulos_p = ["ID","Fornecedor","Marca","Código","Descrição","Un/Cx","UM"]
+    if admin: titulos_p += ["",""]
+    for col, txt in zip(cols_h, titulos_p):
         col.markdown(f"<small><b>{txt}</b></small>", unsafe_allow_html=True)
 
     for _, row in df.iterrows():
@@ -440,7 +454,8 @@ def _lista_produtos():
         um     = row["UM"]
         ativo  = row["Ativo"]
 
-        c1,c2,c3,c4,c5,c6,c7,c8,c9 = st.columns([0.4, 1.5, 1.3, 1.0, 2.8, 0.6, 0.5, 0.5, 0.5])
+        cols_r = st.columns(larguras_p)
+        c1,c2,c3,c4,c5,c6,c7 = cols_r[:7]
         c1.caption(str(pid))
         c2.write(str(forn_n) if forn_n else "—")
         c3.caption(str(marca_n) if marca_n else "—")
@@ -448,6 +463,9 @@ def _lista_produtos():
         c5.write(str(desc_c) if desc_c else "—")
         c6.caption(str(un_cx) if un_cx else "—")
         c7.caption(str(um) if um else "—")
+        if not admin:
+            continue
+        c8, c9 = cols_r[7], cols_r[8]
         with c8:
             if st.button("✏️", key=f"ed_prod_{pid}", help="Editar produto",
                          width="stretch"):
@@ -471,6 +489,8 @@ def _lista_produtos():
 
 def _confirmacao_excluir_produto(pid, desc_c, codigo):
     """Confirmação com senha antes de excluir produto individualmente."""
+    if not e_admin():
+        return
     st.warning(f"Excluir produto **{desc_c}** (código: {codigo}, ID: {pid})?")
 
     # Verifica vínculos
@@ -531,6 +551,8 @@ def _confirmacao_excluir_produto(pid, desc_c, codigo):
 
 def _form_editar_produto(prod_id):
     """Formulário de edição inline com todos os campos do produto."""
+    if not e_admin():
+        return
     prod = query("""
         SELECT p.fornecedor_id, p.marca_id, p.categoria_id, p.linha_id,
                p.codigo_produto, p.descricao, p.descricao_curta,
@@ -655,6 +677,8 @@ def _form_editar_produto(prod_id):
 
 
 def _form_novo_produto():
+    if not e_admin():
+        return
     st.subheader("Novo produto")
     forns  = cache_fornecedores()
 
@@ -866,6 +890,8 @@ def _form_novo_produto():
 
 
 def _importar_produtos_excel():
+    if not e_admin():
+        return
     st.subheader("Importar produtos via Excel")
 
     # Exibe resultado de importacao anterior
@@ -4759,6 +4785,8 @@ def _exportar_tabela_pdf(df_itens, filtro_forn="Todos"):
 # ═══════════════════════════════════════════════════════
 
 def _excluir_produtos_lote():
+    if not e_admin():
+        return
     st.subheader("⚠️ Exclusão de produtos em lote")
 
     st.error(
