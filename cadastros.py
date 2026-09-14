@@ -124,28 +124,49 @@ def _form_novo_fornecedor():
 
 
 def _ver_detalhes_fornecedor(forn_id):
-    """Visualização somente-leitura — para perfis sem status de ADM."""
+    """Visualização somente-leitura — para perfis sem status de ADM.
+    Usa texto normal (selecionável) em vez de inputs desabilitados, que no
+    navegador costumam bloquear até a seleção. Inclui um bloco de texto
+    único, com ícone de copiar, pronto para repassar ao cliente."""
     conn = conectar()
     f = conn.execute("SELECT * FROM fornecedor WHERE fornecedor_id=?", (forn_id,)).fetchone()
     conn.close()
     if not f:
         return
+
+    pedido_minimo = float(f["pedido_minimo"]) if f["pedido_minimo"] else 0.0
+
     col1, col2 = st.columns(2)
     with col1:
-        st.text_input("Razão social", f["razao_social"] or "", disabled=True)
-        st.text_input("Nome fantasia", f["nome_fantasia"] or "", disabled=True)
-        st.text_input("CNPJ", f["cnpj"] or "", disabled=True)
-        st.text_input("IE", f["ie"] or "", disabled=True)
+        st.markdown(f"**Razão social:** {f['razao_social'] or '—'}")
+        st.markdown(f"**Nome fantasia:** {f['nome_fantasia'] or '—'}")
+        st.markdown(f"**CNPJ:** {f['cnpj'] or '—'}")
+        st.markdown(f"**IE:** {f['ie'] or '—'}")
     with col2:
-        st.text_input("Endereço", f["endereco"] or "", disabled=True)
-        st.text_input("Bairro", f["bairro"] or "", disabled=True)
-        st.text_input("Cidade", f["cidade"] or "", disabled=True)
-        st.text_input("UF", f["estado"] or "", disabled=True)
-    st.number_input("💰 Pedido mínimo (R$)",
-                     value=float(f["pedido_minimo"]) if f["pedido_minimo"] else 0.0,
-                     format="%.2f", disabled=True)
-    st.text_area("Observação", f["observacao"] or "", disabled=True)
-    st.checkbox("Ativo", value=bool(f["ativo"]), disabled=True)
+        st.markdown(f"**Endereço:** {f['endereco'] or '—'}")
+        st.markdown(f"**Bairro:** {f['bairro'] or '—'}")
+        st.markdown(f"**Cidade:** {f['cidade'] or '—'}")
+        st.markdown(f"**UF:** {f['estado'] or '—'}")
+
+    st.markdown(f"**Pedido mínimo:** R$ {pedido_minimo:,.2f}".replace(",", "@").replace(".", ",").replace("@", "."))
+    if f["observacao"]:
+        st.markdown(f"**Observação:** {f['observacao']}")
+    st.markdown(f"**Status:** {'✅ Ativo' if f['ativo'] else '❌ Inativo'}")
+
+    st.divider()
+    st.caption("📋 Copiar dados do fornecedor")
+    linhas = [
+        f"Razão social: {f['razao_social'] or '—'}",
+        f"Nome fantasia: {f['nome_fantasia'] or '—'}",
+        f"CNPJ: {f['cnpj'] or '—'}",
+        f"IE: {f['ie'] or '—'}",
+        f"Endereço: {f['endereco'] or '—'}, {f['bairro'] or '—'} — {f['cidade'] or '—'}/{f['estado'] or '—'}",
+    ]
+    if pedido_minimo > 0:
+        linhas.append(f"Pedido mínimo: R$ {pedido_minimo:,.2f}".replace(",", "@").replace(".", ",").replace("@", "."))
+    if f["observacao"]:
+        linhas.append(f"Observação: {f['observacao']}")
+    st.code("\n".join(linhas), language=None)
 
 
 def _form_editar_fornecedor(forn_id):
